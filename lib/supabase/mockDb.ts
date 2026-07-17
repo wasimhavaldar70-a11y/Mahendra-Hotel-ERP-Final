@@ -3,7 +3,7 @@
 // Location: lib/supabase/mockDb.ts
 // ========================================================
 
-import { Hotel, User, Room, RoomStatus, Customer, CustomerDocument, CheckIn, CheckInGuest, Payment, ExtendedCheckIn } from '../../types';
+import { Hotel, User, Room, RoomStatus, Customer, CustomerDocument, CustomerHistory, CheckIn, CheckInGuest, Payment, ExtendedCheckIn } from '../../types';
 
 // Broadcaster for real-time synchronization between browser tabs
 const syncChannel = typeof window !== 'undefined' ? new BroadcastChannel('hotelflow-sync') : null;
@@ -34,9 +34,21 @@ const DEFAULT_USERS: User[] = [
   }
 ];
 
-const DEFAULT_ROOMS = (hotelId: string): Room[] => [];
+const DEFAULT_ROOMS = (hotelId: string): Room[] => [
+  { id: `r-${hotelId}-101`, hotel_id: hotelId, room_number: '101', room_type: 'Single Deluxe', price: 1500, floor: 'Ground Floor', capacity: 1, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-102`, hotel_id: hotelId, room_number: '102', room_type: 'Double Deluxe', price: 2500, floor: 'Ground Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-103`, hotel_id: hotelId, room_number: '103', room_type: 'Family Suite', price: 4000, floor: 'Ground Floor', capacity: 4, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-104`, hotel_id: hotelId, room_number: '104', room_type: 'Executive Suite', price: 6000, floor: 'Ground Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-201`, hotel_id: hotelId, room_number: '201', room_type: 'Single Deluxe', price: 1500, floor: 'First Floor', capacity: 1, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-202`, hotel_id: hotelId, room_number: '202', room_type: 'Double Deluxe', price: 2500, floor: 'First Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-203`, hotel_id: hotelId, room_number: '203', room_type: 'Family Suite', price: 4000, floor: 'First Floor', capacity: 4, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-204`, hotel_id: hotelId, room_number: '204', room_type: 'Executive Suite', price: 6000, floor: 'First Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+];
 
-const DEFAULT_CUSTOMERS = (hotelId: string): Customer[] => [];
+const DEFAULT_CUSTOMERS = (hotelId: string): Customer[] => [
+  { id: `c-${hotelId}-1`, hotel_id: hotelId, full_name: 'Rahul Verma', phone: '9876543210', gender: 'Male', address: 'MG Road', city: 'Mumbai', state: 'Maharashtra', country: 'India', created_at: new Date().toISOString() },
+  { id: `c-${hotelId}-2`, hotel_id: hotelId, full_name: 'Priya Sharma', phone: '9876543211', gender: 'Female', address: 'Indiranagar', city: 'Bangalore', state: 'Karnataka', country: 'India', created_at: new Date().toISOString() },
+];
 
 // Initialize Mock Database in LocalStorage
 export const initMockDb = () => {
@@ -118,7 +130,7 @@ export const mockDb = {
         owner_name: email.split('@')[0],
         email,
         phone: '9999999999',
-        subscription_plan: '30 Days',
+        subscription_plan: 'Lifetime',
         subscription_status: 'Active',
         created_at: new Date().toISOString()
       };
@@ -135,8 +147,8 @@ export const mockDb = {
       setTable('hf_users', [...users, newUser]);
       
       // Init rooms and customers for this hotel
-      setTable(`hf_rooms_${newHotelId}`, DEFAULT_ROOMS(newHotelId));
-      setTable(`hf_customers_${newHotelId}`, DEFAULT_CUSTOMERS(newHotelId));
+      setTable(`hf_rooms_${newHotelId}`, []);
+      setTable(`hf_customers_${newHotelId}`, []);
       setTable(`hf_checkins_${newHotelId}`, []);
       setTable(`hf_payments_${newHotelId}`, []);
       setTable(`hf_guests_${newHotelId}`, []);
@@ -178,8 +190,8 @@ export const mockDb = {
     setTable('hf_users', [...users, newOwnerUser]);
     
     // Init resources
-    setTable(`hf_rooms_${newId}`, DEFAULT_ROOMS(newId));
-    setTable(`hf_customers_${newId}`, DEFAULT_CUSTOMERS(newId));
+    setTable(`hf_rooms_${newId}`, []);
+    setTable(`hf_customers_${newId}`, []);
     setTable(`hf_checkins_${newId}`, []);
     setTable(`hf_payments_${newId}`, []);
     setTable(`hf_guests_${newId}`, []);
@@ -212,10 +224,15 @@ export const mockDb = {
     return true;
   },
 
+  resetHotelPassword: async (email: string, password?: string): Promise<boolean> => {
+    // In mockDb mode, password validation is not enforced, so we return true.
+    return true;
+  },
+
   // Rooms Operations
   getRooms: async (hotelId: string): Promise<Room[]> => {
     initMockDb();
-    return getTable<Room>(`hf_rooms_${hotelId}`);
+    return getTable<Room>(`hf_rooms_${hotelId}`).filter(r => !r.deleted_at);
   },
 
   addRoom: async (hotelId: string, room: Omit<Room, 'id' | 'hotel_id' | 'created_at' | 'status'>): Promise<Room> => {
@@ -243,74 +260,82 @@ export const mockDb = {
     return rooms[index];
   },
 
+  deleteRoom: async (hotelId: string, roomId: string): Promise<boolean> => {
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+    const index = rooms.findIndex(r => r.id === roomId);
+    if (index === -1) return false;
+    rooms[index].deleted_at = new Date().toISOString();
+    setTable(`hf_rooms_${hotelId}`, rooms);
+    broadcastDbUpdate('rooms');
+    return true;
+  },
+
   // Customers Operations
   getCustomers: async (hotelId: string): Promise<Customer[]> => {
     initMockDb();
-    return getTable<Customer>(`hf_customers_${hotelId}`);
+    return getTable<Customer>(`hf_customers_${hotelId}`).filter(c => !c.deleted_at);
   },
 
   searchCustomers: async (hotelId: string, query: string): Promise<Customer[]> => {
-    const customers = getTable<Customer>(`hf_customers_${hotelId}`);
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`).filter(c => !c.deleted_at);
     const q = query.toLowerCase().trim();
     if (!q) return [];
     
-    return customers.filter(c => 
-      c.full_name.toLowerCase().includes(q) || 
-      c.phone.includes(q)
-    );
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const docs = getTable<CustomerDocument>(`hf_documents_${hotelId}`);
+
+    return customers.filter(c => {
+      const nameMatched = tokens.every(tok => c.full_name.toLowerCase().includes(tok));
+      const phoneMatched = c.phone.includes(q);
+      const emailMatched = c.email?.toLowerCase().includes(q) || false;
+      const vehicleMatched = c.vehicle_number?.toLowerCase().includes(q) || false;
+      const docMatched = docs.some(d => d.customer_id === c.id && d.document_number.includes(q));
+
+      return nameMatched || phoneMatched || emailMatched || vehicleMatched || docMatched;
+    });
   },
 
-  getCustomerByPhoneOrAadhar: async (hotelId: string, identifier: string): Promise<{ customer: Customer; docs: CustomerDocument[]; stayCount: number; lastVisit: string | null; preferredRoom: string | null; pendingBalance: number } | null> => {
-    const customers = getTable<Customer>(`hf_customers_${hotelId}`);
+  getCustomerByPhoneOrAadhar: async (hotelId: string, identifier: string): Promise<{ customer: Customer; docs: CustomerDocument[]; stayCount: number; lastVisit: string | null; pendingBalance: number } | null> => {
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`).filter(c => !c.deleted_at);
     const cleanId = identifier.trim();
     
-    // Find customer by phone or Aadhaar
-    const docsTable = getTable<CustomerDocument>(`hf_documents_${hotelId}`);
-    let customer = customers.find(c => c.phone === cleanId);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanId);
+    let customer = null;
     
-    if (!customer) {
-      // Search docs
-      const doc = docsTable.find(d => d.document_number === cleanId);
-      if (doc) {
-        customer = customers.find(c => c.id === doc.customer_id);
+    if (isUuid) {
+      customer = customers.find(c => c.id === cleanId);
+    } else {
+      customer = customers.find(c => 
+        c.phone === cleanId || 
+        c.email?.toLowerCase() === cleanId.toLowerCase() || 
+        c.vehicle_number?.toLowerCase() === cleanId.toLowerCase()
+      );
+
+      if (!customer) {
+        const docsTable = getTable<CustomerDocument>(`hf_documents_${hotelId}`);
+        const doc = docsTable.find(d => d.document_number === cleanId);
+        if (doc) {
+          customer = customers.find(c => c.id === doc.customer_id);
+        }
+      }
+
+      if (!customer) {
+        customer = customers.find(c => c.full_name.toLowerCase().includes(cleanId.toLowerCase()));
       }
     }
 
     if (!customer) return null;
 
-    // Get documents
+    const docsTable = getTable<CustomerDocument>(`hf_documents_${hotelId}`);
     const customerDocs = docsTable.filter(d => d.customer_id === customer!.id);
 
-    // Get statistics
-    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`).filter(ch => !ch.deleted_at);
     const customerStays = checkIns.filter(ch => ch.primary_customer_id === customer!.id);
     
-    // Last visit
     const completedStays = customerStays.filter(ch => ch.status === 'Completed');
     completedStays.sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
     const lastVisit = completedStays.length > 0 ? completedStays[0].check_in : null;
 
-    // Preferred Room
-    const roomCounts: Record<string, number> = {};
-    let maxCount = 0;
-    let preferredRoomId: string | null = null;
-    
-    customerStays.forEach(st => {
-      roomCounts[st.room_id] = (roomCounts[st.room_id] || 0) + 1;
-      if (roomCounts[st.room_id] > maxCount) {
-        maxCount = roomCounts[st.room_id];
-        preferredRoomId = st.room_id;
-      }
-    });
-
-    let preferredRoomNumber: string | null = null;
-    if (preferredRoomId) {
-      const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
-      const r = rooms.find(room => room.id === preferredRoomId);
-      if (r) preferredRoomNumber = r.room_number;
-    }
-
-    // Outstanding Balance (pending from active stays)
     let pendingBalance = 0;
     const activeCheckins = customerStays.filter(ch => ch.status === 'Active');
     const payments = getTable<Payment>(`hf_payments_${hotelId}`);
@@ -325,7 +350,6 @@ export const mockDb = {
       docs: customerDocs,
       stayCount: customerStays.length,
       lastVisit,
-      preferredRoom: preferredRoomNumber,
       pendingBalance
     };
   },
@@ -333,22 +357,24 @@ export const mockDb = {
   addCustomer: async (hotelId: string, data: Omit<Customer, 'id' | 'hotel_id' | 'created_at'>, docType?: string, docNum?: string, frontImg?: string, backImg?: string): Promise<Customer> => {
     const customers = getTable<Customer>(`hf_customers_${hotelId}`);
     
-    // Check if phone already exists
-    const existing = customers.find(c => c.phone === data.phone);
+    const existing = customers.find(c => c.phone === data.phone && !c.deleted_at);
     if (existing) {
-      // If customer exists, we might want to update documents or return it
       if (docType && docNum) {
         const docsTable = getTable<CustomerDocument>(`hf_documents_${hotelId}`);
-        const newDoc: CustomerDocument = {
-          id: `doc-${Date.now()}`,
-          customer_id: existing.id,
-          document_type: docType as any,
-          document_number: docNum,
-          front_image: frontImg,
-          back_image: backImg,
-          created_at: new Date().toISOString()
-        };
-        setTable(`hf_documents_${hotelId}`, [...docsTable, newDoc]);
+        const existingDoc = docsTable.find(d => d.customer_id === existing.id && d.document_type === docType && d.document_number === docNum);
+        if (!existingDoc) {
+          const newDoc: CustomerDocument = {
+            id: `doc-${Date.now()}`,
+            customer_id: existing.id,
+            document_type: docType as any,
+            document_number: docNum,
+            front_image: frontImg,
+            back_image: backImg,
+            is_primary: true,
+            created_at: new Date().toISOString()
+          };
+          setTable(`hf_documents_${hotelId}`, [...docsTable, newDoc]);
+        }
       }
       return existing;
     }
@@ -371,6 +397,7 @@ export const mockDb = {
         document_number: docNum,
         front_image: frontImg,
         back_image: backImg,
+        is_primary: true,
         created_at: new Date().toISOString()
       };
       setTable(`hf_documents_${hotelId}`, [...docsTable, newDoc]);
@@ -378,6 +405,112 @@ export const mockDb = {
 
     broadcastDbUpdate('customers');
     return newCustomer;
+  },
+
+  updateCustomer: async (
+    hotelId: string,
+    customerId: string,
+    customerData: Omit<Customer, 'id' | 'hotel_id' | 'created_at'>,
+    docData?: { type: string; number: string; front: string; back: string }
+  ): Promise<Customer | null> => {
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`);
+    const idx = customers.findIndex(c => c.id === customerId);
+    if (idx === -1) return null;
+
+    customers[idx] = {
+      ...customers[idx],
+      ...customerData
+    };
+    setTable(`hf_customers_${hotelId}`, customers);
+
+    if (docData) {
+      const docs = getTable<CustomerDocument>(`hf_documents_${hotelId}`);
+      const dIdx = docs.findIndex(d => d.customer_id === customerId && d.document_type === docData.type && d.document_number === docData.number);
+      if (dIdx !== -1) {
+        docs[dIdx] = {
+          ...docs[dIdx],
+          front_image: docData.front,
+          back_image: docData.back
+        };
+      } else {
+        const updatedDocs = docs.map(d => {
+          if (d.customer_id === customerId) {
+            return { ...d, is_primary: false };
+          }
+          return d;
+        });
+        updatedDocs.push({
+          id: `doc-${Date.now()}`,
+          customer_id: customerId,
+          document_type: docData.type as any,
+          document_number: docData.number,
+          front_image: docData.front,
+          back_image: docData.back,
+          is_primary: true,
+          created_at: new Date().toISOString()
+        });
+        setTable(`hf_documents_${hotelId}`, updatedDocs);
+      }
+    }
+
+    broadcastDbUpdate('customers');
+    return customers[idx];
+  },
+
+  deleteCustomer: async (hotelId: string, customerId: string): Promise<boolean> => {
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`);
+    const index = customers.findIndex(c => c.id === customerId);
+    if (index === -1) return false;
+    customers[index].deleted_at = new Date().toISOString();
+    setTable(`hf_customers_${hotelId}`, customers);
+    broadcastDbUpdate('customers');
+    return true;
+  },
+
+  setPrimaryDocument: async (hotelId: string, customerId: string, documentId: string): Promise<boolean> => {
+    const docs = getTable<CustomerDocument>(`hf_documents_${hotelId}`);
+    const updated = docs.map(d => {
+      if (d.customer_id === customerId) {
+        return { ...d, is_primary: d.id === documentId };
+      }
+      return d;
+    });
+    setTable(`hf_documents_${hotelId}`, updated);
+    broadcastDbUpdate('customers');
+    return true;
+  },
+
+  getCustomerHistory: async (hotelId: string, customerId: string): Promise<CustomerHistory[]> => {
+    return [];
+  },
+
+  getCustomerStays: async (hotelId: string, customerId: string): Promise<any[]> => {
+    initMockDb();
+    const checkIns = getTable<any>(`hf_checkins_${hotelId}`) || [];
+    const rooms = getTable<any>(`hf_rooms_${hotelId}`) || [];
+    const payments = getTable<any>(`hf_payments_${hotelId}`) || [];
+
+    const stays = checkIns.filter(ci => ci.primary_customer_id === customerId && !ci.deleted_at);
+
+    const mapped = stays.map(stay => {
+      const room = rooms.find(r => r.id === stay.room_id);
+      const payment = payments.find(p => p.checkin_id === stay.id);
+      return {
+        id: stay.id,
+        check_in: stay.check_in,
+        expected_checkout: stay.expected_checkout,
+        status: stay.status,
+        room_number: room?.room_number || 'N/A',
+        room_type: room?.room_type || 'N/A',
+        room_price: Number(payment?.room_price || 0),
+        advance: Number(payment?.advance || 0),
+        pending: Number(payment?.pending || 0),
+        payment_method: payment?.payment_method || 'N/A'
+      };
+    });
+
+    mapped.sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
+    return mapped;
   },
 
   // Check In and Stays
@@ -522,12 +655,12 @@ export const mockDb = {
   // Full extended details for Room Modals
   getActiveStayForRoom: async (hotelId: string, roomId: string): Promise<ExtendedCheckIn | null> => {
     initMockDb();
-    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`).filter(ch => !ch.deleted_at);
     const activeStay = checkIns.find(ch => ch.room_id === roomId && ch.status === 'Active');
     
     if (!activeStay) return null;
 
-    const customers = getTable<Customer>(`hf_customers_${hotelId}`);
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`).filter(c => !c.deleted_at);
     const primaryCustomer = customers.find(c => c.id === activeStay.primary_customer_id);
 
     const docsTable = getTable<CustomerDocument>(`hf_documents_${hotelId}`);
@@ -543,7 +676,7 @@ export const mockDb = {
     const guests = getTable<CheckInGuest>(`hf_guests_${hotelId}`);
     const stayGuests = guests.filter(g => g.checkin_id === activeStay.id);
 
-    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`).filter(r => !r.deleted_at);
     const room = rooms.find(r => r.id === roomId);
 
     const guestsWithCustomer = stayGuests.map(sg => {
@@ -568,9 +701,9 @@ export const mockDb = {
   getPayments: async (hotelId: string): Promise<(Payment & { customerName: string; roomNumber: string })[]> => {
     initMockDb();
     const payments = getTable<Payment>(`hf_payments_${hotelId}`);
-    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
-    const customers = getTable<Customer>(`hf_customers_${hotelId}`);
-    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`).filter(ch => !ch.deleted_at);
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`).filter(c => !c.deleted_at);
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`).filter(r => !r.deleted_at);
 
     return payments.map(p => {
       const stay = checkIns.find(ch => ch.id === p.checkin_id);
@@ -582,7 +715,167 @@ export const mockDb = {
         customerName: cust ? cust.full_name : 'Unknown Guest',
         roomNumber: rm ? rm.room_number : 'N/A'
       };
-    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }).filter(p => checkIns.some(ch => ch.id === p.checkin_id)).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
+
+  // Bookings Management
+  getBookings: async (hotelId: string): Promise<ExtendedCheckIn[]> => {
+    initMockDb();
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`).filter(ch => !ch.deleted_at);
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`).filter(c => !c.deleted_at);
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`).filter(r => !r.deleted_at);
+    const payments = getTable<Payment>(`hf_payments_${hotelId}`);
+
+    return checkIns.map(b => {
+      const room = rooms.find(r => r.id === b.room_id);
+      const customer = customers.find(c => c.id === b.primary_customer_id);
+      const payment = payments.find(p => p.checkin_id === b.id);
+
+      return {
+        ...b,
+        room,
+        primary_customer: customer,
+        payment
+      };
+    }).sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
+  },
+
+  createBooking: async (
+    hotelId: string,
+    bookingData: {
+      room_id: string;
+      primary_customer_id: string;
+      check_in: string;
+      expected_checkout: string;
+      number_of_guests: number;
+      status?: 'Reserved' | 'Active';
+    },
+    paymentData: {
+      room_price: number;
+      advance: number;
+      pending: number;
+      payment_method: 'UPI' | 'Cash' | 'Card';
+    },
+    guestsList: {
+      customer_id: string;
+      relationship: 'Self' | 'Friend' | 'Family' | 'Wife' | 'Husband' | 'GF' | 'BF' | 'Child';
+      document_verified: boolean;
+    }[]
+  ): Promise<CheckIn> => {
+    initMockDb();
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
+    const checkInId = `chk-${Date.now()}`;
+    const status = bookingData.status || 'Reserved';
+
+    const newBooking: CheckIn = {
+      id: checkInId,
+      hotel_id: hotelId,
+      room_id: bookingData.room_id,
+      primary_customer_id: bookingData.primary_customer_id,
+      number_of_guests: bookingData.number_of_guests,
+      check_in: bookingData.check_in,
+      expected_checkout: bookingData.expected_checkout,
+      status: status,
+      created_at: new Date().toISOString()
+    };
+
+    const payments = getTable<Payment>(`hf_payments_${hotelId}`);
+    const newPayment: Payment = {
+      id: `p-${Date.now()}`,
+      checkin_id: checkInId,
+      room_price: paymentData.room_price,
+      advance: paymentData.advance,
+      pending: paymentData.pending,
+      payment_method: paymentData.payment_method,
+      created_at: new Date().toISOString()
+    };
+
+    const guests = getTable<CheckInGuest>(`hf_guests_${hotelId}`);
+    const newGuests: CheckInGuest[] = guestsList.map((g, idx) => ({
+      id: `g-${Date.now()}-${idx}`,
+      checkin_id: checkInId,
+      customer_id: g.customer_id,
+      relationship: g.relationship,
+      document_verified: g.document_verified,
+      created_at: new Date().toISOString()
+    }));
+
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+    if (status === 'Active') {
+      const rIndex = rooms.findIndex(r => r.id === bookingData.room_id);
+      if (rIndex !== -1) {
+        rooms[rIndex].status = 'Occupied';
+      }
+    }
+
+    setTable(`hf_checkins_${hotelId}`, [...checkIns, newBooking]);
+    setTable(`hf_payments_${hotelId}`, [...payments, newPayment]);
+    setTable(`hf_guests_${hotelId}`, [...guests, ...newGuests]);
+    setTable(`hf_rooms_${hotelId}`, rooms);
+
+    broadcastDbUpdate('checkins');
+    if (status === 'Active') {
+      broadcastDbUpdate('rooms');
+    }
+    broadcastDbUpdate('payments');
+
+    return newBooking;
+  },
+
+  cancelBooking: async (hotelId: string, bookingId: string): Promise<CheckIn | null> => {
+    initMockDb();
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
+    const index = checkIns.findIndex(ch => ch.id === bookingId);
+    if (index === -1) return null;
+
+    const oldStatus = checkIns[index].status;
+    checkIns[index].status = 'Cancelled';
+
+    const roomId = checkIns[index].room_id;
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+
+    if (oldStatus === 'Active' && roomId) {
+      const rIndex = rooms.findIndex(r => r.id === roomId);
+      if (rIndex !== -1) {
+        rooms[rIndex].status = 'Ready';
+      }
+    }
+
+    setTable(`hf_checkins_${hotelId}`, checkIns);
+    setTable(`hf_rooms_${hotelId}`, rooms);
+
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('rooms');
+
+    return checkIns[index];
+  },
+
+  checkInBooking: async (hotelId: string, bookingId: string): Promise<CheckIn | null> => {
+    initMockDb();
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
+    const index = checkIns.findIndex(ch => ch.id === bookingId);
+    if (index === -1) return null;
+
+    checkIns[index].status = 'Active';
+    checkIns[index].check_in = new Date().toISOString();
+
+    const roomId = checkIns[index].room_id;
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+
+    if (roomId) {
+      const rIndex = rooms.findIndex(r => r.id === roomId);
+      if (rIndex !== -1) {
+        rooms[rIndex].status = 'Occupied';
+      }
+    }
+
+    setTable(`hf_checkins_${hotelId}`, checkIns);
+    setTable(`hf_rooms_${hotelId}`, rooms);
+
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('rooms');
+
+    return checkIns[index];
   },
 
   // Reports aggregations
@@ -596,9 +889,9 @@ export const mockDb = {
   }> => {
     initMockDb();
     const payments = getTable<Payment>(`hf_payments_${hotelId}`);
-    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
-    const customers = getTable<Customer>(`hf_customers_${hotelId}`);
-    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`).filter(ch => !ch.deleted_at);
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`).filter(c => !c.deleted_at);
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`).filter(r => !r.deleted_at);
 
     // Occupancy Rate
     const totalRoomsCount = rooms.length;
@@ -680,5 +973,144 @@ export const mockDb = {
       pendingPayments,
       mostUsedRooms
     };
+  },
+  createWebBooking: async (
+    hotelId: string,
+    webBookingData: {
+      full_name: string;
+      phone: string;
+      email: string;
+      check_in: string;
+      expected_checkout: string;
+      number_of_guests: number;
+      room_type: string;
+      special_requests?: string;
+    }
+  ): Promise<any> => {
+    initMockDb();
+    const requests = getTable<any>(`hf_booking_requests_${hotelId}`) || [];
+    const request = {
+      id: Math.random().toString(36).substring(2, 9),
+      hotel_id: hotelId,
+      full_name: webBookingData.full_name,
+      phone: webBookingData.phone,
+      email: webBookingData.email,
+      check_in: webBookingData.check_in,
+      expected_checkout: webBookingData.expected_checkout,
+      number_of_guests: webBookingData.number_of_guests,
+      room_type: webBookingData.room_type,
+      special_requests: webBookingData.special_requests || '',
+      status: 'Pending',
+      created_at: new Date().toISOString()
+    };
+    requests.push(request);
+    setTable(`hf_booking_requests_${hotelId}`, requests);
+    broadcastDbUpdate('booking_requests');
+    return request;
+  },
+
+  confirmBooking: async (hotelId: string, bookingId: string, roomId: string): Promise<any> => {
+    initMockDb();
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
+    const index = checkIns.findIndex(ch => ch.id === bookingId);
+    if (index === -1) return null;
+
+    checkIns[index].status = 'Reserved';
+    checkIns[index].room_id = roomId;
+
+    setTable(`hf_checkins_${hotelId}`, checkIns);
+    broadcastDbUpdate('checkins');
+    return checkIns[index];
+  },
+
+  getPendingBookingRequests: async (hotelId: string): Promise<any[]> => {
+    initMockDb();
+    const requests = getTable<any>(`hf_booking_requests_${hotelId}`) || [];
+    return requests.filter((r: any) => r.status === 'Pending').sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
+
+  approveBookingRequest: async (hotelId: string, requestId: string, roomId: string): Promise<any> => {
+    initMockDb();
+    const requests = getTable<any>(`hf_booking_requests_${hotelId}`) || [];
+    const reqIndex = requests.findIndex((r: any) => r.id === requestId);
+    if (reqIndex === -1) throw new Error('Booking request not found');
+
+    const req = requests[reqIndex];
+
+    // Find or create customer
+    const customers = getTable<Customer>(`hf_customers_${hotelId}`);
+    let customer = customers.find(c => c.phone === req.phone);
+    if (!customer) {
+      customer = {
+        id: Math.random().toString(36).substring(2, 9),
+        hotel_id: hotelId,
+        full_name: req.full_name,
+        phone: req.phone,
+        email: req.email,
+        city: 'Website Booking',
+        country: 'India',
+        gender: 'Male',
+        created_at: new Date().toISOString()
+      };
+      customers.push(customer);
+      setTable(`hf_customers_${hotelId}`, customers);
+    }
+
+    // Get room details
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+    const room = rooms.find(r => r.id === roomId);
+    if (!room) throw new Error('Room not found');
+
+    // Create reservation record
+    const checkIns = getTable<CheckIn>(`hf_checkins_${hotelId}`);
+    const checkIn: CheckIn = {
+      id: Math.random().toString(36).substring(2, 9),
+      hotel_id: hotelId,
+      room_id: roomId,
+      primary_customer_id: customer.id,
+      number_of_guests: req.number_of_guests,
+      check_in: req.check_in,
+      expected_checkout: req.expected_checkout,
+      status: 'Reserved',
+      created_at: new Date().toISOString()
+    };
+    checkIns.push(checkIn);
+    setTable(`hf_checkins_${hotelId}`, checkIns);
+
+    // Create payment record
+    const payments = getTable<any>(`hf_payments_${hotelId}`);
+    payments.push({
+      id: Math.random().toString(36).substring(2, 9),
+      checkin_id: checkIn.id,
+      room_price: Number(room.price) || 2500,
+      advance: 0,
+      pending: Number(room.price) || 2500,
+      payment_method: 'Cash',
+      created_at: new Date().toISOString()
+    });
+    setTable(`hf_payments_${hotelId}`, payments);
+
+    // Mark request as Approved
+    requests[reqIndex].status = 'Approved';
+    setTable(`hf_booking_requests_${hotelId}`, requests);
+
+    broadcastDbUpdate('booking_requests');
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('customers');
+    broadcastDbUpdate('rooms');
+    return checkIn;
+  },
+
+  rejectBookingRequest: async (hotelId: string, requestId: string): Promise<boolean> => {
+    initMockDb();
+    const requests = getTable<any>(`hf_booking_requests_${hotelId}`) || [];
+    const index = requests.findIndex((r: any) => r.id === requestId);
+    if (index === -1) throw new Error('Booking request not found');
+
+    requests[index].status = 'Rejected';
+    setTable(`hf_booking_requests_${hotelId}`, requests);
+
+    broadcastDbUpdate('booking_requests');
+    return true;
   }
 };

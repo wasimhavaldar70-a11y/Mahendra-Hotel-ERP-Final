@@ -70,7 +70,7 @@ export default function SettingsPage() {
             <Settings className="w-5 h-5 text-primary" />
             Hotel Configuration
           </h1>
-          <p className="text-xs text-slate-400 font-semibold mt-0.5">Manage details of your property, active subscription, and configure future CRM add-ons.</p>
+          <p className="text-xs text-slate-400 font-semibold mt-0.5">Manage details of your property, active subscription, and configure future add-ons.</p>
         </div>
 
         {/* Profile Card */}
@@ -127,8 +127,17 @@ export default function SettingsPage() {
                 <Crown className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-xs font-extrabold text-slate-800">Premium Professional Suite</h4>
-                <span className="text-[10px] text-slate-400 font-semibold mt-0.5 block">Plan tier: {currentHotel?.subscription_plan}</span>
+                <h4 className="text-xs font-extrabold text-slate-800">
+                  {currentHotel?.subscription_plan === 'Lifetime' ? 'Lifetime License' : 'Premium Professional Suite'}
+                </h4>
+                <span className="text-[10px] text-slate-400 font-semibold mt-0.5 block">
+                  Plan tier: {currentHotel?.subscription_plan === 'Lifetime' ? 'Lifetime (One-Time Sale)' : currentHotel?.subscription_plan}
+                </span>
+                {currentHotel?.subscription_plan === 'Lifetime' && (
+                  <span className="text-[9px] text-slate-500 font-semibold mt-1 block">
+                    * Annual maintenance: ₹5,000/yr (Domain Renewal & Supabase Database)
+                  </span>
+                )}
               </div>
             </div>
 
@@ -143,7 +152,7 @@ export default function SettingsPage() {
           <div>
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
               <Shield className="w-4 h-4 text-primary" />
-              CRM Powerpack Add-ons
+              Powerpack Add-ons
             </h3>
             <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Toggle these beta features to customize your desk operations.</p>
           </div>

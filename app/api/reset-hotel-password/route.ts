@@ -54,10 +54,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { hotel_id } = body;
+    const { email, password } = body;
 
-    if (!hotel_id) {
-      return NextResponse.json({ error: 'Missing hotel_id' }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json({ error: 'Missing email or password' }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
     const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
@@ -81,37 +85,27 @@ export async function POST(request: Request) {
       }
     }
 
-    // Start transaction
-    await pgClient.query('BEGIN;');
+    // Ensure pgcrypto is available for crypt
+    await pgClient.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
 
-    // 1. Get the email of the hotel owner to clean up auth.users
-    const hotelRes = await pgClient.query('SELECT email FROM public.hotels WHERE id = $1;', [hotel_id]);
-    
-    if (hotelRes.rows.length > 0) {
-      const email = hotelRes.rows[0].email;
-      
-      // 2. Delete the user from auth.users (cascades to public.users)
-      await pgClient.query('DELETE FROM auth.users WHERE email = $1;', [email]);
+    // Update password in auth.users
+    const result = await pgClient.query(
+      `UPDATE auth.users 
+       SET encrypted_password = crypt($1::text, gen_salt('bf', 10)),
+           updated_at = now()
+       WHERE email = $2::text;`,
+      [password, email.toLowerCase().trim()]
+    );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: 'No user account found for this email' }, { status: 404 });
     }
-
-    // 3. Delete the hotel from public.hotels (cascades to all operational tables)
-    await pgClient.query('DELETE FROM public.hotels WHERE id = $1;', [hotel_id]);
-
-    // Commit Transaction
-    await pgClient.query('COMMIT;');
 
     return NextResponse.json({ success: true });
 
   } catch (err: any) {
-    if (pgClient) {
-      try {
-        await pgClient.query('ROLLBACK;');
-      } catch (rollbackErr) {
-        console.error('Rollback failed:', rollbackErr);
-      }
-    }
-    console.error('Delete Hotel API Error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to delete hotel' }, { status: 500 });
+    console.error('Reset Password API Error:', err);
+    return NextResponse.json({ error: err.message || 'Failed to reset password' }, { status: 500 });
   } finally {
     if (pgClient) {
       await pgClient.end();

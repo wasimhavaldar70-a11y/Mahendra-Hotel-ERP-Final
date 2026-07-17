@@ -3,24 +3,11 @@
 // Location: lib/supabase/client.ts
 // ========================================================
 
-import { createClient } from '@supabase/supabase-js';
 import { mockDb } from './mockDb';
 import { supabaseDb } from './supabaseDb';
+import { supabase, isRealSupabase } from './supabaseClient';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-// Real connection is active if credentials exist and are not placeholders
-export const isRealSupabase = !!(
-  supabaseUrl && 
-  supabaseAnonKey && 
-  !supabaseAnonKey.includes('[YOUR-') && 
-  !supabaseUrl.includes('[YOUR-')
-);
-
-export const supabase = isRealSupabase
-  ? createClient(supabaseUrl!, supabaseAnonKey!)
-  : null;
+export { supabase, isRealSupabase };
 
 // Unified database operations client
 export const db = isRealSupabase ? supabaseDb : mockDb;
@@ -36,7 +23,11 @@ export const setSessionUser = (sessionData: any) => {
   if (typeof window === 'undefined') return;
   if (sessionData) {
     localStorage.setItem('hf_session', JSON.stringify(sessionData));
+    // Set cookie for Next.js Middleware and API routes to access the session
+    document.cookie = `hf_session=${encodeURIComponent(JSON.stringify(sessionData))}; path=/; max-age=86400; SameSite=Lax`;
   } else {
     localStorage.removeItem('hf_session');
+    // Clear the session cookie
+    document.cookie = 'hf_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   }
 };

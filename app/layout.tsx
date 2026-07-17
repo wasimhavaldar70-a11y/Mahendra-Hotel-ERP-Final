@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "HotelFlow CRM - Simple Hotel PMS & CRM",
+  title: "StayDesk - Simple Hotel PMS",
   description: "Simplify your hotel operations: Visual room map, returning customer 20-second check-in, checkouts, payments, reports, and identity vault.",
 };
 

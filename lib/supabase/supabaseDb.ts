@@ -3,23 +3,84 @@
 // Location: lib/supabase/supabaseDb.ts
 // ========================================================
 
-import { createClient } from '@supabase/supabase-js';
-import { User, Hotel, Room, Customer, CustomerDocument, CheckIn, CheckInGuest, Payment, ExtendedCheckIn, RoomStatus } from '../../types';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-// Only instantiate if credentials are provided
-const supabase = (supabaseUrl && supabaseAnonKey)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+import { supabase } from './supabaseClient';
+import { User, Hotel, Room, Customer, CustomerDocument, CustomerHistory, CheckIn, CheckInGuest, Payment, ExtendedCheckIn, RoomStatus } from '../../types';
 
 // Broadcast changes locally so that multiple open tabs refresh automatically on edits
 const broadcastChannel = typeof window !== 'undefined' ? new BroadcastChannel('hotelflow-sync') : null;
 const broadcastDbUpdate = (type: string) => {
   if (broadcastChannel) {
-    broadcastChannel.postMessage({ type, timestamp: Date.now() });
+    broadcastChannel.postMessage({ type: 'DB_UPDATE', table: type, timestamp: Date.now() });
   }
+};
+
+// Helper: Convert base64 Data URI to Blob for storage uploading
+const dataURItoBlob = (dataURI: string) => {
+  const parts = dataURI.split(',');
+  const byteString = atob(parts[1]);
+  const mimeString = parts[0].split(':')[1].split(';')[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeString });
+};
+
+// Helper: Upload file to Supabase Storage and return path
+const uploadImageToStorage = async (hotelId: string, customerId: string, side: 'front' | 'back', base64Data: string | undefined): Promise<string> => {
+  if (!supabase || !base64Data) return '';
+  if (!base64Data.startsWith('data:')) return base64Data; // Already URL/path
+
+  try {
+    // Check if bucket exists
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+    if (listError) throw listError;
+
+    if (!buckets?.some(b => b.id === 'customer-documents')) {
+      const { error: createError } = await supabase.storage.createBucket('customer-documents', {
+        public: true,
+        fileSizeLimit: 5242880 // 5MB
+      });
+      if (createError) throw createError;
+    }
+
+    const blob = dataURItoBlob(base64Data);
+    const fileExt = blob.type.split('/')[1] || 'png';
+    const filePath = `${hotelId}/${customerId}/${side}-${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('customer-documents')
+      .upload(filePath, blob, {
+        contentType: blob.type,
+        upsert: true
+      });
+
+    if (uploadError) throw uploadError;
+    return filePath;
+  } catch (err) {
+    console.error('Failed to upload image to Supabase Storage:', err);
+    throw new Error('Storage Upload Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+  }
+};
+
+// Helper: Get public URL for storage path
+const resolveImageUrl = (imagePath: string | null | undefined): string => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
+  if (!supabase) return '';
+  const { data } = supabase.storage.from('customer-documents').getPublicUrl(imagePath);
+  return data.publicUrl || '';
+};
+
+// Helper: Map list of documents to resolve paths
+const resolveDocs = (docs: any[] | null | undefined) => {
+  if (!docs) return [];
+  return docs.map(d => ({
+    ...d,
+    front_image: resolveImageUrl(d.front_image),
+    back_image: resolveImageUrl(d.back_image)
+  }));
 };
 
 export const supabaseDb = {
@@ -81,10 +142,14 @@ export const supabaseDb = {
   },
 
   addHotel: async (data: Omit<Hotel, 'id' | 'created_at' | 'subscription_status'> & { password?: string }): Promise<Hotel> => {
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    const token = session?.access_token || '';
+
     const response = await fetch('/api/provision-hotel', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
         hotel_name: data.hotel_name,
@@ -120,10 +185,14 @@ export const supabaseDb = {
   },
 
   deleteHotel: async (id: string): Promise<boolean> => {
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    const token = session?.access_token || '';
+
     const response = await fetch('/api/delete-hotel', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ hotel_id: id })
     });
@@ -137,6 +206,30 @@ export const supabaseDb = {
     return true;
   },
 
+  resetHotelPassword: async (email: string, password?: string): Promise<boolean> => {
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    const token = session?.access_token || '';
+
+    const response = await fetch('/api/reset-hotel-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        email: email,
+        password: password
+      })
+    });
+
+    const resData = await response.json();
+    if (!response.ok) {
+      throw new Error(resData.error || 'Failed to reset password');
+    }
+
+    return true;
+  },
+
   // Rooms Operations
   getRooms: async (hotelId: string): Promise<Room[]> => {
     if (!supabase) return [];
@@ -144,6 +237,7 @@ export const supabaseDb = {
       .from('rooms')
       .select('*')
       .eq('hotel_id', hotelId)
+      .is('deleted_at', null)
       .order('room_number', { ascending: true });
     return error ? [] : data || [];
   },
@@ -187,6 +281,22 @@ export const supabaseDb = {
     return data;
   },
 
+  deleteRoom: async (hotelId: string, roomId: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await supabase
+      .from('rooms')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', roomId)
+      .eq('hotel_id', hotelId);
+
+    if (error) {
+      console.error('Delete room failed:', error.message);
+      throw new Error('Failed to delete room: ' + error.message);
+    }
+    broadcastDbUpdate('rooms');
+    return true;
+  },
+
   // Customers Operations
   getCustomers: async (hotelId: string): Promise<Customer[]> => {
     if (!supabase) return [];
@@ -194,6 +304,7 @@ export const supabaseDb = {
       .from('customers')
       .select('*')
       .eq('hotel_id', hotelId)
+      .is('deleted_at', null)
       .order('full_name', { ascending: true });
     return error ? [] : data || [];
   },
@@ -207,12 +318,13 @@ export const supabaseDb = {
       .from('customers')
       .select('*')
       .eq('hotel_id', hotelId)
+      .is('deleted_at', null)
       .or(`full_name.ilike.%${q}%,phone.like.%${q}%`);
 
     return error ? [] : data || [];
   },
 
-  getCustomerByPhoneOrAadhar: async (hotelId: string, identifier: string): Promise<{ customer: Customer; docs: CustomerDocument[]; stayCount: number; lastVisit: string | null; preferredRoom: string | null; pendingBalance: number } | null> => {
+  getCustomerByPhoneOrAadhar: async (hotelId: string, identifier: string): Promise<{ customer: Customer; docs: CustomerDocument[]; stayCount: number; lastVisit: string | null; pendingBalance: number } | null> => {
     if (!supabase) return null;
     const cleanId = identifier.trim();
 
@@ -222,6 +334,7 @@ export const supabaseDb = {
       .select('*')
       .eq('hotel_id', hotelId)
       .eq('phone', cleanId)
+      .is('deleted_at', null)
       .maybeSingle();
 
     // 2. If not found by phone, search through document numbers
@@ -238,6 +351,7 @@ export const supabaseDb = {
           .select('*')
           .eq('hotel_id', hotelId)
           .eq('id', docData[0].customer_id)
+          .is('deleted_at', null)
           .maybeSingle();
         customer = custByDoc || null;
       }
@@ -251,12 +365,15 @@ export const supabaseDb = {
       .select('*')
       .eq('customer_id', customer.id);
 
+    const resolvedDocs = resolveDocs(docs);
+
     // 4. Fetch stays and payments for stats
     const { data: stays } = await supabase
       .from('check_ins')
       .select('id, room_id, status, check_in')
       .eq('hotel_id', hotelId)
-      .eq('primary_customer_id', customer.id);
+      .eq('primary_customer_id', customer.id)
+      .is('deleted_at', null);
 
     const customerStays = stays || [];
     const stayCount = customerStays.length;
@@ -265,30 +382,6 @@ export const supabaseDb = {
     const completedStays = customerStays.filter(s => s.status === 'Completed');
     completedStays.sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
     const lastVisit = completedStays.length > 0 ? completedStays[0].check_in : null;
-
-    // Preferred Room calculation
-    const roomCounts: Record<string, number> = {};
-    let preferredRoomId: string | null = null;
-    let maxRoomCount = 0;
-    customerStays.forEach(st => {
-      if (st.room_id) {
-        roomCounts[st.room_id] = (roomCounts[st.room_id] || 0) + 1;
-        if (roomCounts[st.room_id] > maxRoomCount) {
-          maxRoomCount = roomCounts[st.room_id];
-          preferredRoomId = st.room_id;
-        }
-      }
-    });
-
-    let preferredRoomNumber: string | null = null;
-    if (preferredRoomId) {
-      const { data: r } = await supabase
-        .from('rooms')
-        .select('room_number')
-        .eq('id', preferredRoomId)
-        .maybeSingle();
-      if (r) preferredRoomNumber = r.room_number;
-    }
 
     // Outstanding Balance (pending payments from active stays)
     let pendingBalance = 0;
@@ -307,10 +400,9 @@ export const supabaseDb = {
 
     return {
       customer,
-      docs: docs || [],
+      docs: resolvedDocs || [],
       stayCount,
       lastVisit,
-      preferredRoom: preferredRoomNumber,
       pendingBalance
     };
   },
@@ -318,26 +410,42 @@ export const supabaseDb = {
   addCustomer: async (hotelId: string, data: Omit<Customer, 'id' | 'hotel_id' | 'created_at'>, docType?: string, docNum?: string, frontImg?: string, backImg?: string): Promise<Customer> => {
     if (!supabase) throw new Error('Supabase client not initialized');
 
-    // Check if phone already exists
+    // Check if phone already exists (excluding soft deleted)
     const { data: existing } = await supabase
       .from('customers')
       .select('*')
       .eq('hotel_id', hotelId)
       .eq('phone', data.phone)
+      .is('deleted_at', null)
       .maybeSingle();
 
     if (existing) {
       // If customer exists, check if new documents need to be added
       if (docType && docNum) {
-        await supabase
+        let finalFront = '';
+        let finalBack = '';
+        try {
+          finalFront = await uploadImageToStorage(hotelId, existing.id, 'front', frontImg);
+          finalBack = await uploadImageToStorage(hotelId, existing.id, 'back', backImg);
+        } catch (err) {
+          console.error('Storage upload failed, falling back to base64:', err);
+          finalFront = frontImg || '';
+          finalBack = backImg || '';
+        }
+
+        const { error: docError } = await supabase
           .from('customer_documents')
           .insert({
             customer_id: existing.id,
             document_type: docType,
             document_number: docNum,
-            front_image: frontImg,
-            back_image: backImg
+            front_image: finalFront,
+            back_image: finalBack
           });
+        
+        if (docError) {
+          throw new Error('Failed to create customer document: ' + docError.message);
+        }
       }
       return existing;
     }
@@ -353,7 +461,11 @@ export const supabaseDb = {
         address: data.address,
         city: data.city,
         state: data.state,
-        country: data.country || 'India'
+        country: data.country || 'India',
+        email: data.email,
+        vehicle_number: data.vehicle_number,
+        emergency_contact: data.emergency_contact,
+        nationality: data.nationality || 'Indian'
       })
       .select()
       .single();
@@ -364,19 +476,226 @@ export const supabaseDb = {
 
     // Add customer document
     if (docType && docNum) {
-      await supabase
+      let finalFront = '';
+      let finalBack = '';
+      try {
+        finalFront = await uploadImageToStorage(hotelId, newCustomer.id, 'front', frontImg);
+        finalBack = await uploadImageToStorage(hotelId, newCustomer.id, 'back', backImg);
+      } catch (err) {
+        console.error('Storage upload failed, falling back to base64:', err);
+        finalFront = frontImg || '';
+        finalBack = backImg || '';
+      }
+
+      const { error: docError } = await supabase
         .from('customer_documents')
         .insert({
           customer_id: newCustomer.id,
           document_type: docType,
           document_number: docNum,
-          front_image: frontImg,
-          back_image: backImg
+          front_image: finalFront,
+          back_image: finalBack,
+          is_primary: true,
+          upload_date: new Date().toISOString()
         });
+
+      if (docError) {
+        throw new Error('Failed to create customer document: ' + docError.message);
+      }
     }
 
     broadcastDbUpdate('customers');
     return newCustomer;
+  },
+
+  updateCustomer: async (
+    hotelId: string,
+    customerId: string,
+    customerData: Omit<Customer, 'id' | 'hotel_id' | 'created_at'>,
+    docData?: { type: string; number: string; front: string; back: string }
+  ): Promise<Customer | null> => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+
+    // 1. Update customer profile details
+    const { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .update({
+        full_name: customerData.full_name,
+        phone: customerData.phone,
+        gender: customerData.gender,
+        address: customerData.address,
+        city: customerData.city,
+        state: customerData.state,
+        country: customerData.country,
+        email: customerData.email,
+        vehicle_number: customerData.vehicle_number,
+        emergency_contact: customerData.emergency_contact,
+        nationality: customerData.nationality
+      })
+      .eq('id', customerId)
+      .eq('hotel_id', hotelId)
+      .select()
+      .single();
+
+    if (customerError || !customer) {
+      throw new Error(customerError?.message || 'Failed to update customer profile');
+    }
+
+    // 2. Update or insert document details
+    if (docData) {
+      // Find if document with this number/type exists
+      const { data: existingDoc } = await supabase
+        .from('customer_documents')
+        .select('id')
+        .eq('customer_id', customerId)
+        .eq('document_type', docData.type)
+        .eq('document_number', docData.number)
+        .maybeSingle();
+
+      let finalFront = '';
+      let finalBack = '';
+      try {
+        finalFront = await uploadImageToStorage(hotelId, customerId, 'front', docData.front);
+        finalBack = await uploadImageToStorage(hotelId, customerId, 'back', docData.back);
+      } catch (err) {
+        console.error('Storage upload failed, falling back to base64:', err);
+        finalFront = docData.front || '';
+        finalBack = docData.back || '';
+      }
+
+      if (existingDoc) {
+        // Update images
+        const { error: docError } = await supabase
+          .from('customer_documents')
+          .update({
+            front_image: finalFront,
+            back_image: finalBack
+          })
+          .eq('id', existingDoc.id);
+        
+        if (docError) throw new Error(docError.message);
+      } else {
+        // Set all other documents to non-primary if this new document is primary
+        await supabase
+          .from('customer_documents')
+          .update({ is_primary: false })
+          .eq('customer_id', customerId);
+
+        // Insert new document
+        const { error: docError } = await supabase
+          .from('customer_documents')
+          .insert({
+            customer_id: customerId,
+            document_type: docData.type,
+            document_number: docData.number,
+            front_image: finalFront,
+            back_image: finalBack,
+            is_primary: true,
+            upload_date: new Date().toISOString()
+          });
+
+        if (docError) throw new Error(docError.message);
+      }
+    }
+
+    broadcastDbUpdate('customers');
+    return customer;
+  },
+
+  deleteCustomer: async (hotelId: string, customerId: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await supabase
+      .from('customers')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', customerId)
+      .eq('hotel_id', hotelId);
+
+    if (error) {
+      console.error('Delete customer failed:', error.message);
+      throw new Error('Failed to delete customer: ' + error.message);
+    }
+    broadcastDbUpdate('customers');
+    return true;
+  },
+
+  setPrimaryDocument: async (hotelId: string, customerId: string, documentId: string): Promise<boolean> => {
+    if (!supabase) return false;
+    
+    // Set all other documents to non-primary
+    await supabase
+      .from('customer_documents')
+      .update({ is_primary: false })
+      .eq('customer_id', customerId);
+
+    // Set selected to primary
+    const { error } = await supabase
+      .from('customer_documents')
+      .update({ is_primary: true, verification_date: new Date().toISOString() })
+      .eq('id', documentId);
+
+    broadcastDbUpdate('customers');
+    return !error;
+  },
+
+  getCustomerHistory: async (hotelId: string, customerId: string): Promise<CustomerHistory[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('customer_history')
+      .select('*')
+      .eq('customer_id', customerId)
+      .order('changed_at', { ascending: false });
+    return error ? [] : data || [];
+  },
+
+  getCustomerStays: async (hotelId: string, customerId: string): Promise<any[]> => {
+    if (!supabase) return [];
+    
+    const { data: stays, error } = await supabase
+      .from('check_ins')
+      .select(`
+        id,
+        check_in,
+        expected_checkout,
+        status,
+        room_id,
+        rooms (
+          room_number,
+          room_type
+        ),
+        payments (
+          room_price,
+          advance,
+          pending,
+          payment_method
+        )
+      `)
+      .eq('hotel_id', hotelId)
+      .eq('primary_customer_id', customerId)
+      .is('deleted_at', null)
+      .order('check_in', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching stays:', error);
+      return [];
+    }
+
+    return (stays || []).map((stay: any) => {
+      const roomInfo = Array.isArray(stay.rooms) ? stay.rooms[0] : stay.rooms;
+      const paymentInfo = Array.isArray(stay.payments) ? stay.payments[0] : stay.payments;
+      
+      return {
+        id: stay.id,
+        check_in: stay.check_in,
+        expected_checkout: stay.expected_checkout,
+        status: stay.status,
+        room_number: roomInfo?.room_number || 'N/A',
+        room_type: roomInfo?.room_type || 'N/A',
+        room_price: Number(paymentInfo?.room_price || 0),
+        advance: Number(paymentInfo?.advance || 0),
+        pending: Number(paymentInfo?.pending || 0),
+        payment_method: paymentInfo?.payment_method || 'N/A'
+      };
+    });
   },
 
   // Check In and Stays
@@ -402,60 +721,39 @@ export const supabaseDb = {
   ): Promise<CheckIn> => {
     if (!supabase) throw new Error('Supabase client not initialized');
 
-    // 1. Insert Check-In record
-    const { data: newCheckIn, error: checkInError } = await supabase
-      .from('check_ins')
-      .insert({
-        hotel_id: hotelId,
-        room_id: checkInData.room_id,
-        primary_customer_id: checkInData.primary_customer_id,
-        number_of_guests: checkInData.number_of_guests,
-        check_in: new Date().toISOString(),
-        expected_checkout: checkInData.expected_checkout,
-        status: 'Active'
-      })
-      .select()
-      .single();
+    // Call the PostgreSQL transactional check-in RPC function
+    const { data: checkinId, error } = await supabase.rpc('check_in_guests_transactional', {
+      p_hotel_id: hotelId,
+      p_room_id: checkInData.room_id,
+      p_primary_customer_id: checkInData.primary_customer_id,
+      p_number_of_guests: checkInData.number_of_guests,
+      p_expected_checkout: checkInData.expected_checkout,
+      p_room_price: paymentData.room_price,
+      p_advance: paymentData.advance,
+      p_pending: paymentData.pending,
+      p_payment_method: paymentData.payment_method,
+      p_guests: guestsList
+    });
 
-    if (checkInError || !newCheckIn) {
-      throw new Error(checkInError?.message || 'Failed to create check-in');
+    if (error || !checkinId) {
+      throw new Error(error?.message || 'Failed to complete transactional check-in');
     }
 
-    // 2. Insert Payment record
-    const { error: paymentError } = await supabase
-      .from('payments')
-      .insert({
-        checkin_id: newCheckIn.id,
-        room_price: paymentData.room_price,
-        advance: paymentData.advance,
-        pending: paymentData.pending,
-        payment_method: paymentData.payment_method
-      });
-
-    if (paymentError) {
-      console.error('Payment insert failed, but check-in was created:', paymentError);
-    }
-
-    // 3. Insert Guest list records
-    if (guestsList.length > 0) {
-      const guestsToInsert = guestsList.map(g => ({
-        checkin_id: newCheckIn.id,
-        customer_id: g.customer_id,
-        relationship: g.relationship,
-        document_verified: g.document_verified
-      }));
-      await supabase.from('check_in_guests').insert(guestsToInsert);
-    }
-
-    // 4. Update Room status to Occupied
-    await supabase
-      .from('rooms')
-      .update({ status: 'Occupied' })
-      .eq('id', checkInData.room_id);
-
+    // Broadcast synchronization updates
     broadcastDbUpdate('checkins');
     broadcastDbUpdate('rooms');
     broadcastDbUpdate('payments');
+
+    // Fetch the newly created check-in to return it (matching original method signature)
+    const { data: newCheckIn, error: fetchError } = await supabase
+      .from('check_ins')
+      .select('*')
+      .eq('id', checkinId)
+      .single();
+
+    if (fetchError || !newCheckIn) {
+      throw new Error(fetchError?.message || 'Failed to retrieve check-in details');
+    }
 
     return newCheckIn;
   },
@@ -505,41 +803,27 @@ export const supabaseDb = {
   checkOut: async (hotelId: string, checkInId: string, finalPaymentMethod: 'UPI' | 'Cash' | 'Card'): Promise<CheckIn | null> => {
     if (!supabase) return null;
 
-    // 1. Set Check-In status to Completed
-    const { data: checkIn, error: checkInError } = await supabase
-      .from('check_ins')
-      .update({ status: 'Completed' })
-      .eq('id', checkInId)
-      .eq('hotel_id', hotelId)
-      .select()
-      .single();
+    const { error } = await supabase.rpc('checkout_stay_transactional', {
+      p_hotel_id: hotelId,
+      p_checkin_id: checkInId,
+      p_final_payment_method: finalPaymentMethod
+    });
 
-    if (checkInError || !checkIn) return null;
-
-    // 2. Settle payment: clear pending balance
-    const { data: payment } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('checkin_id', checkInId)
-      .maybeSingle();
-
-    if (payment) {
-      await supabase
-        .from('payments')
-        .update({
-          advance: payment.room_price, // fully paid
-          pending: 0,
-          payment_method: finalPaymentMethod
-        })
-        .eq('id', payment.id);
+    if (error) {
+      console.error('Checkout failed:', error.message);
+      throw new Error('Checkout transaction failed: ' + error.message);
     }
 
-    // 3. Set Room status to Cleaning
-    if (checkIn.room_id) {
-      await supabase
-        .from('rooms')
-        .update({ status: 'Cleaning' })
-        .eq('id', checkIn.room_id);
+    // Fetch the updated check-in to return
+    const { data: checkIn, error: fetchError } = await supabase
+      .from('check_ins')
+      .select('*')
+      .eq('id', checkInId)
+      .eq('hotel_id', hotelId)
+      .single();
+
+    if (fetchError || !checkIn) {
+      throw new Error(fetchError?.message || 'Failed to retrieve updated stay after checkout');
     }
 
     broadcastDbUpdate('checkins');
@@ -553,23 +837,29 @@ export const supabaseDb = {
   getActiveStayForRoom: async (hotelId: string, roomId: string): Promise<ExtendedCheckIn | null> => {
     if (!supabase) return null;
 
-    // Fetch active stay
+    // Fetch active stay (excluding soft deleted)
     const { data: activeStay } = await supabase
       .from('check_ins')
       .select('*')
       .eq('hotel_id', hotelId)
       .eq('room_id', roomId)
       .eq('status', 'Active')
+      .is('deleted_at', null)
       .maybeSingle();
 
     if (!activeStay) return null;
 
-    // Fetch primary customer with documents
+    // Fetch primary customer with documents (excluding soft deleted)
     const { data: primaryCustomer } = await supabase
       .from('customers')
       .select('*, customer_documents(*)')
       .eq('id', activeStay.primary_customer_id)
+      .is('deleted_at', null)
       .maybeSingle();
+
+    if (primaryCustomer && primaryCustomer.customer_documents) {
+      primaryCustomer.customer_documents = resolveDocs(primaryCustomer.customer_documents);
+    }
 
     // Fetch payment record
     const { data: payment } = await supabase
@@ -584,22 +874,29 @@ export const supabaseDb = {
       .select('*, customers(*, customer_documents(*))')
       .eq('checkin_id', activeStay.id);
 
-    // Fetch room details
+    // Fetch room details (excluding soft deleted)
     const { data: room } = await supabase
       .from('rooms')
       .select('*')
       .eq('id', roomId)
+      .is('deleted_at', null)
       .maybeSingle();
 
-    const formattedGuests = (stayGuests || []).map(g => ({
-      id: g.id,
-      checkin_id: g.checkin_id,
-      customer_id: g.customer_id,
-      relationship: g.relationship,
-      document_verified: g.document_verified,
-      created_at: g.created_at,
-      customer: g.customers
-    }));
+    const formattedGuests = (stayGuests || []).map(g => {
+      const cust = g.customers;
+      if (cust && cust.customer_documents) {
+        cust.customer_documents = resolveDocs(cust.customer_documents);
+      }
+      return {
+        id: g.id,
+        checkin_id: g.checkin_id,
+        customer_id: g.customer_id,
+        relationship: g.relationship,
+        document_verified: g.document_verified,
+        created_at: g.created_at,
+        customer: cust
+      };
+    });
 
     return {
       ...activeStay,
@@ -614,11 +911,12 @@ export const supabaseDb = {
   getPayments: async (hotelId: string): Promise<(Payment & { customerName: string; roomNumber: string })[]> => {
     if (!supabase) return [];
 
-    // Fetch check-ins list for this hotel
+    // Fetch check-ins list for this hotel (excluding soft deleted)
     const { data: checkins } = await supabase
       .from('check_ins')
       .select('id, primary_customer_id, room_id')
-      .eq('hotel_id', hotelId);
+      .eq('hotel_id', hotelId)
+      .is('deleted_at', null);
 
     if (!checkins || checkins.length === 0) return [];
     const checkinIds = checkins.map(c => c.id);
@@ -632,12 +930,12 @@ export const supabaseDb = {
 
     if (error || !payments) return [];
 
-    // Resolve dependencies
+    // Resolve dependencies (excluding soft deleted)
     const customerIds = checkins.map(c => c.primary_customer_id).filter(Boolean);
     const roomIds = checkins.map(c => c.room_id).filter(Boolean);
 
-    const { data: customers } = await supabase.from('customers').select('id, full_name').in('id', customerIds);
-    const { data: rooms } = await supabase.from('rooms').select('id, room_number').in('id', roomIds);
+    const { data: customers } = await supabase.from('customers').select('id, full_name').in('id', customerIds).is('deleted_at', null);
+    const { data: rooms } = await supabase.from('rooms').select('id, room_number').in('id', roomIds).is('deleted_at', null);
 
     return payments.map(p => {
       const stay = checkins.find(ch => ch.id === p.checkin_id);
@@ -650,6 +948,190 @@ export const supabaseDb = {
         roomNumber: rm ? rm.room_number : 'N/A'
       };
     });
+  },
+
+  // Bookings Management
+  getBookings: async (hotelId: string): Promise<ExtendedCheckIn[]> => {
+    if (!supabase) return [];
+    
+    // Fetch bookings (excluding soft deleted)
+    const { data: bookings, error: bookingsError } = await supabase
+      .from('check_ins')
+      .select('*')
+      .eq('hotel_id', hotelId)
+      .is('deleted_at', null)
+      .order('check_in', { ascending: false });
+
+    if (bookingsError || !bookings) return [];
+
+    const extendedBookings: ExtendedCheckIn[] = await Promise.all(
+      bookings.map(async (b) => {
+        const { data: customer } = await supabase!.from('customers')
+          .select('*')
+          .eq('id', b.primary_customer_id)
+          .is('deleted_at', null)
+          .maybeSingle();
+
+        const { data: room } = await supabase!.from('rooms')
+          .select('*')
+          .eq('id', b.room_id)
+          .is('deleted_at', null)
+          .maybeSingle();
+
+        const { data: payment } = await supabase!.from('payments')
+          .select('*')
+          .eq('checkin_id', b.id)
+          .maybeSingle();
+
+        return {
+          ...b,
+          room: room || undefined,
+          primary_customer: customer || undefined,
+          payment: payment || undefined
+        };
+      })
+    );
+
+    return extendedBookings;
+  },
+
+  createBooking: async (
+    hotelId: string,
+    bookingData: {
+      room_id: string;
+      primary_customer_id: string;
+      check_in: string;
+      expected_checkout: string;
+      number_of_guests: number;
+      status?: 'Reserved' | 'Active';
+    },
+    paymentData: {
+      room_price: number;
+      advance: number;
+      pending: number;
+      payment_method: 'UPI' | 'Cash' | 'Card';
+    },
+    guestsList: {
+      customer_id: string;
+      relationship: 'Self' | 'Friend' | 'Family' | 'Wife' | 'Husband' | 'GF' | 'BF' | 'Child';
+      document_verified: boolean;
+    }[]
+  ): Promise<CheckIn> => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+    const status = bookingData.status || 'Reserved';
+
+    const { data: newBooking, error: bookingError } = await supabase
+      .from('check_ins')
+      .insert({
+        hotel_id: hotelId,
+        room_id: bookingData.room_id,
+        primary_customer_id: bookingData.primary_customer_id,
+        number_of_guests: bookingData.number_of_guests,
+        check_in: bookingData.check_in,
+        expected_checkout: bookingData.expected_checkout,
+        status: status
+      })
+      .select()
+      .single();
+
+    if (bookingError || !newBooking) {
+      throw new Error(bookingError?.message || 'Failed to create booking');
+    }
+
+    const { error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        checkin_id: newBooking.id,
+        room_price: paymentData.room_price,
+        advance: paymentData.advance,
+        pending: paymentData.pending,
+        payment_method: paymentData.payment_method
+      });
+
+    if (paymentError) {
+      console.error('Payment insert failed, but booking was created:', paymentError);
+    }
+
+    if (guestsList.length > 0) {
+      const guestsToInsert = guestsList.map(g => ({
+        checkin_id: newBooking.id,
+        customer_id: g.customer_id,
+        relationship: g.relationship,
+        document_verified: g.document_verified
+      }));
+      await supabase.from('check_in_guests').insert(guestsToInsert);
+    }
+
+    if (status === 'Active') {
+      await supabase
+        .from('rooms')
+        .update({ status: 'Occupied' })
+        .eq('id', bookingData.room_id);
+      broadcastDbUpdate('rooms');
+    }
+
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('payments');
+
+    return newBooking;
+  },
+
+  cancelBooking: async (hotelId: string, bookingId: string): Promise<CheckIn | null> => {
+    if (!supabase) return null;
+    
+    const { error } = await supabase.rpc('cancel_booking_transactional', {
+      p_hotel_id: hotelId,
+      p_booking_id: bookingId
+    });
+
+    if (error) {
+      console.error('Cancel booking failed:', error.message);
+      throw new Error('Cancel booking transaction failed: ' + error.message);
+    }
+
+    const { data: booking, error: fetchError } = await supabase
+      .from('check_ins')
+      .select('*')
+      .eq('id', bookingId)
+      .eq('hotel_id', hotelId)
+      .single();
+
+    if (fetchError || !booking) {
+      throw new Error(fetchError?.message || 'Failed to retrieve updated stay after cancellation');
+    }
+
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('rooms');
+    return booking;
+  },
+
+  checkInBooking: async (hotelId: string, bookingId: string): Promise<CheckIn | null> => {
+    if (!supabase) return null;
+    
+    const { error } = await supabase.rpc('check_in_booking_transactional', {
+      p_hotel_id: hotelId,
+      p_booking_id: bookingId
+    });
+
+    if (error) {
+      console.error('Check-in booking failed:', error.message);
+      throw new Error('Check-in booking transaction failed: ' + error.message);
+    }
+
+    const { data: booking, error: fetchError } = await supabase
+      .from('check_ins')
+      .select('*')
+      .eq('id', bookingId)
+      .eq('hotel_id', hotelId)
+      .single();
+
+    if (fetchError || !booking) {
+      throw new Error(fetchError?.message || 'Failed to retrieve updated stay after checking in');
+    }
+
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('rooms');
+    return booking;
   },
 
   // Reports aggregations
@@ -665,98 +1147,217 @@ export const supabaseDb = {
       return { dailyRevenue: [], monthlyRevenue: [], occupancyRate: 0, repeatCustomers: [], pendingPayments: [], mostUsedRooms: [] };
     }
 
-    // Fetch operational datasets
-    const { data: rooms } = await supabase.from('rooms').select('*').eq('hotel_id', hotelId);
-    const { data: checkins } = await supabase.from('check_ins').select('*').eq('hotel_id', hotelId);
-    const { data: customers } = await supabase.from('customers').select('*').eq('hotel_id', hotelId);
-
-    const checkinIds = checkins?.map(c => c.id) || [];
-    const payments = checkinIds.length > 0
-      ? (await supabase.from('payments').select('*').in('checkin_id', checkinIds)).data || []
-      : [];
-
-    const roomList = rooms || [];
-    const checkinList = checkins || [];
-    const customerList = customers || [];
-
-    // Occupancy Rate
-    const totalRoomsCount = roomList.length;
-    const occupiedRoomsCount = roomList.filter(r => r.status === 'Occupied').length;
-    const occupancyRate = totalRoomsCount > 0 ? Math.round((occupiedRoomsCount / totalRoomsCount) * 100) : 0;
-
-    // Daily & Monthly Revenue
-    const dailyMap: Record<string, number> = {};
-    const monthlyMap: Record<string, number> = {};
-
-    payments.forEach(p => {
-      const amount = Number(p.advance);
-      if (amount <= 0) return;
-
-      const dateObj = new Date(p.created_at);
-      const dayKey = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-      const monthKey = dateObj.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-
-      dailyMap[dayKey] = (dailyMap[dayKey] || 0) + amount;
-      monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + amount;
+    const { data, error } = await supabase.rpc('get_hotel_reports', {
+      p_hotel_id: hotelId
     });
 
-    const dailyRevenue = Object.entries(dailyMap).map(([date, amount]) => ({ date, amount })).slice(-7);
-    const monthlyRevenue = Object.entries(monthlyMap).map(([month, amount]) => ({ month, amount }));
-
-    // Repeat Customers
-    const guestVisits: Record<string, { name: string; phone: string; visits: number }> = {};
-    checkinList.forEach(ch => {
-      const cust = customerList.find(c => c.id === ch.primary_customer_id);
-      if (cust) {
-        if (!guestVisits[cust.id]) {
-          guestVisits[cust.id] = { name: cust.full_name, phone: cust.phone, visits: 0 };
-        }
-        guestVisits[cust.id].visits += 1;
-      }
-    });
-
-    const repeatCustomers = Object.values(guestVisits)
-      .filter(v => v.visits > 1)
-      .sort((a, b) => b.visits - a.visits);
-
-    // Pending payments
-    const pendingPayments: { guest: string; phone: string; room: string; amount: number }[] = [];
-    payments.forEach(p => {
-      const pendingVal = Number(p.pending);
-      if (pendingVal > 0) {
-        const stay = checkinList.find(ch => ch.id === p.checkin_id && ch.status === 'Active');
-        if (stay) {
-          const cust = customerList.find(c => c.id === stay.primary_customer_id);
-          const rm = roomList.find(r => r.id === stay.room_id);
-          pendingPayments.push({
-            guest: cust ? cust.full_name : 'Unknown Guest',
-            phone: cust ? cust.phone : '',
-            room: rm ? rm.room_number : '',
-            amount: pendingVal
-          });
-        }
-      }
-    });
-
-    // Most used rooms
-    const roomUsage: Record<string, number> = {};
-    checkinList.forEach(ch => {
-      const rm = roomList.find(r => r.id === ch.room_id);
-      if (rm) {
-        roomUsage[rm.room_number] = (roomUsage[rm.room_number] || 0) + 1;
-      }
-    });
-    const mostUsedRooms = Object.entries(roomUsage)
-      .map(([room, usageCount]) => ({ room, usageCount }))
-      .sort((a, b) => b.usageCount - a.usageCount);
+    if (error || !data) {
+      console.error('Failed to retrieve server-side reports:', error);
+      return { dailyRevenue: [], monthlyRevenue: [], occupancyRate: 0, repeatCustomers: [], pendingPayments: [], mostUsedRooms: [] };
+    }
 
     return {
-      dailyRevenue,
-      monthlyRevenue,
-      occupancyRate,
-      repeatCustomers,
-      pendingPayments,
-      mostUsedRooms
+      dailyRevenue: data.dailyRevenue || [],
+      monthlyRevenue: data.monthlyRevenue || [],
+      occupancyRate: Number(data.occupancyRate) || 0,
+      repeatCustomers: data.repeatCustomers || [],
+      pendingPayments: data.pendingPayments || [],
+      mostUsedRooms: data.mostUsedRooms || []
     };
+  },
+
+  createWebBooking: async (
+    hotelId: string,
+    webBookingData: {
+      full_name: string;
+      phone: string;
+      email: string;
+      check_in: string;
+      expected_checkout: string;
+      number_of_guests: number;
+      room_type: string;
+      special_requests?: string;
+    }
+  ): Promise<any> => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+
+    const { data: request, error } = await supabase
+      .from('booking_requests')
+      .insert({
+        hotel_id: hotelId,
+        full_name: webBookingData.full_name,
+        phone: webBookingData.phone,
+        email: webBookingData.email,
+        check_in: webBookingData.check_in,
+        expected_checkout: webBookingData.expected_checkout,
+        number_of_guests: webBookingData.number_of_guests,
+        room_type: webBookingData.room_type,
+        special_requests: webBookingData.special_requests || '',
+        status: 'Pending'
+      })
+      .select()
+      .single();
+
+    if (error || !request) {
+      throw new Error(error?.message || 'Failed to file booking request');
+    }
+
+    broadcastDbUpdate('booking_requests');
+    return request;
+  },
+
+  confirmBooking: async (hotelId: string, bookingId: string, roomId: string): Promise<any> => {
+    if (!supabase) return null;
+
+    const { data: booking, error } = await supabase
+      .from('check_ins')
+      .update({ status: 'Reserved', room_id: roomId })
+      .eq('id', bookingId)
+      .eq('hotel_id', hotelId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(error.message || 'Failed to confirm booking');
+    }
+
+    broadcastDbUpdate('checkins');
+    return booking;
+  },
+
+  getPendingBookingRequests: async (hotelId: string): Promise<any[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('booking_requests')
+      .select('*')
+      .eq('hotel_id', hotelId)
+      .eq('status', 'Pending')
+      .order('created_at', { ascending: false });
+    return error ? [] : data || [];
+  },
+
+  approveBookingRequest: async (hotelId: string, requestId: string, roomId: string): Promise<any> => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+
+    // 1. Get the booking request details
+    const { data: req, error: reqError } = await supabase
+      .from('booking_requests')
+      .select('*')
+      .eq('id', requestId)
+      .eq('hotel_id', hotelId)
+      .single();
+
+    if (reqError || !req) {
+      throw new Error(reqError?.message || 'Failed to retrieve booking request details');
+    }
+
+    // 2. Find or create the customer record
+    let { data: customer, error: customerError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('hotel_id', hotelId)
+      .eq('phone', req.phone)
+      .maybeSingle();
+
+    if (!customer) {
+      const { data: newCustomer, error: insertCustomerError } = await supabase
+        .from('customers')
+        .insert({
+          hotel_id: hotelId,
+          full_name: req.full_name,
+          phone: req.phone,
+          email: req.email,
+          gender: 'Male',
+          city: 'Website Booking',
+          country: 'India'
+        })
+        .select()
+        .single();
+
+      if (insertCustomerError || !newCustomer) {
+        throw new Error(insertCustomerError?.message || 'Failed to create customer profile');
+      }
+      customer = newCustomer;
+    }
+
+    // 3. Fetch the room details to get the price
+    const { data: room, error: roomError } = await supabase
+      .from('rooms')
+      .select('price')
+      .eq('id', roomId)
+      .eq('hotel_id', hotelId)
+      .single();
+
+    if (roomError || !room) {
+      throw new Error(roomError?.message || 'Failed to retrieve room details for allocation');
+    }
+
+    // 4. Create the booking record in check_ins with status = 'Reserved'
+    const { data: checkIn, error: checkInError } = await supabase
+      .from('check_ins')
+      .insert({
+        hotel_id: hotelId,
+        room_id: roomId,
+        primary_customer_id: customer.id,
+        number_of_guests: req.number_of_guests,
+        check_in: req.check_in,
+        expected_checkout: req.expected_checkout,
+        status: 'Reserved'
+      })
+      .select()
+      .single();
+
+    if (checkInError || !checkIn) {
+      throw new Error(checkInError?.message || 'Failed to create check-in reservation');
+    }
+
+    // 5. Create the payments record
+    const roomPrice = Number(room.price) || 2500;
+    const { error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        checkin_id: checkIn.id,
+        room_price: roomPrice,
+        advance: 0,
+        pending: roomPrice,
+        payment_method: 'Cash'
+      });
+
+    if (paymentError) {
+      console.error('Approved booking request payment registration warning:', paymentError);
+    }
+
+    // 6. Update booking request status to 'Approved'
+    const { error: updateReqError } = await supabase
+      .from('booking_requests')
+      .update({ status: 'Approved' })
+      .eq('id', requestId);
+
+    if (updateReqError) {
+      console.error('Failed to update booking request status to Approved:', updateReqError);
+    }
+
+    broadcastDbUpdate('booking_requests');
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('customers');
+    broadcastDbUpdate('rooms');
+    return checkIn;
+  },
+
+  rejectBookingRequest: async (hotelId: string, requestId: string): Promise<boolean> => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+
+    const { error } = await supabase
+      .from('booking_requests')
+      .update({ status: 'Rejected' })
+      .eq('id', requestId)
+      .eq('hotel_id', hotelId);
+
+    if (error) {
+      throw new Error(error.message || 'Failed to reject booking request');
+    }
+
+    broadcastDbUpdate('booking_requests');
+    return true;
   }
 };

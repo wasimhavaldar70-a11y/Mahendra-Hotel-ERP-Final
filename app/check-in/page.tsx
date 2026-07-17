@@ -11,7 +11,7 @@ import DashboardLayout from '../../components/DashboardLayout';
 import CustomerSearch from '../../components/CustomerSearch';
 import CustomerForm from '../../components/CustomerForm';
 import { db, getSessionUser } from '../../lib/supabase/client';
-import { Room, Customer } from '../../types';
+import { Room, Customer, CustomerDocument } from '../../types';
 import { 
   ClipboardSignature, 
   BedDouble, 
@@ -20,7 +20,9 @@ import {
   Check, 
   UserPlus, 
   Trash2,
-  CalendarCheck
+  CalendarCheck,
+  X,
+  Search
 } from 'lucide-react';
 
 function CheckInFormContent() {
@@ -36,6 +38,11 @@ function CheckInFormContent() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [isReturning, setIsReturning] = useState(false);
+
+  const [isEditingSelectedCustomer, setIsEditingSelectedCustomer] = useState(false);
+  const [selectedCustomerDocs, setSelectedCustomerDocs] = useState<CustomerDocument[]>([]);
+  const [selectedCustomerStats, setSelectedCustomerStats] = useState<any>(null);
+  const [activeGuestSearchIndex, setActiveGuestSearchIndex] = useState<number | null>(null);
 
   // New customer registration state (to hold form data temporarily)
   const [tempCustomerData, setTempCustomerData] = useState<any>(null);
@@ -58,6 +65,7 @@ function CheckInFormContent() {
   const [expectedCheckout, setExpectedCheckout] = useState('');
   const [advancePaid, setAdvancePaid] = useState(0);
   const [customRoomPrice, setCustomRoomPrice] = useState<number | string>('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const session = getSessionUser();
@@ -94,10 +102,11 @@ function CheckInFormContent() {
     }
   };
 
-  const handleSelectCustomer = (customer: Customer, returning: boolean) => {
+  const handleSelectCustomer = async (customer: Customer, returning: boolean) => {
     setSelectedCustomer(customer);
     setIsReturning(returning);
     setShowNewCustomerForm(false);
+    setIsEditingSelectedCustomer(false);
     
     // Update first guest name in members list
     setGuests(prev => {
@@ -105,6 +114,25 @@ function CheckInFormContent() {
       updated[0].full_name = customer.full_name;
       return updated;
     });
+
+    if (customer.id !== 'temp-new-id') {
+      try {
+        const detail = await db.getCustomerByPhoneOrAadhar(currentHotel.id, customer.phone);
+        if (detail) {
+          setSelectedCustomerDocs(detail.docs);
+          setSelectedCustomerStats({
+            stayCount: detail.stayCount,
+            lastVisit: detail.lastVisit,
+            pendingBalance: detail.pendingBalance
+          });
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      setSelectedCustomerDocs([]);
+      setSelectedCustomerStats(null);
+    }
   };
 
   const handleCreateCustomerSubmit = (customerData: any, docData: any) => {
@@ -137,6 +165,51 @@ function CheckInFormContent() {
     });
   };
 
+  const handleUpdateSelectedCustomer = async (customerData: any, docData: any) => {
+    if (!currentHotel || !selectedCustomer) return;
+    try {
+      const updated = await db.updateCustomer(
+        currentHotel.id,
+        selectedCustomer.id,
+        customerData,
+        docData
+      );
+      if (updated) {
+        setSelectedCustomer(updated);
+        setIsEditingSelectedCustomer(false);
+        // Refresh details
+        const detail = await db.getCustomerByPhoneOrAadhar(currentHotel.id, updated.phone);
+        if (detail) {
+          setSelectedCustomerDocs(detail.docs);
+          setSelectedCustomerStats({
+            stayCount: detail.stayCount,
+            lastVisit: detail.lastVisit,
+            pendingBalance: detail.pendingBalance
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Failed to update guest details');
+    }
+  };
+
+  const handleSetPrimaryDoc = async (docId: string) => {
+    if (!currentHotel || !selectedCustomer) return;
+    try {
+      const ok = await db.setPrimaryDocument(currentHotel.id, selectedCustomer.id, docId);
+      if (ok) {
+        // Refresh docs
+        const detail = await db.getCustomerByPhoneOrAadhar(currentHotel.id, selectedCustomer.phone);
+        if (detail) {
+          setSelectedCustomerDocs(detail.docs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleRoomChange = (roomId: string) => {
     setSelectedRoomId(roomId);
     const room = rooms.find(r => r.id === roomId);
@@ -155,21 +228,107 @@ function CheckInFormContent() {
   };
 
   const handleGuestFieldChange = (index: number, field: string, value: any) => {
+    let cleanVal = value;
+    if (field === 'full_name') {
+      cleanVal = value.replace(/[^a-zA-Z\s]/g, '');
+    } else if (field === 'phone') {
+      cleanVal = value.replace(/\D/g, '').slice(0, 10);
+    } else if (field === 'aadhar_number') {
+      const clean = value.replace(/\D/g, '').slice(0, 12);
+      let formatted = '';
+      for (let i = 0; i < clean.length; i++) {
+        if (i > 0 && i % 4 === 0) {
+          formatted += ' ';
+        }
+        formatted += clean[i];
+      }
+      cleanVal = formatted;
+    }
+
     const updated = [...guests];
     updated[index] = {
       ...updated[index],
-      [field]: value
+      [field]: cleanVal
     };
     setGuests(updated);
+
+    if (errors.guests) {
+      setErrors(prev => {
+        const copy = { ...prev };
+        delete copy.guests;
+        return copy;
+      });
+    }
   };
 
   const handleCheckInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRoomId || !selectedCustomer || !expectedCheckout) return;
+    
+    const newErrors: Record<string, string> = {};
 
+    if (!selectedCustomer) {
+      newErrors.selectedCustomer = 'Please select or create a guest profile first';
+    }
+
+    if (!selectedRoomId) {
+      newErrors.selectedRoomId = 'Please select a room';
+    }
+
+    const todayStr = new Date().toISOString().substring(0, 10);
+    if (!expectedCheckout) {
+      newErrors.expectedCheckout = 'Expected checkout date is required';
+    } else if (expectedCheckout <= todayStr) {
+      newErrors.expectedCheckout = 'Expected checkout date must be in the future (tomorrow or later)';
+    }
+
+    const room = rooms.find(r => r.id === selectedRoomId);
+    const roomPrice = Number(customRoomPrice !== '' ? customRoomPrice : (room?.price || 0));
+    if (isNaN(roomPrice) || roomPrice < 0) {
+      newErrors.customRoomPrice = 'Room price cannot be negative';
+    }
+
+    const advPaidNum = Number(advancePaid);
+    if (isNaN(advPaidNum) || advPaidNum < 0) {
+      newErrors.advancePaid = 'Advance paid cannot be negative';
+    } else if (advPaidNum > roomPrice) {
+      newErrors.advancePaid = `Advance paid (₹${advPaidNum}) cannot exceed total room price (₹${roomPrice})`;
+    }
+
+    // Additional guests validation
+    const guestErrors: string[] = [];
+    guests.forEach((g, idx) => {
+      if (idx > 0) {
+        if (!g.full_name.trim()) {
+          guestErrors.push(`Guest #${idx + 1}: Name is required`);
+        } else if (!/^[a-zA-Z\s]+$/.test(g.full_name)) {
+          guestErrors.push(`Guest #${idx + 1}: Name must only contain letters`);
+        }
+        if (g.phone && g.phone.replace(/\D/g, '').length !== 10) {
+          guestErrors.push(`Guest #${idx + 1}: Phone must be exactly 10 digits`);
+        }
+        if (g.aadhar_number) {
+          const cleanAadhar = g.aadhar_number.replace(/\s/g, '');
+          if (cleanAadhar.length !== 12 || !/^\d{12}$/.test(cleanAadhar)) {
+            guestErrors.push(`Guest #${idx + 1}: Aadhaar must be exactly 12 digits`);
+          }
+        }
+      }
+    });
+
+    if (guestErrors.length > 0) {
+      newErrors.guests = guestErrors.join(', ');
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
     setLoading(true);
 
     try {
+      if (!selectedCustomer) return;
       let finalCustomer = selectedCustomer;
 
       // If it's a new customer, save to the mock database first
@@ -277,6 +436,12 @@ function CheckInFormContent() {
               1. Search Guest Database
             </h2>
 
+            {errors.selectedCustomer && (
+              <div className="p-3.5 bg-red-50 text-xs font-semibold text-red-600 rounded-xl border border-red-100 mb-2">
+                {errors.selectedCustomer}
+              </div>
+            )}
+
             <CustomerSearch 
               hotelId={currentHotel?.id} 
               onSelectCustomer={handleSelectCustomer}
@@ -317,30 +482,140 @@ function CheckInFormContent() {
           {/* Selected Customer Info Card */}
           {selectedCustomer && (
             <div className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between border-b border-slate-50 pb-2">
                 <h2 className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
                   <Check className="w-4 h-4 text-emerald-600 bg-emerald-50 rounded-full p-0.5" />
-                  Primary Guest Selected
+                  Primary Guest Verification & Details
                 </h2>
-                <button
-                  onClick={() => setSelectedCustomer(null)}
-                  className="text-xs font-bold text-red-600 hover:text-red-700"
-                >
-                  Change Guest
-                </button>
+                <div className="flex items-center gap-2">
+                  {!isEditingSelectedCustomer && selectedCustomer.id !== 'temp-new-id' && (
+                    <button
+                      onClick={() => setIsEditingSelectedCustomer(true)}
+                      className="text-[10px] font-bold text-primary hover:text-primary-hover bg-red-50 hover:bg-red-100/80 px-3 py-1.5 rounded-xl transition-all uppercase tracking-wider"
+                    >
+                      Update Details
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSelectedCustomer(null)}
+                    className="text-xs font-bold text-red-600 hover:text-red-700"
+                  >
+                    Change Guest
+                  </button>
+                </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-sm">{selectedCustomer.full_name}</h3>
-                  <span className="text-xs text-slate-400 font-semibold block mt-0.5">{selectedCustomer.phone}</span>
+              {isEditingSelectedCustomer ? (
+                <div className="p-2 border border-slate-100 rounded-2xl bg-slate-50/20">
+                  <CustomerForm
+                    initialData={selectedCustomer}
+                    initialDoc={selectedCustomerDocs?.[0] ? {
+                      type: selectedCustomerDocs[0].document_type,
+                      number: selectedCustomerDocs[0].document_number,
+                      front: selectedCustomerDocs[0].front_image || '',
+                      back: selectedCustomerDocs[0].back_image || ''
+                    } : undefined}
+                    onSubmit={handleUpdateSelectedCustomer}
+                    onCancel={() => setIsEditingSelectedCustomer(false)}
+                  />
                 </div>
-                {isReturning && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase tracking-widest border border-emerald-200">
-                    Stayed Before
-                  </span>
-                )}
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Personal & Contact Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Full Name</span>
+                      <span className="text-xs font-bold text-slate-800 mt-0.5 block">{selectedCustomer.full_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Phone</span>
+                      <span className="text-xs font-bold text-slate-800 mt-0.5 block">{selectedCustomer.phone}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Email</span>
+                      <span className="text-xs font-bold text-slate-800 mt-0.5 block">{selectedCustomer.email || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Nationality</span>
+                      <span className="text-xs font-bold text-slate-800 mt-0.5 block">{selectedCustomer.nationality || 'Indian'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Vehicle Number</span>
+                      <span className="text-xs font-bold text-slate-800 mt-0.5 block">{selectedCustomer.vehicle_number || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Emergency Contact</span>
+                      <span className="text-xs font-bold text-slate-800 mt-0.5 block">{selectedCustomer.emergency_contact || 'N/A'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Stays Summary</span>
+                      <span className="text-xs font-black text-emerald-600 mt-0.5 block">
+                        {selectedCustomerStats ? `${selectedCustomerStats.stayCount} Stays` : '1st Stay'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Last Visit</span>
+                      <span className="text-xs font-semibold text-slate-600 mt-0.5 block">
+                        {selectedCustomerStats?.lastVisit ? new Date(selectedCustomerStats.lastVisit).toLocaleDateString() : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Address Details */}
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Permanent Address</span>
+                    <div className="text-xs font-semibold text-slate-700 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                      {selectedCustomer.address || 'No address specified.'} 
+                      {(selectedCustomer.city || selectedCustomer.state) && ` (${[selectedCustomer.city, selectedCustomer.state, selectedCustomer.country].filter(Boolean).join(', ')})`}
+                    </div>
+                  </div>
+
+                  {/* Documents Vault */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase tracking-wider">Documents Vault</span>
+                      {selectedCustomer.id !== 'temp-new-id' && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingSelectedCustomer(true)}
+                          className="text-[9px] font-bold text-primary hover:underline uppercase"
+                        >
+                          + Upload Document
+                        </button>
+                      )}
+                    </div>
+                    
+                    {selectedCustomerDocs && selectedCustomerDocs.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {selectedCustomerDocs.map(doc => (
+                          <div key={doc.id} className={`p-3 rounded-xl border ${doc.is_primary ? 'bg-emerald-50/10 border-emerald-100' : 'bg-slate-50/20 border-slate-100'} flex items-center justify-between text-xs`}>
+                            <div>
+                              <span className="font-bold text-slate-800">{doc.document_type}</span>
+                              <span className="text-slate-400 ml-1.5 font-bold">No: {doc.document_number}</span>
+                              {doc.is_primary && (
+                                <span className="ml-2 px-1.5 py-0.5 rounded text-[8px] bg-emerald-600 text-white font-extrabold uppercase tracking-wider">Primary</span>
+                              )}
+                            </div>
+                            {!doc.is_primary && (
+                              <button
+                                type="button"
+                                onClick={() => handleSetPrimaryDoc(doc.id)}
+                                className="text-[9px] font-black text-primary hover:underline uppercase tracking-wider"
+                              >
+                                Make Primary
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-center text-xs text-slate-400 font-bold">
+                        No documents found.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Step 2: Add Members / Family Guest List */}
               <div className="pt-4 border-t border-slate-50 space-y-4">
@@ -355,6 +630,12 @@ function CheckInFormContent() {
                     Add Member
                   </button>
                 </div>
+
+                {errors.guests && (
+                  <div className="p-3 bg-red-50 text-xs font-semibold text-red-600 rounded-xl border border-red-100">
+                    {errors.guests}
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   {guests.map((g, idx) => {
@@ -387,14 +668,26 @@ function CheckInFormContent() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name *</label>
-                            <input
-                              type="text"
-                              required
-                              value={g.full_name}
-                              onChange={(e) => handleGuestFieldChange(idx, 'full_name', e.target.value)}
-                              className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-primary transition-all"
-                              placeholder="Guest Name"
-                            />
+                            <div className="relative">
+                              <input
+                                type="text"
+                                required
+                                value={g.full_name}
+                                onChange={(e) => handleGuestFieldChange(idx, 'full_name', e.target.value)}
+                                className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl pl-2.5 pr-10 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                                placeholder="Guest Name"
+                              />
+                              {currentHotel && (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveGuestSearchIndex(idx)}
+                                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-primary transition-colors"
+                                  title="Look Up Guest"
+                                >
+                                  <Search className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                           
                           <div>
@@ -485,8 +778,19 @@ function CheckInFormContent() {
               <select
                 required
                 value={selectedRoomId}
-                onChange={(e) => handleRoomChange(e.target.value)}
-                className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                onChange={(e) => {
+                  handleRoomChange(e.target.value);
+                  if (errors.selectedRoomId) {
+                    setErrors(prev => {
+                      const copy = { ...prev };
+                      delete copy.selectedRoomId;
+                      return copy;
+                    });
+                  }
+                }}
+                className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                  errors.selectedRoomId ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                }`}
               >
                 <option value="">-- Choose Room --</option>
                 {rooms.map((room) => (
@@ -495,6 +799,9 @@ function CheckInFormContent() {
                   </option>
                 ))}
               </select>
+              {errors.selectedRoomId && (
+                <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.selectedRoomId}</span>
+              )}
             </div>
 
             {/* Expected checkout */}
@@ -504,9 +811,23 @@ function CheckInFormContent() {
                 type="date"
                 required
                 value={expectedCheckout}
-                onChange={(e) => setExpectedCheckout(e.target.value)}
-                className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                onChange={(e) => {
+                  setExpectedCheckout(e.target.value);
+                  if (errors.expectedCheckout) {
+                    setErrors(prev => {
+                      const copy = { ...prev };
+                      delete copy.expectedCheckout;
+                      return copy;
+                    });
+                  }
+                }}
+                className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                  errors.expectedCheckout ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                }`}
               />
+              {errors.expectedCheckout && (
+                <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.expectedCheckout}</span>
+              )}
             </div>
 
             {/* Price Adjustment */}
@@ -519,11 +840,25 @@ function CheckInFormContent() {
                 <input
                   type="number"
                   value={customRoomPrice}
-                  onChange={(e) => setCustomRoomPrice(e.target.value)}
-                  className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 pl-7 focus:bg-white focus:outline-none"
+                  onChange={(e) => {
+                    setCustomRoomPrice(e.target.value);
+                    if (errors.customRoomPrice) {
+                      setErrors(prev => {
+                        const copy = { ...prev };
+                        delete copy.customRoomPrice;
+                        return copy;
+                      });
+                    }
+                  }}
+                  className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 pl-7 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                    errors.customRoomPrice ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                  }`}
                   placeholder="0"
                 />
               </div>
+              {errors.customRoomPrice && (
+                <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.customRoomPrice}</span>
+              )}
             </div>
 
             {/* Advance payment */}
@@ -536,11 +871,25 @@ function CheckInFormContent() {
                 <input
                   type="number"
                   value={advancePaid === 0 ? '' : advancePaid}
-                  onChange={(e) => setAdvancePaid(Number(e.target.value))}
-                  className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 pl-7 focus:bg-white focus:outline-none"
+                  onChange={(e) => {
+                    setAdvancePaid(Number(e.target.value));
+                    if (errors.advancePaid) {
+                      setErrors(prev => {
+                        const copy = { ...prev };
+                        delete copy.advancePaid;
+                        return copy;
+                      });
+                    }
+                  }}
+                  className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 pl-7 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                    errors.advancePaid ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                  }`}
                   placeholder="Enter advance amount"
                 />
               </div>
+              {errors.advancePaid && (
+                <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.advancePaid}</span>
+              )}
             </div>
 
             {/* Receipt Summary */}
@@ -572,6 +921,59 @@ function CheckInFormContent() {
           </div>
         </div>
       </div>
+
+      {/* Additional Guest Search Modal */}
+      {activeGuestSearchIndex !== null && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl border border-slate-100 p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-50 pb-2">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-primary" />
+                Search & Auto-fill Guest #{activeGuestSearchIndex}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setActiveGuestSearchIndex(null)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <CustomerSearch
+              hotelId={currentHotel?.id}
+              onSelectCustomer={async (customer, isReturning) => {
+                let resolvedAadhar = '';
+                try {
+                  const detail = await db.getCustomerByPhoneOrAadhar(currentHotel.id, customer.phone);
+                  if (detail && detail.docs) {
+                    const aadharDoc = detail.docs.find(d => d.document_type === 'Aadhar');
+                    if (aadharDoc) resolvedAadhar = aadharDoc.document_number;
+                  }
+                } catch (err) {
+                  console.error(err);
+                }
+
+                setGuests(prev => {
+                  const updated = [...prev];
+                  if (updated[activeGuestSearchIndex]) {
+                    updated[activeGuestSearchIndex] = {
+                      ...updated[activeGuestSearchIndex],
+                      full_name: customer.full_name,
+                      phone: customer.phone,
+                      gender: (customer.gender as any) || 'Male',
+                      aadhar_number: resolvedAadhar,
+                      document_verified: true
+                    };
+                  }
+                  return updated;
+                });
+                setActiveGuestSearchIndex(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -59,7 +59,7 @@ export default function ReportsPage() {
       setExporting(null);
       // Simulate file download
       const element = document.createElement("a");
-      const file = new Blob(["StayDesk CRM Report Dump"], {type: 'text/plain'});
+      const file = new Blob(["StayDesk Report Dump"], {type: 'text/plain'});
       element.href = URL.createObjectURL(file);
       element.download = `HotelFlow_Report_${type === 'Excel' ? 'Export.csv' : 'Export.pdf'}`;
       document.body.appendChild(element);

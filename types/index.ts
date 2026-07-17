@@ -9,7 +9,7 @@ export interface Hotel {
   owner_name: string;
   email: string;
   phone: string;
-  subscription_plan: '30 Days' | '90 Days' | '1 Year';
+  subscription_plan: '30 Days' | '90 Days' | '1 Year' | 'Lifetime';
   subscription_status: 'Active' | 'Expired' | 'Suspended';
   created_at: string;
 }
@@ -33,6 +33,7 @@ export interface Room {
   floor: string;
   capacity: number;
   status: RoomStatus;
+  deleted_at?: string;
   created_at: string;
 }
 
@@ -46,6 +47,11 @@ export interface Customer {
   city?: string;
   state?: string;
   country: string;
+  email?: string;
+  vehicle_number?: string;
+  emergency_contact?: string;
+  nationality?: string;
+  deleted_at?: string;
   created_at: string;
   customer_documents?: CustomerDocument[];
 }
@@ -57,7 +63,22 @@ export interface CustomerDocument {
   document_number: string;
   front_image?: string; // Data URI (base64) or storage path
   back_image?: string;  // Data URI (base64) or storage path
+  upload_date?: string;
+  verification_date?: string;
+  uploaded_by?: string;
+  is_primary: boolean;
   created_at: string;
+}
+
+export interface CustomerHistory {
+  id: string;
+  customer_id: string;
+  field_name: string;
+  old_value?: string;
+  new_value?: string;
+  changed_by?: string;
+  changed_at: string;
+  reason?: string;
 }
 
 export interface CheckIn {
@@ -68,7 +89,8 @@ export interface CheckIn {
   number_of_guests: number;
   check_in: string; // ISO Date String
   expected_checkout: string; // ISO Date String
-  status: 'Active' | 'Completed';
+  status: 'Pending' | 'Reserved' | 'Active' | 'Completed' | 'Cancelled';
+  deleted_at?: string;
   created_at: string;
 }
 
@@ -97,4 +119,19 @@ export interface ExtendedCheckIn extends CheckIn {
   primary_customer?: Customer;
   guests?: (CheckInGuest & { customer?: Customer })[];
   payment?: Payment;
+}
+
+export interface BookingRequest {
+  id: string;
+  hotel_id: string;
+  full_name: string;
+  phone: string;
+  email: string;
+  check_in: string;
+  expected_checkout: string;
+  number_of_guests: number;
+  room_type: string;
+  special_requests?: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  created_at: string;
 }

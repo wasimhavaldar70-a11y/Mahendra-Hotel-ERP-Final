@@ -76,13 +76,13 @@ export default function RoomGrid({ rooms, hotelId, onRoomClick }: RoomGridProps)
   const getStatusColor = (status: Room['status']) => {
     switch (status) {
       case 'Ready':
-        return 'bg-gradient-to-br from-[#10B981] to-[#059669] text-white hover:shadow-lg hover:shadow-emerald-500/20 border-t border-white/15';
+        return 'bg-gradient-to-br from-[#0F4C45] to-[#0B2C24] text-white hover:shadow-lg hover:shadow-[#0F4C45]/20 border border-white/10';
       case 'Occupied':
-        return 'bg-gradient-to-br from-[#E11D48] to-[#C62828] text-white hover:shadow-lg hover:shadow-rose-500/25 border-t border-white/15';
+        return 'bg-gradient-to-br from-[#8C2A2A] to-[#601A1A] text-white hover:shadow-lg hover:shadow-[#8C2A2A]/25 border border-white/10';
       case 'Maintenance':
-        return 'bg-gradient-to-br from-[#3B82F6] to-[#1D4ED8] text-white hover:shadow-lg hover:shadow-blue-500/20 border-t border-white/15';
+        return 'bg-gradient-to-br from-[#475569] to-[#334155] text-white hover:shadow-lg hover:shadow-slate-500/20 border border-white/10';
       case 'Cleaning':
-        return 'bg-gradient-to-br from-[#F59E0B] to-[#D97706] text-white hover:shadow-lg hover:shadow-amber-500/20 border-t border-white/15';
+        return 'bg-gradient-to-br from-[#D4AF37] to-[#B8902C] text-white hover:shadow-lg hover:shadow-[#D4AF37]/20 border border-white/10';
     }
   };
 

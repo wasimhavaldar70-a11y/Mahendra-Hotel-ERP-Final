@@ -37,6 +37,7 @@ export default function RoomsPage() {
   const [price, setPrice] = useState('');
   const [capacity, setCapacity] = useState(2);
   const [error, setError] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const loadRooms = async (hotelId: string) => {
     try {
@@ -70,20 +71,43 @@ export default function RoomsPage() {
 
   const handleAddRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!roomNumber || !price) return;
+    if (!currentHotel) return;
 
+    const newErrors: Record<string, string> = {};
+    const cleanRoomNum = roomNumber.trim();
+    if (!cleanRoomNum) {
+      newErrors.roomNumber = 'Room number is required';
+    } else if (!/^[A-Z0-9]+$/.test(cleanRoomNum)) {
+      newErrors.roomNumber = 'Room number must be alphanumeric (letters and numbers only)';
+    }
+
+    const priceNum = Number(price);
+    if (!price || isNaN(priceNum) || priceNum <= 0) {
+      newErrors.price = 'Price must be a positive number greater than 0';
+    }
+
+    if (!capacity || capacity <= 0) {
+      newErrors.capacity = 'Capacity must be greater than 0';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
     setError('');
-    const numMatch = rooms.some(r => r.room_number === roomNumber);
+    const numMatch = rooms.some(r => r.room_number.toUpperCase() === cleanRoomNum.toUpperCase());
     if (numMatch) {
-      setError(`Room ${roomNumber} already exists.`);
+      setError(`Room ${cleanRoomNum} already exists.`);
       return;
     }
 
     try {
       await db.addRoom(currentHotel.id, {
-        room_number: roomNumber,
+        room_number: cleanRoomNum,
         room_type: roomType,
-        price: Number(price),
+        price: priceNum,
         floor: floor,
         capacity: Number(capacity)
       });
@@ -91,11 +115,13 @@ export default function RoomsPage() {
       // Reset form
       setRoomNumber('');
       setPrice('');
+      setCapacity(2);
+      setErrors({});
       setShowAddForm(false);
       loadRooms(currentHotel.id);
     } catch (err) {
       console.error(err);
-      setError('Failed to add room.');
+      setError(err instanceof Error ? err.message : 'Failed to add room.');
     }
   };
 
@@ -128,13 +154,13 @@ export default function RoomsPage() {
   const getStatusBadge = (status: RoomStatus) => {
     switch (status) {
       case 'Ready':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+        return 'bg-[#0F4C45]/5 text-[#0F4C45] border-[#0F4C45]/20';
       case 'Occupied':
-        return 'bg-red-50 text-red-700 border-red-100';
+        return 'bg-red-50 text-red-700 border-red-200';
       case 'Maintenance':
-        return 'bg-blue-50 text-blue-700 border-blue-100';
+        return 'bg-slate-50 text-slate-700 border-slate-200';
       case 'Cleaning':
-        return 'bg-amber-50 text-amber-700 border-amber-100';
+        return 'bg-[#D4AF37]/5 text-[#B8902C] border-[#D4AF37]/20';
     }
   };
 
@@ -153,7 +179,7 @@ export default function RoomsPage() {
 
           <button
             onClick={() => setShowAddForm(true)}
-            className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-red-200 transition-colors flex items-center gap-1.5"
+            className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" />
             Add New Room
@@ -184,10 +210,25 @@ export default function RoomsPage() {
                     type="text"
                     required
                     value={roomNumber}
-                    onChange={(e) => setRoomNumber(e.target.value)}
-                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10);
+                      setRoomNumber(val);
+                      if (errors.roomNumber) {
+                        setErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.roomNumber;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                      errors.roomNumber ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
+                    }`}
                     placeholder="e.g. 101"
                   />
+                  {errors.roomNumber && (
+                    <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.roomNumber}</span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -227,29 +268,57 @@ export default function RoomsPage() {
                       type="number"
                       required
                       value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                      onChange={(e) => {
+                        setPrice(e.target.value);
+                        if (errors.price) {
+                          setErrors(prev => {
+                            const copy = { ...prev };
+                            delete copy.price;
+                            return copy;
+                          });
+                        }
+                      }}
+                      className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                        errors.price ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
+                      }`}
                       placeholder="e.g. 1800"
                     />
+                    {errors.price && (
+                      <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.price}</span>
+                    )}
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Capacity (Persons)</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Capacity (Persons) *</label>
                     <input
                       type="number"
                       required
                       value={capacity}
-                      onChange={(e) => setCapacity(Number(e.target.value))}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                      onChange={(e) => {
+                        setCapacity(Number(e.target.value));
+                        if (errors.capacity) {
+                          setErrors(prev => {
+                            const copy = { ...prev };
+                            delete copy.capacity;
+                            return copy;
+                          });
+                        }
+                      }}
+                      className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                        errors.capacity ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
+                      }`}
                       min="1"
                     />
+                    {errors.capacity && (
+                      <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.capacity}</span>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
-                    className="flex-1 bg-primary text-white text-xs font-bold py-3 rounded-xl hover:bg-primary-hover shadow-lg shadow-red-200 transition-colors"
+                    className="flex-1 bg-primary text-white text-xs font-bold py-3 rounded-xl hover:bg-primary-hover shadow-md hover:shadow-lg transition-all"
                   >
                     Save Room configuration
                   </button>
@@ -267,7 +336,7 @@ export default function RoomsPage() {
         )}
 
         {/* Filter Bar */}
-        <div className="bg-white p-4 rounded-[18px] border border-slate-100 shadow-sm flex flex-wrap gap-4 items-center">
+        <div className="bg-white p-4 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm flex flex-wrap gap-4 items-center">
           <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1">
             <Filter className="w-3.5 h-3.5" />
             Filters:
@@ -306,7 +375,7 @@ export default function RoomsPage() {
         </div>
 
         {/* Rooms Table List */}
-        <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-[24px] border border-[#E2E8F0]/40 shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>

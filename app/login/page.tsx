@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, setSessionUser, getSessionUser } from '../../lib/supabase/client';
-import { KeyRound, Mail, Sparkles, Building2, UserCog } from 'lucide-react';
+import { KeyRound, Mail } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,6 +35,14 @@ export default function LoginPage() {
       setError('Please enter your email address');
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    if (!password) {
+      setError('Please enter your password');
+      return;
+    }
 
     setLoading(true);
     setError('');
@@ -58,51 +66,30 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickDemoSelect = (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword('wasim@705853');
-    // Automatically login with demo account
-    setLoading(true);
-    setError('');
-    setTimeout(async () => {
-      try {
-        const res = await db.login(demoEmail, 'wasim@705853');
-        if (res) {
-          setSessionUser(res);
-          if (res.user.role === 'superadmin') {
-            router.push('/super-admin');
-          } else {
-            router.push('/dashboard');
-          }
-        }
-      } catch (err) {
-        setError('Demo login failed');
-      } finally {
-        setLoading(false);
-      }
-    }, 400);
-  };
+
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="flex min-h-screen items-center justify-center bg-[#FCFBF7] px-4 py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Decorative gradients */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-red-100 blur-[120px] opacity-70"></div>
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-100 blur-[120px] opacity-70"></div>
+      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-[#0F4C45]/5 blur-[120px] opacity-70"></div>
+      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-[#D4AF37]/5 blur-[120px] opacity-70"></div>
 
       <div className="w-full max-w-md space-y-8 z-10">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-white font-black text-2xl shadow-xl shadow-red-200 mb-4 animate-bounce">
-            SD
-          </div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">
-            StayDesk CRM
+          <img 
+            src="/logo.jpg" 
+            alt="StayDesk Logo" 
+            className="w-16 h-16 rounded-2xl mx-auto mb-4 shadow-md object-cover border border-slate-100"
+          />
+          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 font-serif">
+            StayDesk
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-slate-500 font-medium">
             India's simplest Hotel Management Platform
           </p>
         </div>
 
-        <div className="bg-white p-8 rounded-[24px] shadow-xl border border-slate-100/50">
+        <div className="bg-white p-8 rounded-[24px] shadow-xl border border-[#E2E8F0]/40">
           <form className="space-y-6" onSubmit={handleLogin}>
             {error && (
               <div className="p-3.5 rounded-xl bg-red-50 text-xs font-semibold text-red-600 border border-red-100">
@@ -125,7 +112,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-sm placeholder-slate-400 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
+                  className="block w-full rounded-xl border border-[#E2E8F0]/80 bg-slate-50/50 py-3 pl-10 pr-3 text-sm placeholder-slate-400 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
                   placeholder="name@hotel.com"
                 />
               </div>
@@ -146,7 +133,7 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-10 pr-3 text-sm placeholder-slate-400 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
+                  className="block w-full rounded-xl border border-[#E2E8F0]/80 bg-slate-50/50 py-3 pl-10 pr-3 text-sm placeholder-slate-400 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
                   placeholder="••••••••"
                 />
               </div>
@@ -155,7 +142,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full justify-center items-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-lg shadow-red-200 hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all duration-200 disabled:opacity-50"
+              className="flex w-full justify-center items-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all duration-200 disabled:opacity-50"
             >
               {loading ? (
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-solid border-white border-t-transparent"></div>
@@ -165,39 +152,14 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick Demo Selector */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <div className="flex items-center gap-1.5 justify-center text-xs font-semibold text-slate-400 mb-4 uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              Demo Fast Pass
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => handleQuickDemoSelect('wasimhavaldar70@gmail.com')}
-                className="flex flex-col items-center gap-1 px-3 py-3 rounded-xl border border-slate-100 hover:border-red-200 hover:bg-red-50/20 text-center transition-all duration-200 group"
-              >
-                <UserCog className="w-5 h-5 text-slate-400 group-hover:text-primary transition-colors" />
-                <span className="text-xs font-bold text-slate-700">Super Admin</span>
-                <span className="text-[10px] text-slate-400">wasimhavaldar70@gmail.com</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemoSelect('admin@staydesk.com')}
-                className="flex flex-col items-center gap-1 px-3 py-3 rounded-xl border border-slate-100 hover:border-red-200 hover:bg-red-50/20 text-center transition-all duration-200 group"
-              >
-                <Building2 className="w-5 h-5 text-slate-400 group-hover:text-primary transition-colors" />
-                <span className="text-xs font-bold text-slate-700">Backup Admin</span>
-                <span className="text-[10px] text-slate-400">admin@staydesk.com</span>
-              </button>
-            </div>
-            
-            <div className="mt-4 text-center">
-              <span className="text-[11px] text-slate-400">
-                Type any email to auto-register a new hotel.
-              </span>
-            </div>
+          {/* Powered by Humble Goats */}
+          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+              Powered by
+            </span>
+            <span className="text-xs font-black text-slate-700 mt-1 block tracking-wider hover:text-primary transition-colors cursor-default">
+              Humble Goats
+            </span>
           </div>
         </div>
       </div>

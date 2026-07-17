@@ -20,7 +20,8 @@ import {
   PlayCircle,
   PauseCircle,
   UserCog,
-  Trash2
+  Trash2,
+  Key
 } from 'lucide-react';
 
 export default function SuperAdminPage() {
@@ -33,9 +34,19 @@ export default function SuperAdminPage() {
   const [ownerName, setOwnerName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [plan, setPlan] = useState<'30 Days' | '90 Days' | '1 Year'>('30 Days');
+  const [plan, setPlan] = useState<'30 Days' | '90 Days' | '1 Year' | 'Lifetime'>('Lifetime');
   const [error, setError] = useState('');
   const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Password Reset states
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetHotelEmail, setResetHotelEmail] = useState('');
+  const [resetHotelName, setResetHotelName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const loadHotels = async () => {
     try {
@@ -65,11 +76,42 @@ export default function SuperAdminPage() {
 
   const handleAddHotel = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hotelName || !ownerName || !email || !phone || !password) {
-      setError('All fields including password are required.');
+    
+    const newErrors: Record<string, string> = {};
+    if (!hotelName.trim()) {
+      newErrors.hotelName = 'Hotel Name is required';
+    }
+    
+    if (!ownerName.trim()) {
+      newErrors.ownerName = 'Owner Name is required';
+    } else if (!/^[a-zA-Z\s]+$/.test(ownerName)) {
+      newErrors.ownerName = 'Owner Name must only contain letters and spaces';
+    }
+
+    if (!phone) {
+      newErrors.phone = 'Phone Number is required';
+    } else if (phone.length !== 10 || !/^\d{10}$/.test(phone)) {
+      newErrors.phone = 'Phone Number must be exactly 10 digits';
+    }
+
+    if (!email) {
+      newErrors.email = 'Email Address is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    if (!password) {
+      newErrors.password = 'Password is required';
+    } else if (password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     setError('');
     const emailMatch = hotels.some(h => h.email.toLowerCase() === email.toLowerCase());
     if (emailMatch) {
@@ -79,10 +121,10 @@ export default function SuperAdminPage() {
 
     try {
       await db.addHotel({
-        hotel_name: hotelName,
-        owner_name: ownerName,
+        hotel_name: hotelName.trim(),
+        owner_name: ownerName.trim(),
         phone,
-        email,
+        email: email.toLowerCase().trim(),
         subscription_plan: plan,
         password
       });
@@ -92,6 +134,7 @@ export default function SuperAdminPage() {
       setPhone('');
       setEmail('');
       setPassword('');
+      setErrors({});
       setShowAddForm(false);
       loadHotels();
     } catch (err) {
@@ -123,18 +166,40 @@ export default function SuperAdminPage() {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      setResetError('Password must be at least 6 characters');
+      return;
+    }
+
+    setResetLoading(true);
+    setResetError('');
+    setResetSuccess('');
+
+    try {
+      await db.resetHotelPassword(resetHotelEmail, newPassword);
+      setResetSuccess('Password reset successfully!');
+      setNewPassword('');
+      setTimeout(() => {
+        setShowResetModal(false);
+        setResetSuccess('');
+      }, 1500);
+    } catch (err) {
+      console.error(err);
+      setResetError(err instanceof Error ? err.message : 'Failed to reset password.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const activeHotels = hotels.filter(h => h.subscription_status === 'Active').length;
   const suspendedHotels = hotels.filter(h => h.subscription_status === 'Suspended').length;
 
-  // Dynamic MRR Calculation based on plan prices (₹2,500/mo for 30 Days, ₹2,000/mo for 90 Days, ₹1,500/mo for 1 Year)
-  const mrr = hotels.reduce((acc, hotel) => {
+  // Dynamic ARR/Maintenance Calculation based on active accounts (₹5,000/yr for domain & database maintenance per customer)
+  const maintenanceRevenue = hotels.reduce((acc, hotel) => {
     if (hotel.subscription_status !== 'Active') return acc;
-    switch (hotel.subscription_plan) {
-      case '30 Days': return acc + 2500;
-      case '90 Days': return acc + 2000;
-      case '1 Year': return acc + 1500;
-      default: return acc;
-    }
+    return acc + 5000;
   }, 0);
 
   return (
@@ -193,8 +258,8 @@ export default function SuperAdminPage() {
 
           <div className="bg-white p-5 rounded-[18px] border border-slate-100 shadow-sm flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">MRR Revenue</span>
-              <span className="text-xl font-black text-primary mt-1">₹{mrr.toLocaleString('en-IN')}</span>
+              <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Annual Maintenance</span>
+              <span className="text-xl font-black text-primary mt-1">₹{maintenanceRevenue.toLocaleString('en-IN')}</span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-red-50 text-primary flex items-center justify-center">
               <TrendingUp className="w-5 h-5" />
@@ -220,16 +285,30 @@ export default function SuperAdminPage() {
                   </div>
                 )}
 
-                <div>
+                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Hotel Name *</label>
                   <input
                     type="text"
                     required
                     value={hotelName}
-                    onChange={(e) => setHotelName(e.target.value)}
-                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                    onChange={(e) => {
+                      setHotelName(e.target.value);
+                      if (errors.hotelName) {
+                        setErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.hotelName;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                      errors.hotelName ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                    }`}
                     placeholder="e.g. Taj Residency"
                   />
+                  {errors.hotelName && (
+                    <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.hotelName}</span>
+                  )}
                 </div>
 
                 <div>
@@ -238,37 +317,52 @@ export default function SuperAdminPage() {
                     type="text"
                     required
                     value={ownerName}
-                    onChange={(e) => setOwnerName(e.target.value)}
-                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setOwnerName(val);
+                      if (errors.ownerName) {
+                        setErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.ownerName;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                      errors.ownerName ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                    }`}
                     placeholder="e.g. Rajesh Kumar"
                   />
+                  {errors.ownerName && (
+                    <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.ownerName}</span>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Phone Number *</label>
-                    <input
-                      type="tel"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
-                      placeholder="9876543210"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Subscription plan</label>
-                    <select
-                      value={plan}
-                      onChange={(e) => setPlan(e.target.value as any)}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
-                    >
-                      <option value="30 Days">30 Days Pro</option>
-                      <option value="90 Days">90 Days Premium</option>
-                      <option value="1 Year">1 Year Enterprise</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Phone Number *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setPhone(val);
+                      if (errors.phone) {
+                        setErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.phone;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                      errors.phone ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                    }`}
+                    placeholder="10-digit number"
+                  />
+                  {errors.phone && (
+                    <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.phone}</span>
+                  )}
                 </div>
 
                 <div>
@@ -277,10 +371,24 @@ export default function SuperAdminPage() {
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errors.email) {
+                        setErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.email;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                      errors.email ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                    }`}
                     placeholder="rajesh@tajresidency.com"
                   />
+                  {errors.email && (
+                    <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.email}</span>
+                  )}
                 </div>
 
                 <div>
@@ -289,11 +397,24 @@ export default function SuperAdminPage() {
                     type="password"
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errors.password) {
+                        setErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.password;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                      errors.password ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                    }`}
                     placeholder="Set owner password (min 6 chars)"
-                    minLength={6}
                   />
+                  {errors.password && (
+                    <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.password}</span>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-2">
@@ -306,6 +427,88 @@ export default function SuperAdminPage() {
                   <button
                     type="button"
                     onClick={() => setShowAddForm(false)}
+                    className="bg-slate-100 text-slate-600 text-xs font-bold px-4 py-3 rounded-xl hover:bg-slate-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Reset Password Modal */}
+        {showResetModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-[24px] w-full max-w-sm shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in duration-200">
+              <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <Key className="w-4 h-4 text-primary" />
+                  Reset Owner Password
+                </h3>
+                <button onClick={() => {
+                  setShowResetModal(false);
+                  setNewPassword('');
+                  setResetError('');
+                  setResetSuccess('');
+                }} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleResetPassword} className="p-6 space-y-4">
+                {resetError && (
+                  <div className="p-3 bg-red-50 text-xs font-semibold text-red-600 rounded-xl border border-red-100">
+                    {resetError}
+                  </div>
+                )}
+                {resetSuccess && (
+                  <div className="p-3 bg-emerald-50 text-xs font-semibold text-emerald-600 rounded-xl border border-emerald-100">
+                    {resetSuccess}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Hotel Property</label>
+                  <span className="text-xs font-bold text-slate-700 block mt-1">{resetHotelName}</span>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Owner Email</label>
+                  <span className="text-xs font-bold text-slate-500 block mt-0.5">{resetHotelEmail}</span>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">New Password *</label>
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      if (resetError) setResetError('');
+                    }}
+                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="Enter new password (min 6 chars)"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="flex-1 bg-primary text-white text-xs font-bold py-3 rounded-xl hover:bg-primary-hover shadow-lg shadow-red-200 transition-colors disabled:opacity-50"
+                  >
+                    {resetLoading ? 'Resetting...' : 'Update Password'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowResetModal(false);
+                      setNewPassword('');
+                      setResetError('');
+                      setResetSuccess('');
+                    }}
                     className="bg-slate-100 text-slate-600 text-xs font-bold px-4 py-3 rounded-xl hover:bg-slate-200"
                   >
                     Cancel
@@ -350,7 +553,9 @@ export default function SuperAdminPage() {
                           <div>{hotel.email}</div>
                           <div className="text-[10px] text-slate-400 mt-0.5">{hotel.phone}</div>
                         </td>
-                        <td className="px-6 py-4 font-bold text-slate-800">{hotel.subscription_plan}</td>
+                        <td className="px-6 py-4 font-bold text-slate-800">
+                          {hotel.subscription_plan === 'Lifetime' ? 'Lifetime (₹5,000/yr)' : hotel.subscription_plan}
+                        </td>
                         <td className="px-6 py-4">
                           <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold border ${
                             isSuspended 
@@ -380,6 +585,18 @@ export default function SuperAdminPage() {
                                 Suspend
                               </>
                             )}
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setResetHotelName(hotel.hotel_name);
+                              setResetHotelEmail(hotel.email);
+                              setShowResetModal(true);
+                            }}
+                            className="bg-slate-50 hover:bg-slate-100/50 text-slate-700 border border-slate-200 font-bold px-3 py-1.5 rounded-lg transition-colors text-[10px] inline-flex items-center gap-1.5"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                            Reset Password
                           </button>
 
                           <button

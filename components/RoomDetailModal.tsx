@@ -46,6 +46,25 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Cash' | 'Card'>('UPI');
 
+  // Dynamic Hotel Info state
+  const [currentHotel, setCurrentHotel] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const session = localStorage.getItem('hf_session');
+      if (session) {
+        try {
+          const parsed = JSON.parse(session);
+          if (parsed && parsed.hotel) {
+            setCurrentHotel(parsed.hotel);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (room.status === 'Occupied') {
       loadActiveStay();
@@ -137,10 +156,10 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
       {stayData && (
         <div id="print-receipt" className="hidden">
           <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
-            <h3 style={{ margin: '0 0 5px 0', fontSize: '14px', textTransform: 'uppercase' }}>STAYDESK CRM RECEIPT</h3>
-            <p style={{ margin: '0', fontSize: '10px' }}>Grand Palace Hotel</p>
-            <p style={{ margin: '0', fontSize: '10px' }}>Phone: 9876543210</p>
-            <p style={{ margin: '0', fontSize: '10px' }}>Email: support@grandpalace.com</p>
+            <h3 style={{ margin: '0 0 5px 0', fontSize: '14px', textTransform: 'uppercase' }}>STAYDESK RECEIPT</h3>
+            <p style={{ margin: '0', fontSize: '10px', fontWeight: 'bold' }}>{currentHotel?.hotel_name || 'Grand Palace Hotel'}</p>
+            <p style={{ margin: '0', fontSize: '10px' }}>Phone: {currentHotel?.phone || '9876543210'}</p>
+            <p style={{ margin: '0', fontSize: '10px' }}>Email: {currentHotel?.email || 'support@grandpalace.com'}</p>
           </div>
 
           <div style={{ marginBottom: '10px', fontSize: '10px' }}>
@@ -178,7 +197,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
           </div>
 
           <div style={{ borderTop: '1px dashed #000', paddingTop: '10px', textAlign: 'center' }}>
-            <p style={{ margin: '0', fontSize: '11px', fontWeight: 'bold' }}>Total Settled: ₹{Number(stayData.payment?.room_price).toFixed(2)} via {paymentMethod}</p>
+            <p style={{ margin: '0', fontSize: '11px', fontWeight: 'bold' }}>Total Settled: ₹{Number(stayData.payment?.room_price).toFixed(2)}</p>
             <p style={{ margin: '15px 0 0 0', fontSize: '10px', fontStyle: 'italic' }}>Thank you for staying with us!</p>
           </div>
         </div>
@@ -348,7 +367,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                       <div className="flex gap-2">
                         <button
                           onClick={handleExtendStay}
-                          className="flex-1 bg-primary text-white text-xs font-bold py-2.5 rounded-lg hover:bg-primary-hover shadow-md shadow-red-200 transition-colors"
+                          className="flex-1 bg-primary text-white text-xs font-bold py-2.5 rounded-lg hover:bg-primary-hover shadow-md transition-colors"
                         >
                           Confirm Extension
                         </button>
@@ -449,7 +468,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                         router.push(`/check-in?room_id=${room.id}`);
                         onClose();
                       }}
-                      className="flex items-center justify-between w-full p-4 rounded-[18px] bg-primary text-white font-bold hover:bg-primary-hover shadow-lg shadow-red-200 transition-all duration-200 group"
+                      className="flex items-center justify-between w-full p-4 rounded-[18px] bg-primary text-white font-bold hover:bg-primary-hover shadow-lg transition-all duration-200 group"
                     >
                       <span className="text-sm">Proceed to Guest Check-In</span>
                       <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

@@ -1,12 +1,12 @@
 // ========================================================
-// StayDesk CRM / HotelFlow CRM Next.js Middleware
-// Location: middleware.ts
+// StayDesk / HotelFlow Next.js Request Proxy
+// Location: proxy.ts
 // ========================================================
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Passthrough for next assets, public files, and authentication API calls
@@ -15,19 +15,24 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/static') || 
     pathname.startsWith('/favicon.ico') || 
     pathname.startsWith('/api') || 
-    pathname === '/login'
+    pathname === '/' ||
+    pathname === '/admin' ||
+    pathname === '/login' ||
+    pathname === '/logo.jpg'
   ) {
     return NextResponse.next();
   }
 
-  // Note: For real Supabase deployments, you would retrieve the session cookie here:
-  // const session = request.cookies.get('sb-access-token');
-  // if (!session) {
-  //   return NextResponse.redirect(new URL('/login', request.url));
-  // }
+  const session = request.cookies.get('hf_session');
+  if (!session) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
 
   return NextResponse.next();
 }
+
+// Export as default as well to comply with both conventions
+export default proxy;
 
 // Config to target all page routes
 export const config = {
