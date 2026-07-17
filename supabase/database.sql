@@ -206,6 +206,9 @@ CREATE POLICY "Super Admins can delete hotels" ON hotels
 CREATE POLICY "Hotel Owners can view their own hotel details" ON hotels 
   FOR SELECT TO authenticated USING (id = get_user_hotel_id());
 
+CREATE POLICY "Hotel Owners can update their own hotel details" ON hotels 
+  FOR UPDATE TO authenticated USING (id = get_user_hotel_id()) WITH CHECK (id = get_user_hotel_id());
+
 -- Policies for Users
 CREATE POLICY "Super Admins can select users" ON users 
   FOR SELECT TO authenticated USING (is_super_admin());

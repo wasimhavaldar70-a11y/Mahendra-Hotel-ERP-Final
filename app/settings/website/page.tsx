@@ -279,9 +279,10 @@ export default function WebsiteSettingsPage() {
       channel.close();
 
       alert('Brand website settings and room details saved successfully to database!');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to save settings: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      const errMsg = err?.message || err?.error_description || (typeof err === 'string' ? err : JSON.stringify(err));
+      alert('Failed to save settings: ' + errMsg);
     } finally {
       setSaving(false);
     }
