@@ -148,6 +148,7 @@ export const supabaseDb = {
     if (!supabase) return null;
     const lowercaseEmail = email.toLowerCase().trim();
     let access_token: string | undefined = undefined;
+    let authUser: any = null;
 
     // If a password is provided, validate it via Supabase Auth
     if (password) {
@@ -161,11 +162,13 @@ export const supabaseDb = {
         return null;
       }
       
+      authUser = authData.user;
       const session = (await supabase.auth.getSession()).data.session;
       access_token = session?.access_token;
     } else {
       const session = (await supabase.auth.getSession()).data.session;
       access_token = session?.access_token;
+      authUser = session?.user || null;
     }
 
     // Check if the user exists in our public users table
@@ -175,10 +178,9 @@ export const supabaseDb = {
       .eq('email', lowercaseEmail)
       .maybeSingle();
 
-    if (!user && !userError) {
+    if (!user && !userError && authUser) {
       // Self-healing: If user exists in auth.users, dynamically create public.users record
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser && authUser.email?.toLowerCase().trim() === lowercaseEmail) {
+      if (authUser.email?.toLowerCase().trim() === lowercaseEmail) {
         const defaultRole = lowercaseEmail === 'wasimhavaldar70@gmail.com' || lowercaseEmail === 'admin@staydesk.com' ? 'superadmin' : 'hotel_owner';
         
         // Find matching hotel by email

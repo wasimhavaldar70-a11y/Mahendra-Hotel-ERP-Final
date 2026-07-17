@@ -250,6 +250,9 @@ CREATE POLICY "Super Admins can delete users" ON users
 CREATE POLICY "Users can view their own profile" ON users 
   FOR SELECT TO authenticated USING (id = auth.uid());
 
+CREATE POLICY "Users can insert their own profile" ON users 
+  FOR INSERT TO authenticated WITH CHECK (id = auth.uid());
+
 -- Policies for Rooms
 CREATE POLICY "Users can select rooms of their hotel" ON rooms 
   FOR SELECT TO authenticated USING (hotel_id = get_user_hotel_id() OR is_super_admin());
