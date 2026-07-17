@@ -229,6 +229,33 @@ export default function WebsiteSettingsPage() {
     setSaving(true);
 
     try {
+      // 1. Perform direct atomic database updates for room prices and photos first
+      // This uploads any base64 images to Supabase Storage and returns clean public URLs
+      const updatedConfigs = { ...roomConfigs };
+      const roomTypes = Object.keys(roomConfigs);
+      
+      for (const type of roomTypes) {
+        const config = roomConfigs[type];
+        if (config.id) {
+          const updatedRoom = await db.updateRoomDetails(currentHotel.id, config.id, {
+            price: Number(config.price),
+            image_url: config.image
+          });
+          
+          if (updatedRoom) {
+            updatedConfigs[type] = {
+              ...config,
+              price: updatedRoom.price,
+              image: updatedRoom.image_url || ''
+            };
+          }
+        }
+      }
+
+      // Update roomConfigs state with clean URLs
+      setRoomConfigs(updatedConfigs);
+
+      // 2. Compile cmsData with clean public URLs (no Base64!)
       const cmsData = {
         tagline,
         heroImage,
@@ -244,10 +271,10 @@ export default function WebsiteSettingsPage() {
         twitter,
         faqs,
         gallery,
-        rooms: roomConfigs
+        rooms: updatedConfigs
       };
 
-      // 1. Update brand config json inside the hotels table
+      // 3. Update brand config json inside the hotels table
       const updatedHotel = await db.updateHotelCMS(currentHotel.id, cmsData);
       if (updatedHotel) {
         const session = getSessionUser();
@@ -255,18 +282,6 @@ export default function WebsiteSettingsPage() {
           session.hotel = updatedHotel;
           setSessionUser(session);
           setCurrentHotel(updatedHotel);
-        }
-      }
-
-      // 2. Perform direct atomic database updates for room prices and photos
-      const roomTypes = Object.keys(roomConfigs);
-      for (const type of roomTypes) {
-        const config = roomConfigs[type];
-        if (config.id) {
-          await db.updateRoomDetails(currentHotel.id, config.id, {
-            price: Number(config.price),
-            image_url: config.image
-          });
         }
       }
 
