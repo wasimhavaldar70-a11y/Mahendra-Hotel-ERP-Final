@@ -260,6 +260,17 @@ export const mockDb = {
     return rooms[index];
   },
 
+  updateRoomImage: async (hotelId: string, roomId: string, image: string): Promise<Room | null> => {
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+    const index = rooms.findIndex(r => r.id === roomId);
+    if (index === -1) return null;
+    
+    rooms[index].image_url = image;
+    setTable(`hf_rooms_${hotelId}`, rooms);
+    broadcastDbUpdate('rooms');
+    return rooms[index];
+  },
+
   deleteRoom: async (hotelId: string, roomId: string): Promise<boolean> => {
     const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
     const index = rooms.findIndex(r => r.id === roomId);

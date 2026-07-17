@@ -17,7 +17,8 @@ import {
   Sparkles, 
   CheckCircle,
   Filter,
-  X
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function RoomsPage() {
@@ -138,6 +139,33 @@ export default function RoomsPage() {
       loadRooms(currentHotel.id);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleRoomImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, roomId: string) => {
+    if (!currentHotel) return;
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        alert('Only image files are allowed');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          await db.updateRoomImage(currentHotel.id, roomId, reader.result as string);
+          loadRooms(currentHotel.id);
+        } catch (err) {
+          console.error(err);
+          alert('Failed to upload room photo');
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -389,6 +417,7 @@ export default function RoomsPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <th className="px-6 py-4">Photo</th>
                     <th className="px-6 py-4">Room Number</th>
                     <th className="px-6 py-4">Floor</th>
                     <th className="px-6 py-4">Room Type</th>
@@ -401,6 +430,24 @@ export default function RoomsPage() {
                 <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
                   {filteredRooms.map((room) => (
                     <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-3">
+                        <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-slate-100 border border-slate-200/80 flex items-center justify-center group shrink-0 shadow-sm">
+                          {room.image_url ? (
+                            <img src={room.image_url} alt={room.room_number} className="w-full h-full object-cover animate-fade-in" />
+                          ) : (
+                            <ImageIcon className="w-4 h-4 text-slate-400" />
+                          )}
+                          <label className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                            <Plus className="w-4 h-4 text-white" />
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handleRoomImageUpload(e, room.id)}
+                            />
+                          </label>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 font-extrabold text-slate-900">{room.room_number}</td>
                       <td className="px-6 py-4 text-slate-500">{room.floor}</td>
                       <td className="px-6 py-4">{room.room_type}</td>

@@ -399,10 +399,10 @@ export default function PublicHotelWebsite() {
                   amenities: ['Free WiFi', 'Air Conditioning', 'Premium Linens']
                 };
 
-                const displayImage = customConfig.image || defaultConfig.image;
+                const displayImage = room.image_url || customConfig.image || defaultConfig.image;
                 const displayDescription = customConfig.description || defaultConfig.description;
                 const displayAmenities = customConfig.amenities || defaultConfig.amenities;
-                const displayPrice = customConfig.price !== undefined && customConfig.price !== 0 ? customConfig.price : room.price;
+                const displayPrice = room.price !== undefined && room.price !== 0 ? room.price : (customConfig.price || room.price);
 
                 return (
                   <div key={room.id} className="bg-white rounded-[28px] overflow-hidden border border-[#E2E8F0]/40 shadow-sm flex flex-col group hover:shadow-md transition-shadow">

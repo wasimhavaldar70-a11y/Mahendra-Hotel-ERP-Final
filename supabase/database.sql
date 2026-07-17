@@ -634,8 +634,9 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Add Soft Delete fields
+-- 2. Add Soft Delete fields and Room Image URL
 ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 

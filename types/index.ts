@@ -33,6 +33,7 @@ export interface Room {
   floor: string;
   capacity: number;
   status: RoomStatus;
+  image_url?: string;
   deleted_at?: string;
   created_at: string;
 }

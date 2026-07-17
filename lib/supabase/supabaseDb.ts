@@ -64,6 +64,31 @@ const uploadImageToStorage = async (hotelId: string, customerId: string, side: '
   }
 };
 
+// Helper: Upload room image to storage
+const uploadRoomImageToStorage = async (hotelId: string, roomId: string, base64Data: string): Promise<string> => {
+  if (!supabase || !base64Data) return '';
+  if (!base64Data.startsWith('data:')) return base64Data;
+
+  try {
+    const blob = dataURItoBlob(base64Data);
+    const fileExt = blob.type.split('/')[1] || 'png';
+    const filePath = `${hotelId}/rooms/${roomId}/${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('customer-documents')
+      .upload(filePath, blob, {
+        contentType: blob.type,
+        upsert: true
+      });
+
+    if (uploadError) throw uploadError;
+    return filePath;
+  } catch (err) {
+    console.error('Failed to upload room photo:', err);
+    throw new Error('Room photo upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+  }
+};
+
 // Helper: Get public URL for storage path
 const resolveImageUrl = (imagePath: string | null | undefined): string => {
   if (!imagePath) return '';
@@ -239,10 +264,15 @@ export const supabaseDb = {
       .eq('hotel_id', hotelId)
       .is('deleted_at', null)
       .order('room_number', { ascending: true });
-    return error ? [] : data || [];
+    
+    if (error || !data) return [];
+    return data.map(r => ({
+      ...r,
+      image_url: r.image_url ? resolveImageUrl(r.image_url) : ''
+    }));
   },
 
-  addRoom: async (hotelId: string, room: Omit<Room, 'id' | 'hotel_id' | 'created_at' | 'status'>): Promise<Room> => {
+  addRoom: async (hotelId: string, room: Omit<Room, 'id' | 'hotel_id' | 'created_at' | 'status' | 'image_url'>): Promise<Room> => {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase
       .from('rooms')
@@ -279,6 +309,33 @@ export const supabaseDb = {
     if (error) return null;
     broadcastDbUpdate('rooms');
     return data;
+  },
+
+  updateRoomImage: async (hotelId: string, roomId: string, base64OrUrl: string): Promise<Room | null> => {
+    let storagePath = base64OrUrl;
+    if (base64OrUrl && base64OrUrl.startsWith('data:')) {
+      storagePath = await uploadRoomImageToStorage(hotelId, roomId, base64OrUrl);
+    }
+
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from('rooms')
+      .update({ image_url: storagePath })
+      .eq('id', roomId)
+      .eq('hotel_id', hotelId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Update room image failed:', error.message);
+      throw new Error('Failed to update room image: ' + error.message);
+    }
+    broadcastDbUpdate('rooms');
+    
+    return {
+      ...data,
+      image_url: data.image_url ? resolveImageUrl(data.image_url) : ''
+    };
   },
 
   deleteRoom: async (hotelId: string, roomId: string): Promise<boolean> => {
