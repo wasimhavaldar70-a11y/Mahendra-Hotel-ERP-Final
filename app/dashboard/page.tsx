@@ -55,42 +55,19 @@ export default function DashboardPage() {
       const roomsList = await db.getRooms(hotelId);
       setRooms(roomsList);
 
-      // Load payments for revenue calculation
-      const paymentsList = await db.getPayments(hotelId);
-      const today = new Date().toDateString();
-      
-      const todayRevenue = paymentsList
-        .filter(p => new Date(p.created_at).toDateString() === today)
-        .reduce((sum, p) => sum + Number(p.advance), 0);
-
-      // Load bookings for check-ins and check-outs today
-      const bookingsList = await db.getBookings(hotelId);
-      
-      const checkInsCount = bookingsList.filter(b => {
-        if (!b.check_in) return false;
-        return new Date(b.check_in).toDateString() === today;
-      }).length;
-
-      const checkOutsCount = bookingsList.filter(b => {
-        if (b.status !== 'Completed') return false;
-        return b.expected_checkout && new Date(b.expected_checkout).toDateString() === today;
-      }).length;
-      
-      const occupied = roomsList.filter(r => r.status === 'Occupied').length;
-      const available = roomsList.filter(r => r.status === 'Ready').length;
-      const maintenance = roomsList.filter(r => r.status === 'Maintenance').length;
-      const cleaning = roomsList.filter(r => r.status === 'Cleaning').length;
-
-      // Set real statistics based on database
-      setStats({
-        todayRevenue,
-        checkInsCount,
-        checkOutsCount,
-        occupiedRooms: occupied,
-        availableRooms: available,
-        maintenanceRooms: maintenance,
-        cleaningRooms: cleaning
-      });
+      // Load stats from database RPC
+      const dashboardStats = await db.getDashboardStats(hotelId);
+      if (dashboardStats) {
+        setStats({
+          todayRevenue: Number(dashboardStats.todayRevenue || 0),
+          checkInsCount: Number(dashboardStats.checkInsCount || 0),
+          checkOutsCount: Number(dashboardStats.checkOutsCount || 0),
+          occupiedRooms: Number(dashboardStats.occupiedRooms || 0),
+          availableRooms: Number(dashboardStats.availableRooms || 0),
+          maintenanceRooms: Number(dashboardStats.maintenanceRooms || 0),
+          cleaningRooms: Number(dashboardStats.cleaningRooms || 0)
+        });
+      }
 
       // Load pending booking requests
       const requestsList = await db.getPendingBookingRequests(hotelId);

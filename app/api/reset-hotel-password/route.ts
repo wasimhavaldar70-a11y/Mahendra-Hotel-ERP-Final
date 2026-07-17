@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
 // @ts-ignore
-import { Client } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { cookies } from 'next/headers';
+import { isRequestAllowed } from '../../../lib/rateLimit';
+
+const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const pool = new Pool({
+  connectionString: dbUrl,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
 export async function POST(request: Request) {
-  let pgClient: Client | null = null;
+  // Apply rate limiter (10 requests per minute)
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
+  if (!isRequestAllowed(clientIp, 10, 60000)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
+  let pgClient: PoolClient | null = null;
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -64,19 +79,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
     }
 
-    const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
     if (!dbUrl) {
       return NextResponse.json({ error: 'Database URL not configured' }, { status: 500 });
     }
 
-    pgClient = new Client({
-      connectionString: dbUrl,
-      ssl: {
-        rejectUnauthorized: false
-      }
-    });
-
-    await pgClient.connect();
+    pgClient = await pool.connect();
 
     if (isRealSupabase && adminUserId) {
       const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
@@ -108,7 +115,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err.message || 'Failed to reset password' }, { status: 500 });
   } finally {
     if (pgClient) {
-      await pgClient.end();
+      pgClient.release();
     }
   }
 }

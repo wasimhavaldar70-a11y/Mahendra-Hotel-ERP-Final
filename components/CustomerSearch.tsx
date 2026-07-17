@@ -39,14 +39,7 @@ export default function CustomerSearch({ hotelId, onSelectCustomer, onClear }: C
     try {
       const matches = await db.searchCustomers(hotelId, query);
       if (matches.length > 0) {
-        const details = await Promise.all(
-          matches.map(async (m) => {
-            const detail = await db.getCustomerByPhoneOrAadhar(hotelId, m.phone);
-            return detail;
-          })
-        );
-        const validDetails = details.filter(Boolean) as any[];
-        setSearchResults(validDetails);
+        setSearchResults(matches);
       } else {
         setNoResultFound(true);
       }

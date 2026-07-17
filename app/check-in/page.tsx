@@ -391,7 +391,7 @@ function CheckInFormContent() {
         {
           room_id: selectedRoomId,
           primary_customer_id: finalCustomer.id,
-          expected_checkout: new Date(expectedCheckout + 'T12:00:00').toISOString(),
+          expected_checkout: new Date(expectedCheckout + 'T' + (currentHotel?.cms_data?.checkoutTime || '12:00:00')).toISOString(),
           number_of_guests: guests.length
         },
         {

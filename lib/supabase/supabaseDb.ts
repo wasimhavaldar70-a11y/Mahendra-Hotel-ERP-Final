@@ -39,7 +39,7 @@ const uploadImageToStorage = async (hotelId: string, customerId: string, side: '
 
     if (!buckets?.some(b => b.id === 'customer-documents')) {
       const { error: createError } = await supabase.storage.createBucket('customer-documents', {
-        public: true,
+        public: false,
         fileSizeLimit: 5242880 // 5MB
       });
       if (createError) throw createError;
@@ -90,29 +90,44 @@ const uploadRoomImageToStorage = async (hotelId: string, roomId: string, base64D
 };
 
 // Helper: Get public URL for storage path
-const resolveImageUrl = (imagePath: string | null | undefined): string => {
+// Helper: Get pre-signed URL for storage path
+const resolveImageUrl = async (imagePath: string | null | undefined): Promise<string> => {
   if (!imagePath) return '';
   if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
   if (!supabase) return '';
-  const { data } = supabase.storage.from('customer-documents').getPublicUrl(imagePath);
-  return data.publicUrl || '';
+  try {
+    const { data, error } = await supabase.storage.from('customer-documents').createSignedUrl(imagePath, 3600);
+    if (error || !data) {
+      // Fallback to publicUrl if signing fails
+      const { data: pubData } = supabase.storage.from('customer-documents').getPublicUrl(imagePath);
+      return pubData.publicUrl || '';
+    }
+    return data.signedUrl || '';
+  } catch (e) {
+    const { data: pubData } = supabase.storage.from('customer-documents').getPublicUrl(imagePath);
+    return pubData.publicUrl || '';
+  }
 };
 
-// Helper: Map list of documents to resolve paths
-const resolveDocs = (docs: any[] | null | undefined) => {
+// Helper: Map list of documents to resolve paths asynchronously
+const resolveDocs = async (docs: any[] | null | undefined) => {
   if (!docs) return [];
-  return docs.map(d => ({
-    ...d,
-    front_image: resolveImageUrl(d.front_image),
-    back_image: resolveImageUrl(d.back_image)
-  }));
+  const resolved = await Promise.all(
+    docs.map(async d => ({
+      ...d,
+      front_image: await resolveImageUrl(d.front_image),
+      back_image: await resolveImageUrl(d.back_image)
+    }))
+  );
+  return resolved;
 };
 
 export const supabaseDb = {
   // Authentication
-  login: async (email: string, password?: string): Promise<{ user: User; hotel: Hotel | null } | null> => {
+  login: async (email: string, password?: string): Promise<{ user: User; hotel: Hotel | null; access_token?: string } | null> => {
     if (!supabase) return null;
     const lowercaseEmail = email.toLowerCase().trim();
+    let access_token: string | undefined = undefined;
 
     // If a password is provided, validate it via Supabase Auth
     if (password) {
@@ -125,6 +140,12 @@ export const supabaseDb = {
         console.log('Supabase Auth credentials check failed:', authError?.message);
         return null;
       }
+      
+      const session = (await supabase.auth.getSession()).data.session;
+      access_token = session?.access_token;
+    } else {
+      const session = (await supabase.auth.getSession()).data.session;
+      access_token = session?.access_token;
     }
 
     // Check if the user exists in our public users table
@@ -140,7 +161,7 @@ export const supabaseDb = {
     }
 
     if (user.role === 'superadmin') {
-      return { user, hotel: null };
+      return { user, hotel: null, access_token };
     }
 
     // Fetch the hotel details if it's an owner or receptionist
@@ -150,10 +171,10 @@ export const supabaseDb = {
         .select('*')
         .eq('id', user.hotel_id)
         .maybeSingle();
-      return { user, hotel: hotel || null };
+      return { user, hotel: hotel || null, access_token };
     }
 
-    return { user, hotel: null };
+    return { user, hotel: null, access_token };
   },
 
   // Hotels Management (Superadmin)
@@ -164,6 +185,16 @@ export const supabaseDb = {
       .select('*')
       .order('created_at', { ascending: false });
     return error ? [] : data || [];
+  },
+
+  getHotelById: async (hotelId: string): Promise<Hotel | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from('hotels')
+      .select('*')
+      .eq('id', hotelId)
+      .single();
+    return error ? null : data;
   },
 
   addHotel: async (data: Omit<Hotel, 'id' | 'created_at' | 'subscription_status'> & { password?: string }): Promise<Hotel> => {
@@ -283,10 +314,13 @@ export const supabaseDb = {
       .order('room_number', { ascending: true });
     
     if (error || !data) return [];
-    return data.map(r => ({
-      ...r,
-      image_url: r.image_url ? resolveImageUrl(r.image_url) : ''
-    }));
+    const resolvedRooms = await Promise.all(
+      data.map(async r => ({
+        ...r,
+        image_url: r.image_url ? await resolveImageUrl(r.image_url) : ''
+      }))
+    );
+    return resolvedRooms;
   },
 
   addRoom: async (hotelId: string, room: Omit<Room, 'id' | 'hotel_id' | 'created_at' | 'status' | 'image_url'>): Promise<Room> => {
@@ -351,7 +385,7 @@ export const supabaseDb = {
     
     return {
       ...data,
-      image_url: data.image_url ? resolveImageUrl(data.image_url) : ''
+      image_url: data.image_url ? await resolveImageUrl(data.image_url) : ''
     };
   },
 
@@ -381,7 +415,7 @@ export const supabaseDb = {
     broadcastDbUpdate('rooms');
     return {
       ...data,
-      image_url: data.image_url ? resolveImageUrl(data.image_url) : ''
+      image_url: data.image_url ? await resolveImageUrl(data.image_url) : ''
     };
   },
 
@@ -413,19 +447,71 @@ export const supabaseDb = {
     return error ? [] : data || [];
   },
 
-  searchCustomers: async (hotelId: string, query: string): Promise<Customer[]> => {
+  searchCustomers: async (hotelId: string, query: string): Promise<Array<{ customer: Customer; docs: CustomerDocument[]; stayCount: number; lastVisit: string | null; pendingBalance: number }>> => {
     if (!supabase) return [];
     const q = query.trim();
     if (!q) return [];
 
     const { data, error } = await supabase
       .from('customers')
-      .select('*')
+      .select(`
+        *,
+        customer_documents(*),
+        check_ins(id, check_in, expected_checkout, status, payments(pending))
+      `)
       .eq('hotel_id', hotelId)
       .is('deleted_at', null)
       .or(`full_name.ilike.%${q}%,phone.like.%${q}%`);
 
-    return error ? [] : data || [];
+    if (error || !data) return [];
+
+    const results = await Promise.all(data.map(async (c: any) => {
+      const docs = await resolveDocs(c.customer_documents);
+      const stays = c.check_ins || [];
+      const stayCount = stays.length;
+
+      // Last Visit
+      const completedStays = stays.filter((s: any) => s.status === 'Completed');
+      completedStays.sort((a: any, b: any) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
+      const lastVisit = completedStays.length > 0 ? completedStays[0].check_in : null;
+
+      // Outstanding Balance (pending payments from active stays)
+      let pendingBalance = 0;
+      const activeStays = stays.filter((s: any) => s.status === 'Active');
+      activeStays.forEach((s: any) => {
+        const pay = Array.isArray(s.payments) ? s.payments[0] : s.payments;
+        if (pay) {
+          pendingBalance += Number(pay.pending || 0);
+        }
+      });
+
+      const customerInfo: Customer = {
+        id: c.id,
+        hotel_id: c.hotel_id,
+        full_name: c.full_name,
+        phone: c.phone,
+        gender: c.gender,
+        address: c.address,
+        city: c.city,
+        state: c.state,
+        country: c.country,
+        email: c.email,
+        vehicle_number: c.vehicle_number,
+        emergency_contact: c.emergency_contact,
+        nationality: c.nationality,
+        created_at: c.created_at
+      };
+
+      return {
+        customer: customerInfo,
+        docs,
+        stayCount,
+        lastVisit,
+        pendingBalance
+      };
+    }));
+
+    return results;
   },
 
   getCustomerByPhoneOrAadhar: async (hotelId: string, identifier: string): Promise<{ customer: Customer; docs: CustomerDocument[]; stayCount: number; lastVisit: string | null; pendingBalance: number } | null> => {
@@ -469,7 +555,7 @@ export const supabaseDb = {
       .select('*')
       .eq('customer_id', customer.id);
 
-    const resolvedDocs = resolveDocs(docs);
+    const resolvedDocs = await resolveDocs(docs);
 
     // 4. Fetch stays and payments for stats
     const { data: stays } = await supabase
@@ -962,7 +1048,7 @@ export const supabaseDb = {
       .maybeSingle();
 
     if (primaryCustomer && primaryCustomer.customer_documents) {
-      primaryCustomer.customer_documents = resolveDocs(primaryCustomer.customer_documents);
+      primaryCustomer.customer_documents = await resolveDocs(primaryCustomer.customer_documents);
     }
 
     // Fetch payment record
@@ -986,10 +1072,10 @@ export const supabaseDb = {
       .is('deleted_at', null)
       .maybeSingle();
 
-    const formattedGuests = (stayGuests || []).map(g => {
+    const formattedGuests = await Promise.all((stayGuests || []).map(async g => {
       const cust = g.customers;
       if (cust && cust.customer_documents) {
-        cust.customer_documents = resolveDocs(cust.customer_documents);
+        cust.customer_documents = await resolveDocs(cust.customer_documents);
       }
       return {
         id: g.id,
@@ -1000,7 +1086,7 @@ export const supabaseDb = {
         created_at: g.created_at,
         customer: cust
       };
-    });
+    }));
 
     return {
       ...activeStay,
@@ -1446,6 +1532,18 @@ export const supabaseDb = {
     broadcastDbUpdate('customers');
     broadcastDbUpdate('rooms');
     return checkIn;
+  },
+
+  getDashboardStats: async (hotelId: string): Promise<any> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase.rpc('get_dashboard_stats', {
+      p_hotel_id: hotelId
+    });
+    if (error) {
+      console.error('Failed to get dashboard stats:', error);
+      return null;
+    }
+    return data;
   },
 
   rejectBookingRequest: async (hotelId: string, requestId: string): Promise<boolean> => {

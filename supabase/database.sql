@@ -39,8 +39,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   floor VARCHAR(100) NOT NULL DEFAULT 'Ground Floor',
   capacity INTEGER NOT NULL DEFAULT 2,
   status VARCHAR(50) NOT NULL DEFAULT 'Ready', -- 'Ready', 'Occupied', 'Maintenance', 'Cleaning'
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  UNIQUE (hotel_id, room_number)
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- 4. Customers Table (Permanent database)
@@ -54,8 +53,7 @@ CREATE TABLE IF NOT EXISTS customers (
   city VARCHAR(100),
   state VARCHAR(100),
   country VARCHAR(100) NOT NULL DEFAULT 'India',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  UNIQUE (hotel_id, phone)
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- 5. Customer Documents Table (Stored in Supabase Storage)
@@ -104,6 +102,7 @@ CREATE TABLE IF NOT EXISTS payments (
   advance NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
   pending NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
   payment_method VARCHAR(50) NOT NULL, -- 'UPI', 'Cash', 'Card'
+  final_payment_method VARCHAR(50),    -- 'UPI', 'Cash', 'Card'
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -171,6 +170,7 @@ ALTER TABLE customer_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE check_ins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE check_in_guests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Helper function to get the current user's hotel_id
 CREATE OR REPLACE FUNCTION get_user_hotel_id()
@@ -187,6 +187,26 @@ RETURNS BOOLEAN AS $$
   SELECT COALESCE(
     (current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role') = 'superadmin',
     COALESCE((SELECT role = 'superadmin' FROM public.users WHERE id = auth.uid()), false)
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Helper function to check access to customer documents (bypasses soft delete check of customers table RLS)
+CREATE OR REPLACE FUNCTION check_document_access(p_customer_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.customers
+    WHERE id = p_customer_id
+    AND hotel_id = get_user_hotel_id()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Helper function to check access to payments (bypasses soft delete check of check_ins table RLS)
+CREATE OR REPLACE FUNCTION check_payment_access(p_checkin_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.check_ins
+    WHERE id = p_checkin_id
+    AND hotel_id = get_user_hotel_id()
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
@@ -210,6 +230,10 @@ DROP POLICY IF EXISTS "Hotel Owners can update their own hotel details" ON hotel
 CREATE POLICY "Hotel Owners can update their own hotel details" ON hotels 
   FOR UPDATE TO authenticated USING (id = get_user_hotel_id()) WITH CHECK (id = get_user_hotel_id());
 
+DROP POLICY IF EXISTS "Allow public select hotels" ON hotels;
+CREATE POLICY "Allow public select hotels" ON hotels 
+  FOR SELECT TO anon, authenticated USING (true);
+
 -- Policies for Users
 CREATE POLICY "Super Admins can select users" ON users 
   FOR SELECT TO authenticated USING (is_super_admin());
@@ -229,6 +253,10 @@ CREATE POLICY "Users can view their own profile" ON users
 -- Policies for Rooms
 CREATE POLICY "Users can select rooms of their hotel" ON rooms 
   FOR SELECT TO authenticated USING (hotel_id = get_user_hotel_id() OR is_super_admin());
+
+DROP POLICY IF EXISTS "Allow public select rooms" ON rooms;
+CREATE POLICY "Allow public select rooms" ON rooms 
+  FOR SELECT TO anon, authenticated USING (deleted_at IS NULL);
 
 CREATE POLICY "Users can insert rooms of their hotel" ON rooms 
   FOR INSERT TO authenticated WITH CHECK (hotel_id = get_user_hotel_id() OR is_super_admin());
@@ -254,46 +282,16 @@ CREATE POLICY "Users can delete customers of their hotel" ON customers
 
 -- Policies for Customer Documents
 CREATE POLICY "Users can select documents of their hotel" ON customer_documents 
-  FOR SELECT TO authenticated USING (
-    EXISTS (
-      SELECT 1 FROM customers
-      WHERE customers.id = customer_documents.customer_id
-      AND customers.hotel_id = get_user_hotel_id()
-    )
-  );
+  FOR SELECT TO authenticated USING (check_document_access(customer_id));
 
 CREATE POLICY "Users can insert documents of their hotel" ON customer_documents 
-  FOR INSERT TO authenticated WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM customers
-      WHERE customers.id = customer_documents.customer_id
-      AND customers.hotel_id = get_user_hotel_id()
-    )
-  );
+  FOR INSERT TO authenticated WITH CHECK (check_document_access(customer_id));
 
 CREATE POLICY "Users can update documents of their hotel" ON customer_documents 
-  FOR UPDATE TO authenticated USING (
-    EXISTS (
-      SELECT 1 FROM customers
-      WHERE customers.id = customer_documents.customer_id
-      AND customers.hotel_id = get_user_hotel_id()
-    )
-  ) WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM customers
-      WHERE customers.id = customer_documents.customer_id
-      AND customers.hotel_id = get_user_hotel_id()
-    )
-  );
+  FOR UPDATE TO authenticated USING (check_document_access(customer_id)) WITH CHECK (check_document_access(customer_id));
 
 CREATE POLICY "Users can delete documents of their hotel" ON customer_documents 
-  FOR DELETE TO authenticated USING (
-    EXISTS (
-      SELECT 1 FROM customers
-      WHERE customers.id = customer_documents.customer_id
-      AND customers.hotel_id = get_user_hotel_id()
-    )
-  );
+  FOR DELETE TO authenticated USING (check_document_access(customer_id));
 
 -- Policies for Check-Ins
 CREATE POLICY "Users can select check-ins of their hotel" ON check_ins 
@@ -353,46 +351,16 @@ CREATE POLICY "Users can delete guests of their hotel" ON check_in_guests
 
 -- Policies for Payments
 CREATE POLICY "Users can select payments of their hotel" ON payments 
-  FOR SELECT TO authenticated USING (
-    EXISTS (
-      SELECT 1 FROM check_ins
-      WHERE check_ins.id = payments.checkin_id
-      AND check_ins.hotel_id = get_user_hotel_id()
-    )
-  );
+  FOR SELECT TO authenticated USING (check_payment_access(checkin_id));
 
 CREATE POLICY "Users can insert payments of their hotel" ON payments 
-  FOR INSERT TO authenticated WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM check_ins
-      WHERE check_ins.id = payments.checkin_id
-      AND check_ins.hotel_id = get_user_hotel_id()
-    )
-  );
+  FOR INSERT TO authenticated WITH CHECK (check_payment_access(checkin_id));
 
 CREATE POLICY "Users can update payments of their hotel" ON payments 
-  FOR UPDATE TO authenticated USING (
-    EXISTS (
-      SELECT 1 FROM check_ins
-      WHERE check_ins.id = payments.checkin_id
-      AND check_ins.hotel_id = get_user_hotel_id()
-    )
-  ) WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM check_ins
-      WHERE check_ins.id = payments.checkin_id
-      AND check_ins.hotel_id = get_user_hotel_id()
-    )
-  );
+  FOR UPDATE TO authenticated USING (check_payment_access(checkin_id)) WITH CHECK (check_payment_access(checkin_id));
 
 CREATE POLICY "Users can delete payments of their hotel" ON payments 
-  FOR DELETE TO authenticated USING (
-    EXISTS (
-      SELECT 1 FROM check_ins
-      WHERE check_ins.id = payments.checkin_id
-      AND check_ins.hotel_id = get_user_hotel_id()
-    )
-  );
+  FOR DELETE TO authenticated USING (check_payment_access(checkin_id));
 
 -- Automatically sync auth.users to public.users on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -618,6 +586,64 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 
+-- High performance dashboard stats pre-aggregation function
+CREATE OR REPLACE FUNCTION get_dashboard_stats(p_hotel_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+  v_today_revenue NUMERIC(10,2);
+  v_checkins_count INT;
+  v_checkouts_count INT;
+  v_occupied INT;
+  v_available INT;
+  v_maintenance INT;
+  v_cleaning INT;
+BEGIN
+  -- 1. Today's Revenue (sum of advances paid today)
+  SELECT COALESCE(SUM(p.advance), 0.00) INTO v_today_revenue
+  FROM public.payments p
+  JOIN public.check_ins c ON p.checkin_id = c.id
+  WHERE c.hotel_id = p_hotel_id 
+    AND p.created_at AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
+    AND c.deleted_at IS NULL;
+
+  -- 2. Check-ins Count Today
+  SELECT COUNT(*)::INT INTO v_checkins_count
+  FROM public.check_ins
+  WHERE hotel_id = p_hotel_id
+    AND check_in AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
+    AND deleted_at IS NULL;
+
+  -- 3. Checkouts Count Today (status completed and expected_checkout is today)
+  SELECT COUNT(*)::INT INTO v_checkouts_count
+  FROM public.check_ins
+  WHERE hotel_id = p_hotel_id
+    AND status = 'Completed'
+    AND expected_checkout AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
+    AND expected_checkout AT TIME ZONE 'Asia/Kolkata'::text < date_trunc('day', timezone('Asia/Kolkata'::text, now())) + INTERVAL '1 day'
+    AND deleted_at IS NULL;
+
+  -- 4. Room Counts
+  SELECT COALESCE(COUNT(CASE WHEN status = 'Occupied' THEN 1 END)::INT, 0),
+         COALESCE(COUNT(CASE WHEN status = 'Ready' THEN 1 END)::INT, 0),
+         COALESCE(COUNT(CASE WHEN status = 'Maintenance' THEN 1 END)::INT, 0),
+         COALESCE(COUNT(CASE WHEN status = 'Cleaning' THEN 1 END)::INT, 0)
+  INTO v_occupied, v_available, v_maintenance, v_cleaning
+  FROM public.rooms
+  WHERE hotel_id = p_hotel_id AND deleted_at IS NULL;
+
+  RETURN json_build_object(
+    'todayRevenue', v_today_revenue,
+    'checkInsCount', v_checkins_count,
+    'checkOutsCount', v_checkouts_count,
+    'occupiedRooms', v_occupied,
+    'availableRooms', v_available,
+    'maintenanceRooms', v_maintenance,
+    'cleaningRooms', v_cleaning
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+
 -- ========================================================
 -- DATABASE CONSISTENCY & SECURITY ENHANCEMENTS (MIGRATIONS)
 -- ========================================================
@@ -699,6 +725,20 @@ ALTER TABLE public.customer_documents FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.check_ins FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.check_in_guests FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.payments FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs FORCE ROW LEVEL SECURITY;
+
+-- Audit logs policies
+DROP POLICY IF EXISTS "Super admins can select audit logs" ON public.audit_logs;
+CREATE POLICY "Super admins can select audit logs" ON public.audit_logs
+  FOR SELECT TO authenticated USING (is_super_admin());
+
+-- Cleanup existing constraints for soft-deletes unique indexing on operational databases
+ALTER TABLE public.rooms DROP CONSTRAINT IF EXISTS rooms_hotel_id_room_number_key;
+ALTER TABLE public.customers DROP CONSTRAINT IF EXISTS customers_hotel_id_phone_key;
+
+-- Create partial unique indexes to safely enforce uniqueness excluding soft-deleted rows
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_hotel_room_unique ON public.rooms (hotel_id, room_number) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_hotel_phone_unique ON public.customers (hotel_id, phone) WHERE deleted_at IS NULL;
 
 -- 7. Add Audit Logging Infrastructure
 CREATE TABLE IF NOT EXISTS public.audit_logs (
@@ -806,31 +846,16 @@ DROP POLICY IF EXISTS "Owners can update payments of their hotel" ON payments;
 DROP POLICY IF EXISTS "Users can update payments of their hotel" ON payments;
 CREATE POLICY "Owners can update payments of their hotel" ON payments 
   FOR UPDATE TO authenticated USING (
-    EXISTS (
-      SELECT 1 FROM check_ins
-      WHERE check_ins.id = payments.checkin_id
-      AND check_ins.hotel_id = get_user_hotel_id()
-      AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
-    )
+    check_payment_access(checkin_id) AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
   ) WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM check_ins
-      WHERE check_ins.id = payments.checkin_id
-      AND check_ins.hotel_id = get_user_hotel_id()
-      AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
-    )
+    check_payment_access(checkin_id) AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
   );
 
 DROP POLICY IF EXISTS "Owners can delete payments of their hotel" ON payments;
 DROP POLICY IF EXISTS "Users can delete payments of their hotel" ON payments;
 CREATE POLICY "Owners can delete payments of their hotel" ON payments 
   FOR DELETE TO authenticated USING (
-    EXISTS (
-      SELECT 1 FROM check_ins
-      WHERE check_ins.id = payments.checkin_id
-      AND check_ins.hotel_id = get_user_hotel_id()
-      AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
-    )
+    check_payment_access(checkin_id) AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
   );
 
 -- ========================================================
@@ -1022,6 +1047,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Ensure new column is added to payments
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS final_payment_method VARCHAR(50);
+
 -- 8. Transactional RPC for atomic stay check-out and billing settlement
 CREATE OR REPLACE FUNCTION checkout_stay_transactional(
   p_hotel_id UUID,
@@ -1046,7 +1074,7 @@ BEGIN
 
   IF v_room_price IS NOT NULL THEN
     UPDATE public.payments 
-    SET advance = v_room_price, pending = 0.00, payment_method = p_final_payment_method
+    SET advance = v_room_price, pending = 0.00, final_payment_method = p_final_payment_method
     WHERE checkin_id = p_checkin_id;
   END IF;
 
@@ -1071,10 +1099,10 @@ VALUES ('20260717_database_consistency_upgrades')
 ON CONFLICT (version) DO NOTHING;
 
 
--- Ensure the customer-documents bucket exists
+-- Ensure the customer-documents bucket exists and is private
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('customer-documents', 'customer-documents', true)
-ON CONFLICT (id) DO NOTHING;
+VALUES ('customer-documents', 'customer-documents', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
 
 
 -- 10. STORAGE BUCKET ROW LEVEL SECURITY (RLS) POLICIES
@@ -1083,6 +1111,7 @@ ON CONFLICT (id) DO NOTHING;
 -- Drop existing storage policies if exist
 DROP POLICY IF EXISTS "Enforce tenant storage folder isolation" ON storage.objects;
 DROP POLICY IF EXISTS "Allow public read of documents" ON storage.objects;
+DROP POLICY IF EXISTS "Enforce tenant storage select isolation" ON storage.objects;
 
 -- Create policy to restrict modification access to owner folders only
 CREATE POLICY "Enforce tenant storage folder isolation" ON storage.objects
@@ -1096,10 +1125,13 @@ CREATE POLICY "Enforce tenant storage folder isolation" ON storage.objects
     (storage.foldername(name))[1] = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')
   );
 
--- Create policy to allow anonymous public SELECT operations on documents
-CREATE POLICY "Allow public read of documents" ON storage.objects
-  FOR SELECT TO public
-  USING (bucket_id = 'customer-documents');
+-- Create policy to allow ONLY authenticated users to select documents of their hotel folder
+CREATE POLICY "Enforce tenant storage select isolation" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'customer-documents' AND
+    (storage.foldername(name))[1] = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')
+  );
 
 
 

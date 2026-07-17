@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
 // @ts-ignore
-import { Client } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { cookies } from 'next/headers';
+import { isRequestAllowed } from '../../../lib/rateLimit';
+
+const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const pool = new Pool({
+  connectionString: dbUrl,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
 export async function POST(request: Request) {
-  let pgClient: Client | null = null;
+  // Apply rate limiter (10 requests per minute)
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
+  if (!isRequestAllowed(clientIp, 10, 60000)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
+  let pgClient: PoolClient | null = null;
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -60,20 +75,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
-
     if (!dbUrl) {
       return NextResponse.json({ error: 'Database URL not configured' }, { status: 500 });
     }
 
-    pgClient = new Client({
-      connectionString: dbUrl,
-      ssl: {
-        rejectUnauthorized: false
-      }
-    });
-
-    await pgClient.connect();
+    pgClient = await pool.connect();
 
     if (isRealSupabase && adminUserId) {
       const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
@@ -82,96 +88,177 @@ export async function POST(request: Request) {
       }
     }
 
-    // Start database transaction
-    await pgClient.query('BEGIN;');
-
     const lowercaseEmail = email.toLowerCase().trim();
 
-    // A. Clean up any existing records for this email first to prevent duplicates/errors
-    await pgClient.query("DELETE FROM public.users WHERE email = $1;", [lowercaseEmail]);
-    await pgClient.query("DELETE FROM auth.identities WHERE email = $1;", [lowercaseEmail]);
-    await pgClient.query("DELETE FROM auth.users WHERE email = $1;", [lowercaseEmail]);
+    // 1. Email validation step (prevent silent deletes of other hotel users - Issue 11)
+    const emailCheck = await pgClient.query('SELECT id FROM public.users WHERE email = $1;', [lowercaseEmail]);
+    if (emailCheck.rows.length > 0) {
+      return NextResponse.json({ error: 'Email address is already in use' }, { status: 400 });
+    }
 
-    // Ensure pgcrypto extension is installed
-    await pgClient.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const hasServiceKey = !!(serviceRoleKey && !serviceRoleKey.includes('[YOUR-'));
 
-    // Generate User UUID in advance so we can use it across both tables
-    const uuidRes = await pgClient.query("SELECT gen_random_uuid() as id;");
-    const userId = uuidRes.rows[0].id;
+    let hotel: any = null;
 
-    // B. Register the user via direct SQL (Bypassing Supabase Auth API Email Rate Limits)
-    // Using gen_salt('bf', 10) to generate the exact $2a$10$ bcrypt format required by GoTrue.
-    // Explicitly setting token/change columns to '' instead of NULL to prevent GoTrue Golang scan errors.
-    await pgClient.query(`
-      INSERT INTO auth.users (
-        instance_id, id, aud, role, email, 
-        encrypted_password, email_confirmed_at, 
-        raw_app_meta_data, raw_user_meta_data, 
-        created_at, updated_at,
-        confirmation_token, recovery_token, email_change_token_new, email_change,
-        phone_change, phone_change_token, email_change_token_current, reauthentication_token
-      ) VALUES (
-        '00000000-0000-0000-0000-000000000000',
-        $1::uuid,
-        'authenticated',
-        'authenticated',
-        $2::text,
-        crypt($3::text, gen_salt('bf', 10)),
-        now(),
-        '{"provider":"email","providers":["email"]}',
-        json_build_object(
-          'sub', $1::text,
-          'email', $2::text,
-          'email_verified', false,
-          'phone_verified', false
-        ),
-        now(),
-        now(),
-        '', '', '', '',
-        '', '', '', ''
-      );
-    `, [userId, lowercaseEmail, password]);
+    if (hasServiceKey) {
+      // A. Create Hotel record first to generate hotel.id (Issue 8)
+      await pgClient.query('BEGIN;');
+      
+      const insertHotelRes = await pgClient.query(`
+        INSERT INTO public.hotels (hotel_name, owner_name, email, phone, subscription_plan, subscription_status)
+        VALUES ($1, $2, $3, $4, $5, 'Active')
+        RETURNING *;
+      `, [hotel_name, owner_name, lowercaseEmail, phone, subscription_plan]);
+      
+      hotel = insertHotelRes.rows[0];
 
-    // C. Create a corresponding row in auth.identities to link the user's login identity
-    await pgClient.query(`
-      INSERT INTO auth.identities (
-        id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
-      ) VALUES (
-        gen_random_uuid(),
-        $1::uuid,
-        $1::text,
-        json_build_object(
-          'sub', $1::text,
-          'email', $2::text,
-          'email_verified', false,
-          'phone_verified', false
-        ),
-        'email',
-        now(),
-        now(),
-        now()
-      );
-    `, [userId, lowercaseEmail]);
+      // B. Provision account via official Supabase admin client (Issue 7)
+      const { createClient } = require('@supabase/supabase-js');
+      const supabaseAdmin = createClient(supabaseUrl!, serviceRoleKey!);
 
-    // D. Create the Hotel
-    const insertHotelRes = await pgClient.query(`
-      INSERT INTO public.hotels (hotel_name, owner_name, email, phone, subscription_plan, subscription_status)
-      VALUES ($1, $2, $3, $4, $5, 'Active')
-      RETURNING *;
-    `, [hotel_name, owner_name, lowercaseEmail, phone, subscription_plan]);
-    
-    const hotel = insertHotelRes.rows[0];
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: lowercaseEmail,
+        password: password,
+        email_confirm: true,
+        app_metadata: {
+          role: 'hotel_owner',
+          hotel_id: hotel.id
+        }
+      });
 
-    // E. Link user to the hotel in public.users as hotel_owner
-    await pgClient.query(`
-      INSERT INTO public.users (id, email, role, hotel_id)
-      VALUES ($1, $2, 'hotel_owner', $3)
-      ON CONFLICT (id) DO UPDATE 
-      SET role = 'hotel_owner', hotel_id = $3;
-    `, [userId, lowercaseEmail, hotel.id]);
+      if (authError || !authData.user) {
+        throw new Error(authError?.message || 'Failed to create user account via Supabase Admin API');
+      }
 
-    // Commit Transaction
-    await pgClient.query('COMMIT;');
+      // C. Ensure matching role and reference mapping in public schemas
+      await pgClient.query(`
+        INSERT INTO public.users (id, email, role, hotel_id)
+        VALUES ($1, $2, 'hotel_owner', $3)
+        ON CONFLICT (id) DO UPDATE 
+        SET role = 'hotel_owner', hotel_id = $3;
+      `, [authData.user.id, lowercaseEmail, hotel.id]);
+
+      // D. Explicitly update auth.users metadata to ensure JWT claims are populated (Issue 7/8)
+      await pgClient.query(`
+        UPDATE auth.users 
+        SET raw_app_meta_data = jsonb_set(
+          jsonb_set(
+            coalesce(raw_app_meta_data, '{}'::jsonb),
+            '{hotel_id}',
+            to_jsonb($1::uuid)
+          ),
+          '{role}',
+          '"hotel_owner"'::jsonb
+        )
+        WHERE id = $2::uuid;
+      `, [hotel.id, authData.user.id]);
+
+      await pgClient.query('COMMIT;');
+    } else {
+      // Fallback: Reordered direct SQL provisioning (Hotel first, then User)
+      await pgClient.query('BEGIN;');
+
+      // 1. Insert Hotel
+      const insertHotelRes = await pgClient.query(`
+        INSERT INTO public.hotels (hotel_name, owner_name, email, phone, subscription_plan, subscription_status)
+        VALUES ($1, $2, $3, $4, $5, 'Active')
+        RETURNING *;
+      `, [hotel_name, owner_name, lowercaseEmail, phone, subscription_plan]);
+      
+      hotel = insertHotelRes.rows[0];
+
+      // Generate User UUID
+      const uuidRes = await pgClient.query("SELECT gen_random_uuid() as id;");
+      const userId = uuidRes.rows[0].id;
+
+      // Ensure pgcrypto
+      await pgClient.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+
+      // 2. Insert auth.users with correct app_metadata containing hotel_id
+      const appMetadataJson = JSON.stringify({
+        provider: 'email',
+        providers: ['email'],
+        role: 'hotel_owner',
+        hotel_id: hotel.id
+      });
+
+      await pgClient.query(`
+        INSERT INTO auth.users (
+          instance_id, id, aud, role, email, 
+          encrypted_password, email_confirmed_at, 
+          raw_app_meta_data, raw_user_meta_data, 
+          created_at, updated_at,
+          confirmation_token, recovery_token, email_change_token_new, email_change,
+          phone_change, phone_change_token, email_change_token_current, reauthentication_token
+        ) VALUES (
+          '00000000-0000-0000-0000-000000000000',
+          $1::uuid,
+          'authenticated',
+          'authenticated',
+          $2::text,
+          crypt($3::text, gen_salt('bf', 10)),
+          now(),
+          $4::jsonb,
+          json_build_object(
+            'sub', $1::text,
+            'email', $2::text,
+            'email_verified', false,
+            'phone_verified', false
+          ),
+          now(),
+          now(),
+          '', '', '', '',
+          '', '', '', ''
+        );
+      `, [userId, lowercaseEmail, password, appMetadataJson]);
+
+      // 3. Create auth.identities
+      await pgClient.query(`
+        INSERT INTO auth.identities (
+          id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+        ) VALUES (
+          gen_random_uuid(),
+          $1::uuid,
+          $1::text,
+          json_build_object(
+            'sub', $1::text,
+            'email', $2::text,
+            'email_verified', false,
+            'phone_verified', false
+          ),
+          'email',
+          now(),
+          now(),
+          now()
+        );
+      `, [userId, lowercaseEmail]);
+
+      // 4. Link user to the hotel in public.users
+      await pgClient.query(`
+        INSERT INTO public.users (id, email, role, hotel_id)
+        VALUES ($1, $2, 'hotel_owner', $3)
+        ON CONFLICT (id) DO UPDATE 
+        SET role = 'hotel_owner', hotel_id = $3;
+      `, [userId, lowercaseEmail, hotel.id]);
+
+      // 5. Explicitly update auth.users metadata to ensure JWT claims are populated (Issue 7/8)
+      await pgClient.query(`
+        UPDATE auth.users 
+        SET raw_app_meta_data = jsonb_set(
+          jsonb_set(
+            coalesce(raw_app_meta_data, '{}'::jsonb),
+            '{hotel_id}',
+            to_jsonb($1::uuid)
+          ),
+          '{role}',
+          '"hotel_owner"'::jsonb
+        )
+        WHERE id = $2::uuid;
+      `, [hotel.id, userId]);
+
+      await pgClient.query('COMMIT;');
+    }
 
     return NextResponse.json({ success: true, hotel });
 
@@ -187,7 +274,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err.message || 'Failed to provision hotel account' }, { status: 500 });
   } finally {
     if (pgClient) {
-      await pgClient.end();
+      pgClient.release();
     }
   }
 }

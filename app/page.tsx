@@ -127,9 +127,25 @@ export default function PublicHotelWebsite() {
 
   const loadData = async () => {
     try {
-      const hotelsList = await db.getHotels();
-      if (hotelsList && hotelsList.length > 0) {
-        const activeHotel = hotelsList[0];
+      let activeHotel = null;
+      let targetHotelId = null;
+
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        targetHotelId = params.get('hotel_id') || params.get('hotel');
+      }
+
+      if (targetHotelId) {
+        // @ts-ignore
+        activeHotel = await db.getHotelById(targetHotelId);
+      } else {
+        const hotelsList = await db.getHotels();
+        if (hotelsList && hotelsList.length > 0) {
+          activeHotel = hotelsList[0];
+        }
+      }
+
+      if (activeHotel) {
         setHotel(activeHotel);
 
         const roomsList = await db.getRooms(activeHotel.id);

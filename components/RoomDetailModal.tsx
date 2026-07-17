@@ -102,7 +102,8 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
   const handleExtendStay = async () => {
     if (!stayData) return;
     try {
-      const parsedDate = new Date(newCheckoutDate + 'T12:00:00'); // Standard checkout time is 12 PM
+      const checkoutTime = currentHotel?.cms_data?.checkoutTime || '12:00:00';
+      const parsedDate = new Date(newCheckoutDate + 'T' + checkoutTime);
       await db.extendStay(hotelId, stayData.id, parsedDate.toISOString(), Number(additionalCharges));
       setExtending(false);
       loadActiveStay();
