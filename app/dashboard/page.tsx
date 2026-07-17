@@ -140,22 +140,36 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const session = getSessionUser();
-    if (session && session.hotel) {
-      setCurrentHotel(session.hotel);
-      loadDashboardData(session.hotel.id);
-      
-      // Real-time synchronization event listener (BroadcastChannel)
-      const channel = new BroadcastChannel('hotelflow-sync');
-      channel.onmessage = (event) => {
-        if (event.data && event.data.type === 'DB_UPDATE') {
-          loadDashboardData(session.hotel.id);
-        }
-      };
-
-      return () => {
-        channel.close();
-      };
+    if (!session) {
+      window.location.href = '/login';
+      return;
     }
+    
+    if (session.user.role === 'superadmin') {
+      window.location.href = '/super-admin';
+      return;
+    }
+
+    if (!session.hotel) {
+      alert('Error: No hotel linked to this user account.');
+      window.location.href = '/login';
+      return;
+    }
+
+    setCurrentHotel(session.hotel);
+    loadDashboardData(session.hotel.id);
+    
+    // Real-time synchronization event listener (BroadcastChannel)
+    const channel = new BroadcastChannel('hotelflow-sync');
+    channel.onmessage = (event) => {
+      if (event.data && event.data.type === 'DB_UPDATE') {
+        loadDashboardData(session.hotel.id);
+      }
+    };
+
+    return () => {
+      channel.close();
+    };
   }, []);
 
   const handleRoomStatusChanged = () => {
