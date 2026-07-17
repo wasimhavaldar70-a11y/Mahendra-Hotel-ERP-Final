@@ -3,14 +3,13 @@
 // Location: lib/supabase/client.ts
 // ========================================================
 
-import { mockDb } from './mockDb';
 import { supabaseDb } from './supabaseDb';
 import { supabase, isRealSupabase } from './supabaseClient';
 
 export { supabase, isRealSupabase };
 
 // Unified database operations client
-export const db = isRealSupabase ? supabaseDb : mockDb;
+export const db = supabaseDb;
 
 // Mock/Real Session helpers
 export const getSessionUser = () => {

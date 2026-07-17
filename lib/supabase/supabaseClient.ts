@@ -8,14 +8,13 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Real connection is active if credentials exist and are not placeholders
-export const isRealSupabase = !!(
-  supabaseUrl && 
-  supabaseAnonKey && 
-  !supabaseAnonKey.includes('[YOUR-') && 
-  !supabaseUrl.includes('[YOUR-')
-);
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('[YOUR-') || supabaseAnonKey.includes('[YOUR-')) {
+  throw new Error(
+    'CRITICAL ERROR: Supabase environment credentials (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY) are missing or not configured correctly.'
+  );
+}
 
-export const supabase = isRealSupabase
-  ? createClient(supabaseUrl!, supabaseAnonKey!)
-  : null;
+// Real connection is active
+export const isRealSupabase = true;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
