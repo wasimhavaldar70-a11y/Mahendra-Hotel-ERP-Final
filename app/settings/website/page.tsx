@@ -72,29 +72,49 @@ export default function WebsiteSettingsPage() {
   ]);
 
   // Room Customization Settings
-  const [roomConfigs, setRoomConfigs] = useState<Record<string, { id?: string; image: string; price: number; description: string; amenities: string[] }>>({
+  const [roomConfigs, setRoomConfigs] = useState<Record<string, { id?: string; image: string; images?: string[]; price: number; description: string; amenities: string[] }>>({
     'Deluxe Room': {
       price: 2500,
       description: 'A spacious room featuring a queen-size bed, high-speed Wi-Fi, and a beautiful pool view.',
       image: 'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&w=800&q=80'
+      ],
       amenities: ['Free WiFi', 'Air Conditioning', 'Room Service', 'Pool View']
     },
     'Super Deluxe Room': {
       price: 3500,
       description: 'Indulge in extra space and luxury, with a king-size bed, private balcony, and spectacular ocean views.',
       image: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80'
+      ],
       amenities: ['Free WiFi', 'Air Conditioning', 'Minibar', 'Balcony', 'Ocean View']
     },
     'Family Suite': {
       price: 5000,
       description: 'Perfect for families. Two interconnected bedrooms, premium linens, and personalized butler service.',
       image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=800&q=80'
+      ],
       amenities: ['Free WiFi', 'Air Conditioning', 'Kid\'s Play Area', 'Butler Service']
     },
     'Executive Suite': {
       price: 7500,
       description: 'Our finest accommodation. Enjoy ultimate luxury, private hot tub, lounge access, and panoramic city views.',
       image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=800&q=80'
+      ],
       amenities: ['Free WiFi', 'Air Conditioning', 'Hot Tub', 'Butler Service', 'Lounge Access']
     }
   });
@@ -109,7 +129,7 @@ export default function WebsiteSettingsPage() {
     }));
   };
 
-  const handleRoomImageUpload = (e: React.ChangeEvent<HTMLInputElement>, roomType: string) => {
+  const handleRoomImageUpload = (e: React.ChangeEvent<HTMLInputElement>, roomType: string, imgIdx: number) => {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
@@ -123,10 +143,34 @@ export default function WebsiteSettingsPage() {
 
       const reader = new FileReader();
       reader.onloadend = () => {
-        handleRoomConfigChange(roomType, 'image', reader.result as string);
+        const currentImages = [...(roomConfigs[roomType]?.images || ['', '', ''])];
+        currentImages[imgIdx] = reader.result as string;
+
+        setRoomConfigs(prev => ({
+          ...prev,
+          [roomType]: {
+            ...prev[roomType],
+            images: currentImages,
+            ...(imgIdx === 0 && { image: reader.result as string })
+          }
+        }));
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleRoomImageTextChange = (roomType: string, imgIdx: number, value: string) => {
+    const currentImages = [...(roomConfigs[roomType]?.images || ['', '', ''])];
+    currentImages[imgIdx] = value;
+
+    setRoomConfigs(prev => ({
+      ...prev,
+      [roomType]: {
+        ...prev[roomType],
+        images: currentImages,
+        ...(imgIdx === 0 && { image: value })
+      }
+    }));
   };
 
   useEffect(() => {
@@ -164,29 +208,49 @@ export default function WebsiteSettingsPage() {
           const roomsList = await db.getRooms(hotel.id);
           const initialConfigs: Record<string, any> = { ...roomConfigs };
 
-          const defaultConfigMap: Record<string, { price: number; description: string; image: string; amenities: string[] }> = {
+          const defaultConfigMap: Record<string, { price: number; description: string; image: string; images: string[]; amenities: string[] }> = {
             'Deluxe Room': {
               price: 2500,
               description: 'A spacious room featuring a queen-size bed, high-speed Wi-Fi, and a beautiful pool view.',
               image: 'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+              images: [
+                'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&w=800&q=80'
+              ],
               amenities: ['Free WiFi', 'Air Conditioning', 'Room Service', 'Pool View']
             },
             'Super Deluxe Room': {
               price: 3500,
               description: 'Indulge in extra space and luxury, with a king-size bed, private balcony, and spectacular ocean views.',
               image: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+              images: [
+                'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80'
+              ],
               amenities: ['Free WiFi', 'Air Conditioning', 'Minibar', 'Balcony', 'Ocean View']
             },
             'Family Suite': {
               price: 5000,
               description: 'Perfect for families. Two interconnected bedrooms, premium linens, and personalized butler service.',
               image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+              images: [
+                'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=800&q=80'
+              ],
               amenities: ['Free WiFi', 'Air Conditioning', 'Kid\'s Play Area', 'Butler Service']
             },
             'Executive Suite': {
               price: 7500,
               description: 'Our finest accommodation. Enjoy ultimate luxury, private hot tub, lounge access, and panoramic city views.',
               image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80',
+              images: [
+                'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=800&q=80'
+              ],
               amenities: ['Free WiFi', 'Air Conditioning', 'Hot Tub', 'Butler Service', 'Lounge Access']
             }
           };
@@ -196,15 +260,25 @@ export default function WebsiteSettingsPage() {
               price: 2000,
               description: 'A premium, beautifully appointed room featuring state of the art hospitality amenities.',
               image: '',
+              images: ['', '', ''],
               amenities: ['Free WiFi', 'Air Conditioning']
             };
 
             const oldRoomCMS = cms.rooms?.[r.room_type] || {};
+            const oldImages = oldRoomCMS.images || (oldRoomCMS.image ? [oldRoomCMS.image] : []);
+            const defaultImagesList = defaultConfigMap[r.room_type]?.images || [defaults.image];
+            
+            const finalImages = [
+              oldImages[0] || r.image_url || oldRoomCMS.image || defaultImagesList[0] || '',
+              oldImages[1] || defaultImagesList[1] || '',
+              oldImages[2] || defaultImagesList[2] || ''
+            ];
 
             initialConfigs[r.room_type] = {
               id: r.id,
               price: r.price || oldRoomCMS.price || defaults.price,
-              image: r.image_url || oldRoomCMS.image || defaults.image,
+              image: finalImages[0],
+              images: finalImages,
               description: oldRoomCMS.description || defaults.description,
               amenities: oldRoomCMS.amenities || defaults.amenities
             };
@@ -237,16 +311,28 @@ export default function WebsiteSettingsPage() {
       for (const type of roomTypes) {
         const config = roomConfigs[type];
         if (config.id) {
+          const currentImages = config.images || [config.image || '', '', ''];
+          const cleanImages = [];
+          for (let i = 0; i < currentImages.length; i++) {
+            let img = currentImages[i];
+            if (img && img.startsWith('data:')) {
+              // @ts-ignore
+              img = await db.uploadPublicAsset(currentHotel.id, `rooms/${config.id}`, img);
+            }
+            cleanImages.push(img || '');
+          }
+
           const updatedRoom = await db.updateRoomDetails(currentHotel.id, config.id, {
             price: Number(config.price),
-            image_url: config.image
+            image_url: cleanImages[0]
           });
           
           if (updatedRoom) {
             updatedConfigs[type] = {
               ...config,
               price: updatedRoom.price,
-              image: updatedRoom.image_url || ''
+              image: updatedRoom.image_url || '',
+              images: cleanImages
             };
           }
         }
@@ -504,26 +590,35 @@ export default function WebsiteSettingsPage() {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Room Photo (Upload file or paste URL)</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={rConfig.image || ''}
-                              onChange={(e) => handleRoomConfigChange(roomType, 'image', e.target.value)}
-                              className="w-full text-xs font-semibold text-slate-600 bg-slate-50/50 border border-[#E2E8F0]/80 rounded-xl p-2.5 focus:bg-white focus:outline-none flex-1 truncate"
-                              placeholder="Image URL"
-                            />
-                            <label className="bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl transition-colors text-[10px] flex items-center justify-center cursor-pointer shrink-0">
-                              Upload
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleRoomImageUpload(e, roomType)}
-                                className="hidden"
-                              />
-                            </label>
-                          </div>
+                        <div className="space-y-2">
+                          <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Suite Photos (up to 3 for Showcase gallery)</label>
+                          {[0, 1, 2].map((imgIdx) => {
+                            const currentImages = rConfig.images || [rConfig.image || '', '', ''];
+                            const urlVal = currentImages[imgIdx] || '';
+                            return (
+                              <div key={imgIdx} className="flex gap-2">
+                                <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-2 rounded-xl flex items-center justify-center shrink-0 w-6">
+                                  #{imgIdx + 1}
+                                </span>
+                                <input
+                                  type="text"
+                                  value={urlVal}
+                                  onChange={(e) => handleRoomImageTextChange(roomType, imgIdx, e.target.value)}
+                                  className="w-full text-xs font-semibold text-slate-600 bg-slate-50/50 border border-[#E2E8F0]/80 rounded-xl p-2.5 focus:bg-white focus:outline-none flex-1 truncate"
+                                  placeholder={`Photo #${imgIdx + 1} URL`}
+                                />
+                                <label className="bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl transition-colors text-[10px] flex items-center justify-center cursor-pointer shrink-0">
+                                  Upload
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleRoomImageUpload(e, roomType, imgIdx)}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 

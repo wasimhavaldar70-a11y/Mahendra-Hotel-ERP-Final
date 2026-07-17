@@ -25,7 +25,8 @@ import {
   MessageSquare,
   HelpCircle,
   Play,
-  ArrowRight
+  ArrowRight,
+  ArrowLeft
 } from 'lucide-react';
 
 export default function PublicHotelWebsite() {
@@ -35,6 +36,8 @@ export default function PublicHotelWebsite() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [selectedRoomToShowcase, setSelectedRoomToShowcase] = useState<any | null>(null);
+  const [showcasePhotoIdx, setShowcasePhotoIdx] = useState(0);
 
   // Booking form states
   const [bookName, setBookName] = useState('');
@@ -102,25 +105,45 @@ export default function PublicHotelWebsite() {
     }
   });
 
-  const roomDisplayConfigs: Record<string, { image: string; description: string; amenities: string[] }> = {
+  const roomDisplayConfigs: Record<string, { image: string; images: string[]; description: string; amenities: string[] }> = {
     'Deluxe Room': {
       description: 'A spacious room featuring a queen-size bed, high-speed Wi-Fi, and a beautiful pool view.',
       image: 'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&w=800&q=80'
+      ],
       amenities: ['Free WiFi', 'Air Conditioning', 'Room Service', 'Pool View']
     },
     'Super Deluxe Room': {
       description: 'Indulge in extra space and luxury, with a king-size bed, private balcony, and spectacular ocean views.',
       image: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80'
+      ],
       amenities: ['Free WiFi', 'Air Conditioning', 'Minibar', 'Balcony', 'Ocean View']
     },
     'Family Suite': {
       description: 'Perfect for families. Two interconnected bedrooms, premium linens, and personalized butler service.',
       image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=800&q=80'
+      ],
       amenities: ['Free WiFi', 'Air Conditioning', 'Kid\'s Play Area', 'Butler Service']
     },
     'Executive Suite': {
       description: 'Our finest accommodation. Enjoy ultimate luxury, private hot tub, lounge access, and panoramic city views.',
       image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80',
+      images: [
+        'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=800&q=80'
+      ],
       amenities: ['Free WiFi', 'Air Conditioning', 'Hot Tub', 'Butler Service', 'Lounge Access']
     }
   };
@@ -424,7 +447,13 @@ export default function PublicHotelWebsite() {
 
                 return (
                   <div key={room.id} className="bg-white rounded-[28px] overflow-hidden border border-[#E2E8F0]/40 shadow-sm flex flex-col group hover:shadow-md transition-shadow">
-                    <div className="h-64 relative overflow-hidden">
+                    <div 
+                      onClick={() => {
+                        setSelectedRoomToShowcase(room);
+                        setShowcasePhotoIdx(0);
+                      }}
+                      className="h-64 relative overflow-hidden cursor-pointer"
+                    >
                       <img 
                         src={displayImage} 
                         alt={room.room_type} 
@@ -438,7 +467,15 @@ export default function PublicHotelWebsite() {
                     <div className="p-6 flex-1 flex flex-col justify-between space-y-6">
                       <div className="space-y-3">
                         <div className="flex justify-between items-baseline">
-                          <h3 className="text-lg font-bold text-slate-800 font-serif">{room.room_type}</h3>
+                          <h3 
+                            onClick={() => {
+                              setSelectedRoomToShowcase(room);
+                              setShowcasePhotoIdx(0);
+                            }}
+                            className="text-lg font-bold text-slate-800 font-serif cursor-pointer hover:text-primary transition-colors"
+                          >
+                            {room.room_type}
+                          </h3>
                           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{room.capacity} Persons</span>
                         </div>
                         <p className="text-slate-500 text-xs leading-relaxed font-semibold">{displayDescription}</p>
@@ -454,15 +491,26 @@ export default function PublicHotelWebsite() {
                           ))}
                         </div>
 
-                        <button
-                          onClick={() => {
-                            setBookRoomType(room.room_type);
-                            setShowBookingModal(true);
-                          }}
-                          className="w-full bg-primary hover:bg-primary-hover text-white text-[11px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-colors shadow-sm"
-                        >
-                          Book Stay Now
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedRoomToShowcase(room);
+                              setShowcasePhotoIdx(0);
+                            }}
+                            className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 text-[11px] font-bold py-3.5 rounded-xl border border-slate-200 transition-colors text-center font-sans"
+                          >
+                            View Details
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBookRoomType(room.room_type);
+                              setShowBookingModal(true);
+                            }}
+                            className="flex-1 bg-primary hover:bg-primary-hover text-white text-[11px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-colors shadow-sm"
+                          >
+                            Book Stay Now
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -479,7 +527,13 @@ export default function PublicHotelWebsite() {
 
                 return (
                   <div key={type} className="bg-white rounded-[28px] overflow-hidden border border-[#E2E8F0]/40 shadow-sm flex flex-col group hover:shadow-md transition-shadow">
-                    <div className="h-64 relative overflow-hidden">
+                    <div 
+                      onClick={() => {
+                        setSelectedRoomToShowcase({ room_type: type, price: displayPrice, capacity: 2 });
+                        setShowcasePhotoIdx(0);
+                      }}
+                      className="h-64 relative overflow-hidden cursor-pointer"
+                    >
                       <img 
                         src={displayImage} 
                         alt={type} 
@@ -493,7 +547,15 @@ export default function PublicHotelWebsite() {
                     <div className="p-6 flex-1 flex flex-col justify-between space-y-6">
                       <div className="space-y-3">
                         <div className="flex justify-between items-baseline">
-                          <h3 className="text-lg font-bold text-slate-800 font-serif">{type}</h3>
+                          <h3 
+                            onClick={() => {
+                              setSelectedRoomToShowcase({ room_type: type, price: displayPrice, capacity: 2 });
+                              setShowcasePhotoIdx(0);
+                            }}
+                            className="text-lg font-bold text-slate-800 font-serif cursor-pointer hover:text-primary transition-colors"
+                          >
+                            {type}
+                          </h3>
                           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">2 Persons</span>
                         </div>
                         <p className="text-slate-500 text-xs leading-relaxed font-semibold">{displayDescription}</p>
@@ -509,15 +571,26 @@ export default function PublicHotelWebsite() {
                           ))}
                         </div>
 
-                        <button
-                          onClick={() => {
-                            setBookRoomType(type);
-                            setShowBookingModal(true);
-                          }}
-                          className="w-full bg-primary hover:bg-primary-hover text-white text-[11px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-colors"
-                        >
-                          Book Stay Now
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedRoomToShowcase({ room_type: type, price: displayPrice, capacity: 2 });
+                              setShowcasePhotoIdx(0);
+                            }}
+                            className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-700 text-[11px] font-bold py-3.5 rounded-xl border border-slate-200 transition-colors text-center font-sans"
+                          >
+                            View Details
+                          </button>
+                          <button
+                            onClick={() => {
+                              setBookRoomType(type);
+                              setShowBookingModal(true);
+                            }}
+                            className="flex-1 bg-primary hover:bg-primary-hover text-white text-[11px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-colors"
+                          >
+                            Book Stay Now
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -905,6 +978,133 @@ export default function PublicHotelWebsite() {
           </div>
         </div>
       )}
+
+      {/* Room Showcase Details Modal */}
+      {selectedRoomToShowcase && (() => {
+        const roomType = selectedRoomToShowcase.room_type;
+        const customConfig = cms.rooms?.[roomType] || {};
+        const defaultConfig = roomDisplayConfigs[roomType] || {
+          description: 'A premium, beautifully appointed room featuring state of the art hospitality amenities.',
+          image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80',
+          images: ['https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80'],
+          amenities: ['Free WiFi', 'Air Conditioning', 'Premium Linens']
+        };
+
+        const oldImages = customConfig.images || (customConfig.image ? [customConfig.image] : []);
+        const defaultImagesList = defaultConfig.images || [defaultConfig.image];
+        const showcaseImages = [
+          oldImages[0] || selectedRoomToShowcase.image_url || customConfig.image || defaultImagesList[0] || '',
+          oldImages[1] || defaultImagesList[1] || '',
+          oldImages[2] || defaultImagesList[2] || ''
+        ].filter(Boolean);
+
+        const activePhoto = showcaseImages[showcasePhotoIdx] || showcaseImages[0] || selectedRoomToShowcase.image_url || defaultConfig.image;
+        const displayDescription = customConfig.description || defaultConfig.description;
+        const displayAmenities = customConfig.amenities || defaultConfig.amenities;
+        const displayPrice = selectedRoomToShowcase.price !== undefined && selectedRoomToShowcase.price !== 0 ? selectedRoomToShowcase.price : (customConfig.price || selectedRoomToShowcase.price);
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-[2px] z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-[32px] overflow-hidden max-w-3xl w-full border border-slate-100 shadow-2xl flex flex-col md:flex-row relative animate-in fade-in zoom-in-95 duration-200">
+              
+              <button 
+                onClick={() => setSelectedRoomToShowcase(null)}
+                className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm p-2 rounded-full border border-slate-100 shadow-sm text-slate-500 hover:text-slate-800 transition-colors z-10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Photos Panel with Left/Right Arrows */}
+              <div className="md:w-1/2 h-72 md:h-96 relative bg-slate-100 flex flex-col justify-between overflow-hidden">
+                <img 
+                  src={activePhoto} 
+                  alt={roomType} 
+                  className="absolute inset-0 w-full h-full object-cover transition-all duration-300"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent animate-fade-in"></div>
+
+                {/* Arrow Navigation */}
+                {showcaseImages.length > 1 && (
+                  <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between z-10">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowcasePhotoIdx(prev => (prev === 0 ? showcaseImages.length - 1 : prev - 1));
+                      }}
+                      className="bg-white/95 text-slate-800 p-2 rounded-full shadow-md hover:bg-white transition-colors"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowcasePhotoIdx(prev => (prev === showcaseImages.length - 1 ? 0 : prev + 1));
+                      }}
+                      className="bg-white/95 text-slate-800 p-2 rounded-full shadow-md hover:bg-white transition-colors"
+                    >
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Photo Dots Indicators */}
+                <div className="absolute bottom-4 inset-x-0 flex justify-center gap-1.5 z-10">
+                  {showcaseImages.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setShowcasePhotoIdx(i)}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${i === showcasePhotoIdx ? 'w-4 bg-[#D4AF37]' : 'w-1.5 bg-white/60'}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Showcase Room Details Content */}
+              <div className="md:w-1/2 p-6 flex flex-col justify-between space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-[#D4AF37]">Room Showcase</span>
+                    <h3 className="text-xl font-extrabold text-slate-800 font-serif leading-tight">{roomType}</h3>
+                    <div className="flex justify-between items-center pt-1 border-b border-slate-50 pb-2">
+                      <span className="text-xs font-black text-[#0F4C45]">₹{displayPrice}/Night</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedRoomToShowcase.capacity || 2} Persons Max</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Suite Description</h4>
+                    <p className="text-slate-500 text-xs font-semibold leading-relaxed">{displayDescription}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Premium Amenities</h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {displayAmenities.map((a: string, i: number) => (
+                        <span key={i} className="px-2.5 py-1 rounded-lg bg-slate-50 text-[10px] text-slate-500 font-bold border border-slate-100 flex items-center gap-1">
+                          <Check className="w-3 h-3 text-[#D4AF37]" />
+                          {a}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setBookRoomType(roomType);
+                    setSelectedRoomToShowcase(null);
+                    setShowBookingModal(true);
+                  }}
+                  className="w-full bg-primary hover:bg-primary-hover text-white text-[11px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-colors shadow-md font-sans"
+                >
+                  Book This Suite Now
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
