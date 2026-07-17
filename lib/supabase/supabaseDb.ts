@@ -171,41 +171,52 @@ export const supabaseDb = {
       authUser = session?.user || null;
     }
 
-    // Check if the user exists in our public users table
+    // Check if the user exists in our public users table by their auth ID
     let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
-      .eq('email', lowercaseEmail)
+      .eq('id', authUser.id)
       .maybeSingle();
+
+    // If the user profile exists but email casing is different, update it to ensure consistency
+    if (user && user.email !== lowercaseEmail) {
+      const { data: updatedUser } = await supabase
+        .from('users')
+        .update({ email: lowercaseEmail })
+        .eq('id', authUser.id)
+        .select('*')
+        .maybeSingle();
+      if (updatedUser) {
+        user = updatedUser;
+      }
+    }
 
     if (!user && !userError && authUser) {
       // Self-healing: If user exists in auth.users, dynamically create public.users record
-      if (authUser.email?.toLowerCase().trim() === lowercaseEmail) {
-        const defaultRole = lowercaseEmail === 'wasimhavaldar70@gmail.com' || lowercaseEmail === 'admin@staydesk.com' ? 'superadmin' : 'hotel_owner';
-        
-        // Find matching hotel by email
-        const { data: matchingHotel } = await supabase
-          .from('hotels')
-          .select('id')
-          .eq('email', lowercaseEmail)
-          .maybeSingle();
+      const defaultRole = lowercaseEmail === 'wasimhavaldar70@gmail.com' || lowercaseEmail === 'admin@staydesk.com' ? 'superadmin' : 'hotel_owner';
+      
+      // Find matching hotel by email (case-insensitive)
+      const { data: matchingHotel } = await supabase
+        .from('hotels')
+        .select('id')
+        .ilike('email', lowercaseEmail)
+        .maybeSingle();
 
-        const { data: newUser, error: insertError } = await supabase
-          .from('users')
-          .insert({
-            id: authUser.id,
-            email: lowercaseEmail,
-            role: defaultRole,
-            hotel_id: matchingHotel ? matchingHotel.id : null
-          })
-          .select('*')
-          .maybeSingle();
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: authUser.id,
+          email: lowercaseEmail,
+          role: defaultRole,
+          hotel_id: matchingHotel ? matchingHotel.id : null
+        })
+        .select('*')
+        .maybeSingle();
 
-        if (!insertError && newUser) {
-          user = newUser;
-        } else {
-          console.log('Self-healing public.users insertion failed:', insertError);
-        }
+      if (!insertError && newUser) {
+        user = newUser;
+      } else {
+        console.log('Self-healing public.users insertion failed:', insertError);
       }
     }
 

@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     const lowercaseEmail = email.toLowerCase().trim();
 
     // 1. Email validation step (prevent silent deletes of other hotel users - Issue 11)
-    const emailCheck = await pgClient.query('SELECT id FROM public.users WHERE email = $1;', [lowercaseEmail]);
+    const emailCheck = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
     if (emailCheck.rows.length > 0) {
       return NextResponse.json({ error: 'Email address is already in use' }, { status: 400 });
     }

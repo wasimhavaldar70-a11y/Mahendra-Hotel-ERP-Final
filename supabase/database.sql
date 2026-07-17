@@ -250,6 +250,7 @@ CREATE POLICY "Super Admins can delete users" ON users
 CREATE POLICY "Users can view their own profile" ON users 
   FOR SELECT TO authenticated USING (id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON users;
 CREATE POLICY "Users can insert their own profile" ON users 
   FOR INSERT TO authenticated WITH CHECK (id = auth.uid());
 
@@ -372,21 +373,23 @@ DECLARE
   v_hotel_id UUID;
   v_role VARCHAR(50);
 BEGIN
-  -- Look up if there is a hotel registered with this owner email
-  SELECT id INTO v_hotel_id FROM public.hotels WHERE email = new.email LIMIT 1;
+  -- Look up if there is a hotel registered with this owner email (case-insensitive)
+  SELECT id INTO v_hotel_id FROM public.hotels WHERE LOWER(email) = LOWER(new.email) LIMIT 1;
 
   v_role := CASE 
-    WHEN new.email = 'wasimhavaldar70@gmail.com' OR new.email = 'admin@staydesk.com' THEN 'superadmin'
+    WHEN LOWER(new.email) = 'wasimhavaldar70@gmail.com' OR LOWER(new.email) = 'admin@staydesk.com' THEN 'superadmin'
     ELSE 'hotel_owner'
   END;
 
   INSERT INTO public.users (id, email, role, hotel_id)
   VALUES (
     new.id,
-    new.email,
+    LOWER(new.email),
     v_role,
     v_hotel_id
-  );
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email, role = EXCLUDED.role, hotel_id = EXCLUDED.hotel_id;
 
   -- Set custom JWT claims in auth.users app_metadata
   UPDATE auth.users 
