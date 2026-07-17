@@ -149,13 +149,45 @@ export const supabaseDb = {
     }
 
     // Check if the user exists in our public users table
-    const { data: user, error: userError } = await supabase
+    let { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('email', lowercaseEmail)
       .maybeSingle();
 
-    if (userError || !user) {
+    if (!user && !userError) {
+      // Self-healing: If user exists in auth.users, dynamically create public.users record
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser && authUser.email?.toLowerCase().trim() === lowercaseEmail) {
+        const defaultRole = lowercaseEmail === 'wasimhavaldar70@gmail.com' || lowercaseEmail === 'admin@staydesk.com' ? 'superadmin' : 'hotel_owner';
+        
+        // Find matching hotel by email
+        const { data: matchingHotel } = await supabase
+          .from('hotels')
+          .select('id')
+          .eq('email', lowercaseEmail)
+          .maybeSingle();
+
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: authUser.id,
+            email: lowercaseEmail,
+            role: defaultRole,
+            hotel_id: matchingHotel ? matchingHotel.id : null
+          })
+          .select('*')
+          .maybeSingle();
+
+        if (!insertError && newUser) {
+          user = newUser;
+        } else {
+          console.log('Self-healing public.users insertion failed:', insertError);
+        }
+      }
+    }
+
+    if (!user) {
       console.log('Login match failed or error in public schema:', userError);
       return null;
     }
