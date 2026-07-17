@@ -2,10 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-// 1. Read .env.local
-const envPath = path.join(__dirname, '.env.local');
+// 1. Read .env.local or .env
+let envPath = path.join(__dirname, '.env.local');
 if (!fs.existsSync(envPath)) {
-  console.error('❌ ERROR: .env.local file not found in the root directory!');
+  envPath = path.join(__dirname, '.env');
+}
+if (!fs.existsSync(envPath)) {
+  console.error('❌ ERROR: .env.local or .env file not found in the root directory!');
   process.exit(1);
 }
 

@@ -1104,6 +1104,11 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('customer-documents', 'customer-documents', false)
 ON CONFLICT (id) DO UPDATE SET public = false;
 
+-- Ensure the hotel-assets bucket exists and is public
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('hotel-assets', 'hotel-assets', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
 
 -- 10. STORAGE BUCKET ROW LEVEL SECURITY (RLS) POLICIES
 -- ========================================================
@@ -1112,6 +1117,8 @@ ON CONFLICT (id) DO UPDATE SET public = false;
 DROP POLICY IF EXISTS "Enforce tenant storage folder isolation" ON storage.objects;
 DROP POLICY IF EXISTS "Allow public read of documents" ON storage.objects;
 DROP POLICY IF EXISTS "Enforce tenant storage select isolation" ON storage.objects;
+DROP POLICY IF EXISTS "Enforce tenant assets modify isolation" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public read of hotel assets" ON storage.objects;
 
 -- Create policy to restrict modification access to owner folders only
 CREATE POLICY "Enforce tenant storage folder isolation" ON storage.objects
@@ -1132,6 +1139,24 @@ CREATE POLICY "Enforce tenant storage select isolation" ON storage.objects
     bucket_id = 'customer-documents' AND
     (storage.foldername(name))[1] = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')
   );
+
+-- Create policy to allow authenticated users to modify their hotel assets
+CREATE POLICY "Enforce tenant assets modify isolation" ON storage.objects
+  FOR ALL TO authenticated
+  USING (
+    bucket_id = 'hotel-assets' AND
+    (storage.foldername(name))[1] = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')
+  )
+  WITH CHECK (
+    bucket_id = 'hotel-assets' AND
+    (storage.foldername(name))[1] = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')
+  );
+
+-- Create policy to allow public select operations on hotel assets
+CREATE POLICY "Allow public read of hotel assets" ON storage.objects
+  FOR SELECT TO public
+  USING (bucket_id = 'hotel-assets');
+
 
 
 

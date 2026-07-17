@@ -382,14 +382,44 @@ export default function WebsiteSettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Hero Image URL (Background)</label>
-                  <input
-                    type="text"
-                    value={heroImage}
-                    onChange={(e) => setHeroImage(e.target.value)}
-                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-[#E2E8F0]/80 rounded-xl p-3 focus:bg-white focus:outline-none"
-                    placeholder="URL to high-quality backdrop photo"
-                  />
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Hero Image URL (Background / Upload file)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={heroImage}
+                      onChange={(e) => setHeroImage(e.target.value)}
+                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-[#E2E8F0]/80 rounded-xl p-3 focus:bg-white focus:outline-none flex-1 truncate"
+                      placeholder="URL to high-quality backdrop photo"
+                    />
+                    <label className="bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 font-bold px-4 py-3 rounded-xl transition-colors text-xs flex items-center justify-center cursor-pointer shrink-0">
+                      Upload
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            if (file.size > 5 * 1024 * 1024) {
+                              alert('Image must be less than 5MB');
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onloadend = async () => {
+                              try {
+                                // @ts-ignore
+                                const uploadedUrl = await db.uploadPublicAsset(currentHotel.id, 'hero', reader.result as string);
+                                setHeroImage(uploadedUrl);
+                              } catch (err: any) {
+                                alert('Failed to upload hero image: ' + err.message);
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <div>
@@ -525,13 +555,44 @@ export default function WebsiteSettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {gallery.map((url, idx) => (
                   <div key={idx}>
-                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Image #{idx + 1} URL</label>
-                    <input
-                      type="text"
-                      value={url}
-                      onChange={(e) => handleGalleryChange(idx, e.target.value)}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-[#E2E8F0]/80 rounded-xl p-2.5 focus:bg-white focus:outline-none"
-                    />
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Image #{idx + 1} (Upload or paste URL)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={url}
+                        onChange={(e) => handleGalleryChange(idx, e.target.value)}
+                        className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-[#E2E8F0]/80 rounded-xl p-2.5 focus:bg-white focus:outline-none flex-1 truncate"
+                        placeholder={`Image #${idx + 1} URL`}
+                      />
+                      <label className="bg-slate-100 border border-slate-200 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2.5 rounded-xl transition-colors text-[10px] flex items-center justify-center cursor-pointer shrink-0">
+                        Upload
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 5 * 1024 * 1024) {
+                                alert('Image must be less than 5MB');
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onloadend = async () => {
+                                try {
+                                  // @ts-ignore
+                                  const uploadedUrl = await db.uploadPublicAsset(currentHotel.id, 'gallery', reader.result as string);
+                                  handleGalleryChange(idx, uploadedUrl);
+                                } catch (err: any) {
+                                  alert('Failed to upload gallery image: ' + err.message);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>

@@ -70,41 +70,61 @@ const uploadRoomImageToStorage = async (hotelId: string, roomId: string, base64D
   if (!base64Data.startsWith('data:')) return base64Data;
 
   try {
+    // Check if hotel-assets bucket exists
+    const { data: buckets } = await supabase.storage.listBuckets();
+    if (!buckets?.some(b => b.id === 'hotel-assets')) {
+      const { error: createError } = await supabase.storage.createBucket('hotel-assets', {
+        public: true,
+        fileSizeLimit: 5242880 // 5MB
+      });
+      if (createError) throw createError;
+    }
+
     const blob = dataURItoBlob(base64Data);
     const fileExt = blob.type.split('/')[1] || 'png';
     const filePath = `${hotelId}/rooms/${roomId}/${Date.now()}.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
-      .from('customer-documents')
+      .from('hotel-assets')
       .upload(filePath, blob, {
         contentType: blob.type,
         upsert: true
       });
 
     if (uploadError) throw uploadError;
-    return filePath;
+
+    const { data: { publicUrl } } = supabase.storage.from('hotel-assets').getPublicUrl(filePath);
+    return publicUrl || '';
   } catch (err) {
     console.error('Failed to upload room photo:', err);
     throw new Error('Room photo upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
   }
 };
 
-// Helper: Get public URL for storage path
 // Helper: Get pre-signed URL for storage path
 const resolveImageUrl = async (imagePath: string | null | undefined): Promise<string> => {
   if (!imagePath) return '';
   if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
   if (!supabase) return '';
+
+  const isPublicAsset = imagePath.includes('/rooms/') || imagePath.includes('/gallery/') || imagePath.includes('/hero/');
+  const bucketName = isPublicAsset ? 'hotel-assets' : 'customer-documents';
+
   try {
-    const { data, error } = await supabase.storage.from('customer-documents').createSignedUrl(imagePath, 3600);
+    if (isPublicAsset) {
+      const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
+      return pubData.publicUrl || '';
+    }
+
+    const { data, error } = await supabase.storage.from(bucketName).createSignedUrl(imagePath, 3600);
     if (error || !data) {
       // Fallback to publicUrl if signing fails
-      const { data: pubData } = supabase.storage.from('customer-documents').getPublicUrl(imagePath);
+      const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
       return pubData.publicUrl || '';
     }
     return data.signedUrl || '';
   } catch (e) {
-    const { data: pubData } = supabase.storage.from('customer-documents').getPublicUrl(imagePath);
+    const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
     return pubData.publicUrl || '';
   }
 };
@@ -207,6 +227,42 @@ export const supabaseDb = {
     }
 
     return { user, hotel: null, access_token };
+  },
+
+  uploadPublicAsset: async (hotelId: string, folder: string, base64Data: string): Promise<string> => {
+    if (!supabase || !base64Data) return '';
+    if (!base64Data.startsWith('data:')) return base64Data;
+
+    try {
+      // Check if hotel-assets bucket exists
+      const { data: buckets } = await supabase.storage.listBuckets();
+      if (!buckets?.some(b => b.id === 'hotel-assets')) {
+        const { error: createError } = await supabase.storage.createBucket('hotel-assets', {
+          public: true,
+          fileSizeLimit: 5242880 // 5MB
+        });
+        if (createError) throw createError;
+      }
+
+      const blob = dataURItoBlob(base64Data);
+      const fileExt = blob.type.split('/')[1] || 'png';
+      const filePath = `${hotelId}/${folder}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('hotel-assets')
+        .upload(filePath, blob, {
+          contentType: blob.type,
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('hotel-assets').getPublicUrl(filePath);
+      return publicUrl || '';
+    } catch (err) {
+      console.error('Failed to upload public asset:', err);
+      throw new Error('Public asset upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
   },
 
   // Hotels Management (Superadmin)
