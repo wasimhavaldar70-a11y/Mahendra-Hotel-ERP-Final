@@ -35,14 +35,14 @@ const DEFAULT_USERS: User[] = [
 ];
 
 const DEFAULT_ROOMS = (hotelId: string): Room[] => [
-  { id: `r-${hotelId}-101`, hotel_id: hotelId, room_number: '101', room_type: 'Single Deluxe', price: 1500, floor: 'Ground Floor', capacity: 1, status: 'Ready', created_at: new Date().toISOString() },
-  { id: `r-${hotelId}-102`, hotel_id: hotelId, room_number: '102', room_type: 'Double Deluxe', price: 2500, floor: 'Ground Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
-  { id: `r-${hotelId}-103`, hotel_id: hotelId, room_number: '103', room_type: 'Family Suite', price: 4000, floor: 'Ground Floor', capacity: 4, status: 'Ready', created_at: new Date().toISOString() },
-  { id: `r-${hotelId}-104`, hotel_id: hotelId, room_number: '104', room_type: 'Executive Suite', price: 6000, floor: 'Ground Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
-  { id: `r-${hotelId}-201`, hotel_id: hotelId, room_number: '201', room_type: 'Single Deluxe', price: 1500, floor: 'First Floor', capacity: 1, status: 'Ready', created_at: new Date().toISOString() },
-  { id: `r-${hotelId}-202`, hotel_id: hotelId, room_number: '202', room_type: 'Double Deluxe', price: 2500, floor: 'First Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
-  { id: `r-${hotelId}-203`, hotel_id: hotelId, room_number: '203', room_type: 'Family Suite', price: 4000, floor: 'First Floor', capacity: 4, status: 'Ready', created_at: new Date().toISOString() },
-  { id: `r-${hotelId}-204`, hotel_id: hotelId, room_number: '204', room_type: 'Executive Suite', price: 6000, floor: 'First Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-101`, hotel_id: hotelId, room_number: '101', room_type: 'Deluxe Room', price: 2500, floor: 'Ground Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-102`, hotel_id: hotelId, room_number: '102', room_type: 'Super Deluxe Room', price: 4500, floor: 'Ground Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-103`, hotel_id: hotelId, room_number: '103', room_type: 'Family Suite', price: 6500, floor: 'Ground Floor', capacity: 4, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-104`, hotel_id: hotelId, room_number: '104', room_type: 'Executive Suite', price: 9500, floor: 'Ground Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-201`, hotel_id: hotelId, room_number: '201', room_type: 'Deluxe Room', price: 2500, floor: 'First Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-202`, hotel_id: hotelId, room_number: '202', room_type: 'Super Deluxe Room', price: 4500, floor: 'First Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-203`, hotel_id: hotelId, room_number: '203', room_type: 'Family Suite', price: 6500, floor: 'First Floor', capacity: 4, status: 'Ready', created_at: new Date().toISOString() },
+  { id: `r-${hotelId}-204`, hotel_id: hotelId, room_number: '204', room_type: 'Executive Suite', price: 9500, floor: 'First Floor', capacity: 2, status: 'Ready', created_at: new Date().toISOString() },
 ];
 
 const DEFAULT_CUSTOMERS = (hotelId: string): Customer[] => [
