@@ -11,6 +11,7 @@ export interface Hotel {
   phone: string;
   subscription_plan: '30 Days' | '90 Days' | '1 Year' | 'Lifetime';
   subscription_status: 'Active' | 'Expired' | 'Suspended';
+  cms_data?: any;
   created_at: string;
 }
 

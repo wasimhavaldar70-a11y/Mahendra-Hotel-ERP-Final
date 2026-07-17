@@ -7,7 +7,8 @@
 
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../../components/DashboardLayout';
-import { getSessionUser } from '../../../lib/supabase/client';
+import { getSessionUser, db, setSessionUser } from '../../../lib/supabase/client';
+import { Room } from '../../../types';
 import { 
   Globe, 
   Save, 
@@ -71,7 +72,7 @@ export default function WebsiteSettingsPage() {
   ]);
 
   // Room Customization Settings
-  const [roomConfigs, setRoomConfigs] = useState<Record<string, { image: string; price: number; description: string; amenities: string[] }>>({
+  const [roomConfigs, setRoomConfigs] = useState<Record<string, { id?: string; image: string; price: number; description: string; amenities: string[] }>>({
     'Deluxe Room': {
       price: 2500,
       description: 'A spacious room featuring a queen-size bed, high-speed Wi-Fi, and a beautiful pool view.',
@@ -137,11 +138,13 @@ export default function WebsiteSettingsPage() {
       setPhoneVal(hotel.phone || '');
       setEmailVal(hotel.email || '');
 
-      // Load existing CMS from localStorage if it exists
-      const savedCMS = localStorage.getItem(`hf_cms_${hotel.id}`);
-      if (savedCMS) {
+      const loadCMSAndRooms = async () => {
         try {
-          const cms = JSON.parse(savedCMS);
+          // 1. Load CMS from database (hotel.cms_data) or fallback to local storage
+          const savedCMS = hotel.cms_data || {};
+          const localCMS = localStorage.getItem(`hf_cms_${hotel.id}`);
+          const cms = (Object.keys(savedCMS).length > 0) ? savedCMS : (localCMS ? JSON.parse(localCMS) : {});
+
           if (cms.tagline) setTagline(cms.tagline);
           if (cms.heroImage) setHeroImage(cms.heroImage);
           if (cms.heroVideo) setHeroVideo(cms.heroVideo);
@@ -156,48 +159,132 @@ export default function WebsiteSettingsPage() {
           if (cms.twitter) setTwitter(cms.twitter);
           if (cms.faqs) setFaqs(cms.faqs);
           if (cms.gallery) setGallery(cms.gallery);
-          if (cms.rooms) setRoomConfigs(cms.rooms);
+
+          // 2. Load rooms from database
+          const roomsList = await db.getRooms(hotel.id);
+          const initialConfigs: Record<string, any> = { ...roomConfigs };
+
+          const defaultConfigMap: Record<string, { price: number; description: string; image: string; amenities: string[] }> = {
+            'Deluxe Room': {
+              price: 2500,
+              description: 'A spacious room featuring a queen-size bed, high-speed Wi-Fi, and a beautiful pool view.',
+              image: 'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+              amenities: ['Free WiFi', 'Air Conditioning', 'Room Service', 'Pool View']
+            },
+            'Super Deluxe Room': {
+              price: 3500,
+              description: 'Indulge in extra space and luxury, with a king-size bed, private balcony, and spectacular ocean views.',
+              image: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+              amenities: ['Free WiFi', 'Air Conditioning', 'Minibar', 'Balcony', 'Ocean View']
+            },
+            'Family Suite': {
+              price: 5000,
+              description: 'Perfect for families. Two interconnected bedrooms, premium linens, and personalized butler service.',
+              image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+              amenities: ['Free WiFi', 'Air Conditioning', 'Kid\'s Play Area', 'Butler Service']
+            },
+            'Executive Suite': {
+              price: 7500,
+              description: 'Our finest accommodation. Enjoy ultimate luxury, private hot tub, lounge access, and panoramic city views.',
+              image: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80',
+              amenities: ['Free WiFi', 'Air Conditioning', 'Hot Tub', 'Butler Service', 'Lounge Access']
+            }
+          };
+
+          roomsList.forEach((r: Room) => {
+            const defaults = defaultConfigMap[r.room_type] || {
+              price: 2000,
+              description: 'A premium, beautifully appointed room featuring state of the art hospitality amenities.',
+              image: '',
+              amenities: ['Free WiFi', 'Air Conditioning']
+            };
+
+            const oldRoomCMS = cms.rooms?.[r.room_type] || {};
+
+            initialConfigs[r.room_type] = {
+              id: r.id,
+              price: r.price || oldRoomCMS.price || defaults.price,
+              image: r.image_url || oldRoomCMS.image || defaults.image,
+              description: oldRoomCMS.description || defaults.description,
+              amenities: oldRoomCMS.amenities || defaults.amenities
+            };
+          });
+
+          setRoomConfigs(initialConfigs);
         } catch (e) {
-          console.error('Error loading saved CMS', e);
+          console.error('Error loading brand customization options:', e);
+        } finally {
+          setLoading(false);
         }
-      }
+      };
+
+      loadCMSAndRooms();
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  const handleSaveCMS = () => {
+  const handleSaveCMS = async () => {
     if (!currentHotel) return;
     setSaving(true);
-    
-    const cmsData = {
-      tagline,
-      heroImage,
-      heroVideo,
-      aboutTitle,
-      aboutText,
-      aboutOwnerMessage,
-      addressVal,
-      whatsappVal,
-      googleMapsUrl,
-      instagram,
-      facebook,
-      twitter,
-      faqs,
-      gallery,
-      rooms: roomConfigs
-    };
 
-    localStorage.setItem(`hf_cms_${currentHotel.id}`, JSON.stringify(cmsData));
-    
-    // Broadcast DB update to sync the website if they are looking at it
-    const channel = new BroadcastChannel('hotelflow-sync');
-    channel.postMessage({ type: 'DB_UPDATE' });
-    channel.close();
+    try {
+      const cmsData = {
+        tagline,
+        heroImage,
+        heroVideo,
+        aboutTitle,
+        aboutText,
+        aboutOwnerMessage,
+        addressVal,
+        whatsappVal,
+        googleMapsUrl,
+        instagram,
+        facebook,
+        twitter,
+        faqs,
+        gallery,
+        rooms: roomConfigs
+      };
 
-    setTimeout(() => {
+      // 1. Update brand config json inside the hotels table
+      const updatedHotel = await db.updateHotelCMS(currentHotel.id, cmsData);
+      if (updatedHotel) {
+        const session = getSessionUser();
+        if (session) {
+          session.hotel = updatedHotel;
+          setSessionUser(session);
+          setCurrentHotel(updatedHotel);
+        }
+      }
+
+      // 2. Perform direct atomic database updates for room prices and photos
+      const roomTypes = Object.keys(roomConfigs);
+      for (const type of roomTypes) {
+        const config = roomConfigs[type];
+        if (config.id) {
+          await db.updateRoomDetails(currentHotel.id, config.id, {
+            price: Number(config.price),
+            image_url: config.image
+          });
+        }
+      }
+
+      // Update backup compatibility fallback local storage values
+      localStorage.setItem(`hf_cms_${currentHotel.id}`, JSON.stringify(cmsData));
+
+      // Broadcast changes
+      const channel = new BroadcastChannel('hotelflow-sync');
+      channel.postMessage({ type: 'DB_UPDATE' });
+      channel.close();
+
+      alert('Brand website settings and room details saved successfully to database!');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save settings: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
       setSaving(false);
-      alert('Brand Website CMS configurations saved successfully! Changes are live at /');
-    }, 800);
+    }
   };
 
   const handleAddFaq = () => {

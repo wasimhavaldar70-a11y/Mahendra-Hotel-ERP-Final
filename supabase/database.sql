@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS hotels (
   phone VARCHAR(50) NOT NULL,
   subscription_plan VARCHAR(50) NOT NULL DEFAULT '30 Days', -- '30 Days', '90 Days', '1 Year'
   subscription_status VARCHAR(50) NOT NULL DEFAULT 'Active', -- 'Active', 'Expired', 'Suspended'
+  cms_data JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -634,11 +635,12 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Add Soft Delete fields and Room Image URL
+-- 2. Add Soft Delete fields, Room Image URL, and Hotel CMS Data
 ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.hotels ADD COLUMN IF NOT EXISTS cms_data JSONB DEFAULT '{}'::jsonb;
 
 -- 3. Add Arithmetic Check Constraints
 ALTER TABLE public.rooms DROP CONSTRAINT IF EXISTS chk_room_price_positive;
@@ -1068,10 +1070,11 @@ ON CONFLICT (version) DO NOTHING;
 -- 10. STORAGE BUCKET ROW LEVEL SECURITY (RLS) POLICIES
 -- ========================================================
 
--- Drop existing storage policy if exists
+-- Drop existing storage policies if exist
 DROP POLICY IF EXISTS "Enforce tenant storage folder isolation" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public read of documents" ON storage.objects;
 
--- Create policy to restrict access to owner folders only
+-- Create policy to restrict modification access to owner folders only
 CREATE POLICY "Enforce tenant storage folder isolation" ON storage.objects
   FOR ALL TO authenticated
   USING (
@@ -1082,6 +1085,11 @@ CREATE POLICY "Enforce tenant storage folder isolation" ON storage.objects
     bucket_id = 'customer-documents' AND
     (storage.foldername(name))[1] = coalesce(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')
   );
+
+-- Create policy to allow anonymous public SELECT operations on documents
+CREATE POLICY "Allow public read of documents" ON storage.objects
+  FOR SELECT TO public
+  USING (bucket_id = 'customer-documents');
 
 
 

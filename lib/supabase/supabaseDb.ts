@@ -209,6 +209,23 @@ export const supabaseDb = {
     return data;
   },
 
+  updateHotelCMS: async (hotelId: string, cmsData: any): Promise<Hotel | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from('hotels')
+      .update({ cms_data: cmsData })
+      .eq('id', hotelId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Failed to update hotel CMS:', error);
+      throw error;
+    }
+    broadcastDbUpdate('hotels');
+    return data;
+  },
+
   deleteHotel: async (id: string): Promise<boolean> => {
     const session = supabase ? (await supabase.auth.getSession()).data.session : null;
     const token = session?.access_token || '';
@@ -332,6 +349,36 @@ export const supabaseDb = {
     }
     broadcastDbUpdate('rooms');
     
+    return {
+      ...data,
+      image_url: data.image_url ? resolveImageUrl(data.image_url) : ''
+    };
+  },
+
+  updateRoomDetails: async (hotelId: string, roomId: string, details: { price?: number; image_url?: string; room_type?: string }): Promise<Room | null> => {
+    let imagePath = details.image_url;
+    if (details.image_url && details.image_url.startsWith('data:')) {
+      imagePath = await uploadRoomImageToStorage(hotelId, roomId, details.image_url);
+    }
+
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from('rooms')
+      .update({
+        ...(details.price !== undefined && { price: details.price }),
+        ...(imagePath !== undefined && { image_url: imagePath }),
+        ...(details.room_type !== undefined && { room_type: details.room_type })
+      })
+      .eq('id', roomId)
+      .eq('hotel_id', hotelId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to update room details:', error);
+      throw error;
+    }
+    broadcastDbUpdate('rooms');
     return {
       ...data,
       image_url: data.image_url ? resolveImageUrl(data.image_url) : ''

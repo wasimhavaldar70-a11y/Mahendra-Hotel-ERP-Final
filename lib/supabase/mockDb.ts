@@ -211,6 +211,17 @@ export const mockDb = {
     return hotels[index];
   },
 
+  updateHotelCMS: async (hotelId: string, cmsData: any): Promise<Hotel | null> => {
+    const hotels = getTable<Hotel>('hf_hotels');
+    const index = hotels.findIndex(h => h.id === hotelId);
+    if (index === -1) return null;
+    
+    hotels[index].cms_data = cmsData;
+    setTable('hf_hotels', hotels);
+    broadcastDbUpdate('hotels');
+    return hotels[index];
+  },
+
   deleteHotel: async (id: string): Promise<boolean> => {
     const hotels = getTable<Hotel>('hf_hotels');
     const filtered = hotels.filter(h => h.id !== id);
@@ -266,6 +277,20 @@ export const mockDb = {
     if (index === -1) return null;
     
     rooms[index].image_url = image;
+    setTable(`hf_rooms_${hotelId}`, rooms);
+    broadcastDbUpdate('rooms');
+    return rooms[index];
+  },
+
+  updateRoomDetails: async (hotelId: string, roomId: string, details: { price?: number; image_url?: string; room_type?: string }): Promise<Room | null> => {
+    const rooms = getTable<Room>(`hf_rooms_${hotelId}`);
+    const index = rooms.findIndex(r => r.id === roomId);
+    if (index === -1) return null;
+    
+    if (details.price !== undefined) rooms[index].price = details.price;
+    if (details.image_url !== undefined) rooms[index].image_url = details.image_url;
+    if (details.room_type !== undefined) rooms[index].room_type = details.room_type;
+    
     setTable(`hf_rooms_${hotelId}`, rooms);
     broadcastDbUpdate('rooms');
     return rooms[index];

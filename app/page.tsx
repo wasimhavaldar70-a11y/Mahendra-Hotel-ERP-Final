@@ -135,10 +135,12 @@ export default function PublicHotelWebsite() {
         const roomsList = await db.getRooms(activeHotel.id);
         setRooms(roomsList);
 
-        // Fetch CMS settings if saved
+        // Prioritize database CMS data, fallback to local storage
+        const dbCMS = activeHotel.cms_data || {};
         const savedCMS = localStorage.getItem(`hf_cms_${activeHotel.id}`);
-        if (savedCMS) {
-          setCms((prev: any) => ({ ...prev, ...JSON.parse(savedCMS) }));
+        const cmsData = (Object.keys(dbCMS).length > 0) ? dbCMS : (savedCMS ? JSON.parse(savedCMS) : null);
+        if (cmsData) {
+          setCms((prev: any) => ({ ...prev, ...cmsData }));
         }
       }
     } catch (e) {
