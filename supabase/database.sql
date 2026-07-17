@@ -206,6 +206,7 @@ CREATE POLICY "Super Admins can delete hotels" ON hotels
 CREATE POLICY "Hotel Owners can view their own hotel details" ON hotels 
   FOR SELECT TO authenticated USING (id = get_user_hotel_id());
 
+DROP POLICY IF EXISTS "Hotel Owners can update their own hotel details" ON hotels;
 CREATE POLICY "Hotel Owners can update their own hotel details" ON hotels 
   FOR UPDATE TO authenticated USING (id = get_user_hotel_id()) WITH CHECK (id = get_user_hotel_id());
 
@@ -1068,6 +1069,12 @@ CREATE TABLE IF NOT EXISTS public.schema_migrations (
 INSERT INTO public.schema_migrations (version)
 VALUES ('20260717_database_consistency_upgrades')
 ON CONFLICT (version) DO NOTHING;
+
+
+-- Ensure the customer-documents bucket exists
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('customer-documents', 'customer-documents', true)
+ON CONFLICT (id) DO NOTHING;
 
 
 -- 10. STORAGE BUCKET ROW LEVEL SECURITY (RLS) POLICIES
