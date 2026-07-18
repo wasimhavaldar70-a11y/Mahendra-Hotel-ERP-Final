@@ -1264,49 +1264,28 @@ export const supabaseDb = {
     });
   },
 
-  // Bookings Management
+  // Bookings Management (Optimized single joined query to resolve N+1 waterfall)
   getBookings: async (hotelId: string): Promise<ExtendedCheckIn[]> => {
     if (!supabase) return [];
     
-    // Fetch bookings (excluding soft deleted)
-    const { data: bookings, error: bookingsError } = await supabase
+    const { data, error } = await supabase
       .from('check_ins')
-      .select('*')
+      .select('*, room:rooms(*), primary_customer:customers(*), payment:payments(*)')
       .eq('hotel_id', hotelId)
       .is('deleted_at', null)
       .order('check_in', { ascending: false });
 
-    if (bookingsError || !bookings) return [];
+    if (error || !data) {
+      console.error('Error fetching bookings:', error?.message);
+      return [];
+    }
 
-    const extendedBookings: ExtendedCheckIn[] = await Promise.all(
-      bookings.map(async (b) => {
-        const { data: customer } = await supabase!.from('customers')
-          .select('*')
-          .eq('id', b.primary_customer_id)
-          .is('deleted_at', null)
-          .maybeSingle();
-
-        const { data: room } = await supabase!.from('rooms')
-          .select('*')
-          .eq('id', b.room_id)
-          .is('deleted_at', null)
-          .maybeSingle();
-
-        const { data: payment } = await supabase!.from('payments')
-          .select('*')
-          .eq('checkin_id', b.id)
-          .maybeSingle();
-
-        return {
-          ...b,
-          room: room || undefined,
-          primary_customer: customer || undefined,
-          payment: payment || undefined
-        };
-      })
-    );
-
-    return extendedBookings;
+    return data.map((b: any) => ({
+      ...b,
+      room: b.room || undefined,
+      primary_customer: b.primary_customer || undefined,
+      payment: Array.isArray(b.payment) ? b.payment[0] : (b.payment || undefined)
+    })) as ExtendedCheckIn[];
   },
 
   createBooking: async (
