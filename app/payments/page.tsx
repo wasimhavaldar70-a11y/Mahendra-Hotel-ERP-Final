@@ -70,7 +70,8 @@ export default function PaymentsPage() {
   
   // Filtered payments list
   const filteredPayments = payments.filter(p => {
-    const methodMatch = paymentMethodFilter === 'All' || p.payment_method === paymentMethodFilter;
+    const activeMode = (Number(p.pending) === 0 && p.final_payment_method) ? p.final_payment_method : p.payment_method;
+    const methodMatch = paymentMethodFilter === 'All' || activeMode === paymentMethodFilter;
     const statusMatch = statusFilter === 'All' || 
                         (statusFilter === 'Pending' && Number(p.pending) > 0) ||
                         (statusFilter === 'Paid' && Number(p.pending) === 0);
@@ -267,7 +268,7 @@ export default function PaymentsPage() {
                         </td>
                         <td className="px-6 py-4">
                           <span className="px-2 py-0.5 rounded bg-slate-100/80 text-slate-600 text-[10px] font-semibold uppercase">
-                            {p.payment_method}
+                            {(Number(p.pending) === 0 && p.final_payment_method) ? p.final_payment_method : p.payment_method}
                           </span>
                         </td>
                         <td className="px-6 py-4 font-semibold text-slate-800">₹{p.room_price}</td>
