@@ -35,6 +35,7 @@ export default function SuperAdminPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [plan, setPlan] = useState<'30 Days' | '90 Days' | '1 Year' | 'Lifetime'>('Lifetime');
+  const [address, setAddress] = useState('');
   const [error, setError] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -126,7 +127,8 @@ export default function SuperAdminPage() {
         phone,
         email: email.toLowerCase().trim(),
         subscription_plan: plan,
-        password
+        password,
+        address: address.trim()
       });
 
       setHotelName('');
@@ -134,6 +136,7 @@ export default function SuperAdminPage() {
       setPhone('');
       setEmail('');
       setPassword('');
+      setAddress('');
       setErrors({});
       setShowAddForm(false);
       loadHotels();
@@ -363,6 +366,17 @@ export default function SuperAdminPage() {
                   {errors.phone && (
                     <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.phone}</span>
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Hotel Address / Location</label>
+                  <input
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="e.g. Anjuna, Goa, India"
+                  />
                 </div>
 
                 <div>

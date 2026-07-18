@@ -276,7 +276,7 @@ export const supabaseDb = {
     return error ? null : data;
   },
 
-  addHotel: async (data: Omit<Hotel, 'id' | 'created_at' | 'subscription_status'> & { password?: string }): Promise<Hotel> => {
+  addHotel: async (data: Omit<Hotel, 'id' | 'created_at' | 'subscription_status'> & { password?: string; address?: string; google_maps_url?: string }): Promise<Hotel> => {
     const session = supabase ? (await supabase.auth.getSession()).data.session : null;
     const token = session?.access_token || '';
 
@@ -292,7 +292,9 @@ export const supabaseDb = {
         email: data.email,
         phone: data.phone,
         subscription_plan: data.subscription_plan,
-        password: data.password || 'password123'
+        password: data.password || 'password123',
+        address: data.address,
+        google_maps_url: data.google_maps_url
       })
     });
 

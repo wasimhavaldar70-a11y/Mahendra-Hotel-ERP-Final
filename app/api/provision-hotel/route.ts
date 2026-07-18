@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const adminUserId = user.id;
 
     const body = await request.json();
-    const { hotel_name, owner_name, phone, email, subscription_plan, password } = body;
+    const { hotel_name, owner_name, phone, email, subscription_plan, password, address, google_maps_url } = body;
     hotelNameForLog = hotel_name || 'unknown';
 
     if (!hotel_name || !owner_name || !email || !phone || !password) {
@@ -66,9 +66,9 @@ export async function POST(request: Request) {
       aboutTitle: `About ${hotel_name}`,
       aboutText: 'We provide premier hospitality services and premium rooms configured for business and leisure travellers.',
       aboutOwnerMessage: `Welcome to ${hotel_name}. We ensure clean rooms and high quality guest satisfaction.`,
-      addressVal: 'Calangute, Goa, India',
+      addressVal: address ? String(address).trim() : 'Calangute, Goa, India',
       whatsappVal: phone,
-      googleMapsUrl: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3844.2014022416045!2d73.75338167590861!3d15.524584285078712!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bbfc1d560c5c363%3A0xc07cfb19cd7579bb!2sCalangute%20Beach!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin',
+      googleMapsUrl: google_maps_url ? String(google_maps_url).trim() : 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3844.2014022416045!2d73.75338167590861!3d15.524584285078712!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bbfc1d560c5c363%3A0xc07cfb19cd7579bb!2sCalangute%20Beach!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin',
       instagram: 'https://instagram.com',
       facebook: 'https://facebook.com',
       twitter: 'https://twitter.com',
