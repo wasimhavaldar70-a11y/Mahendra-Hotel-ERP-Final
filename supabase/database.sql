@@ -175,26 +175,50 @@ ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 -- Helper function to get the current user's hotel_id
 CREATE OR REPLACE FUNCTION get_user_hotel_id()
 RETURNS UUID AS $$
-  SELECT COALESCE(
-    NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')::uuid,
-    (SELECT hotel_id FROM public.users WHERE id = auth.uid())
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+DECLARE
+  v_hotel_id UUID;
+BEGIN
+  BEGIN
+    v_hotel_id := NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')::uuid;
+  EXCEPTION WHEN OTHERS THEN
+    v_hotel_id := NULL;
+  END;
+
+  IF v_hotel_id IS NULL THEN
+    SELECT hotel_id INTO v_hotel_id FROM public.users WHERE id = auth.uid();
+  END IF;
+
+  RETURN v_hotel_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 -- Helper function to get the current user's role
 CREATE OR REPLACE FUNCTION get_user_role()
 RETURNS VARCHAR AS $$
-  SELECT COALESCE(
-    NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role', ''),
-    (SELECT role FROM public.users WHERE id = auth.uid())
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+DECLARE
+  v_role VARCHAR;
+BEGIN
+  BEGIN
+    v_role := NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role', '');
+  EXCEPTION WHEN OTHERS THEN
+    v_role := NULL;
+  END;
+
+  IF v_role IS NULL THEN
+    SELECT role INTO v_role FROM public.users WHERE id = auth.uid();
+  END IF;
+
+  RETURN v_role;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 -- Helper function to check if the user is a Super Admin
 CREATE OR REPLACE FUNCTION is_super_admin()
 RETURNS BOOLEAN AS $$
-  SELECT COALESCE(get_user_role() = 'superadmin', false);
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+BEGIN
+  RETURN COALESCE(get_user_role() = 'superadmin', false);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 -- Helper function to check access to customer documents (bypasses soft delete check of customers table RLS)
 CREATE OR REPLACE FUNCTION check_document_access(p_customer_id UUID)
