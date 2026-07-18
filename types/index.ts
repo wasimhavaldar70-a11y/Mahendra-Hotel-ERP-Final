@@ -112,6 +112,7 @@ export interface Payment {
   advance: number;
   pending: number;
   payment_method: 'UPI' | 'Cash' | 'Card';
+  final_payment_method?: 'UPI' | 'Cash' | 'Card';
   created_at: string;
 }
 

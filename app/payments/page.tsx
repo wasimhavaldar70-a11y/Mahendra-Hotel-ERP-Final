@@ -16,7 +16,9 @@ import {
   TrendingUp, 
   AlertCircle, 
   CheckCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Smartphone,
+  CreditCard
 } from 'lucide-react';
 
 export default function PaymentsPage() {
@@ -51,6 +53,20 @@ export default function PaymentsPage() {
   // Aggregated totals
   const totalReceived = payments.reduce((sum, p) => sum + Number(p.advance), 0);
   const totalPending = payments.reduce((sum, p) => sum + Number(p.pending), 0);
+
+  // Group received payments by payment method
+  const modeStats = {
+    UPI: { received: 0, pending: 0 },
+    Cash: { received: 0, pending: 0 },
+    Card: { received: 0, pending: 0 }
+  };
+
+  payments.forEach(p => {
+    const activeMode = (Number(p.pending) === 0 && p.final_payment_method) ? p.final_payment_method : p.payment_method;
+    const mode = (activeMode === 'UPI' || activeMode === 'Cash' || activeMode === 'Card') ? activeMode : 'Cash';
+    modeStats[mode].received += Number(p.advance || 0);
+    modeStats[mode].pending += Number(p.pending || 0);
+  });
   
   // Filtered payments list
   const filteredPayments = payments.filter(p => {
@@ -106,6 +122,66 @@ export default function PaymentsPage() {
             </div>
             <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center">
               <TrendingUp className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Mode Summary */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Payment Mode Summary
+            </h2>
+            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Real-time breakdown</span>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* UPI Summary */}
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/30 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">UPI Payments</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-base font-bold text-slate-800">₹{modeStats.UPI.received.toLocaleString('en-IN')}</span>
+                  {modeStats.UPI.pending > 0 && (
+                    <span className="text-[10px] font-semibold text-red-500">Pending: ₹{modeStats.UPI.pending}</span>
+                  )}
+                </div>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <Smartphone className="w-4.5 h-4.5" />
+              </div>
+            </div>
+
+            {/* Cash Summary */}
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/30 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Cash Payments</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-base font-bold text-slate-800">₹{modeStats.Cash.received.toLocaleString('en-IN')}</span>
+                  {modeStats.Cash.pending > 0 && (
+                    <span className="text-[10px] font-semibold text-red-500">Pending: ₹{modeStats.Cash.pending}</span>
+                  )}
+                </div>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Coins className="w-4.5 h-4.5" />
+              </div>
+            </div>
+
+            {/* Card Summary */}
+            <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/30 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Card Payments</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-base font-bold text-slate-800">₹{modeStats.Card.received.toLocaleString('en-IN')}</span>
+                  {modeStats.Card.pending > 0 && (
+                    <span className="text-[10px] font-semibold text-red-500">Pending: ₹{modeStats.Card.pending}</span>
+                  )}
+                </div>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+                <CreditCard className="w-4.5 h-4.5" />
+              </div>
             </div>
           </div>
         </div>
