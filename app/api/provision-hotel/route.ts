@@ -1,17 +1,10 @@
 import { NextResponse } from 'next/server';
 // @ts-ignore
-import { Pool, PoolClient } from 'pg';
+import { PoolClient } from 'pg';
+import { pool } from '../../../lib/db';
 import { isRequestAllowed } from '../../../lib/rateLimit';
 import { getAuthenticatedUser } from '../../../lib/supabase/server';
 import { logger } from '../../../lib/logger';
-
-const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
-const pool = new Pool({
-  connectionString: dbUrl,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
 
 export async function POST(request: Request) {
   // Apply rate limiter (10 requests per minute)
@@ -35,10 +28,6 @@ export async function POST(request: Request) {
 
     if (!hotel_name || !owner_name || !email || !phone || !password) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    if (!dbUrl) {
-      return NextResponse.json({ error: 'Database URL not configured' }, { status: 500 });
     }
 
     pgClient = await pool.connect();

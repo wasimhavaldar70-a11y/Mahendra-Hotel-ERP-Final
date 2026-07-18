@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
-// @ts-ignore
-import { Pool } from 'pg';
+import { pool } from '../../../lib/db';
 import '../../../lib/env';
-
-const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
 export async function GET() {
   const startTime = Date.now();
@@ -13,12 +10,7 @@ export async function GET() {
   let healthy = true;
 
   // 1. Database Check
-  let pool: Pool | null = null;
   try {
-    pool = new Pool({
-      connectionString: dbUrl,
-      ssl: { rejectUnauthorized: false }
-    });
     const client = await pool.connect();
     const startDb = Date.now();
     await client.query('SELECT 1;');
@@ -28,10 +20,6 @@ export async function GET() {
   } catch (err: any) {
     checks.database = `UNHEALTHY: ${err.message}`;
     healthy = false;
-  } finally {
-    if (pool) {
-      await pool.end();
-    }
   }
 
   // 2. Storage Check

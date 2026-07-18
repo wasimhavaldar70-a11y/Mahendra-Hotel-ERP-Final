@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
-// @ts-ignore
-import { Pool } from 'pg';
+import { pool } from '../../../lib/db';
 import '../../../lib/env';
-
-const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
 export async function GET() {
   const checks: Record<string, any> = {
@@ -12,12 +9,7 @@ export async function GET() {
   let ready = true;
 
   // 1. Database Liveness check
-  let pool: Pool | null = null;
   try {
-    pool = new Pool({
-      connectionString: dbUrl,
-      ssl: { rejectUnauthorized: false }
-    });
     const client = await pool.connect();
     await client.query('SELECT 1;');
     client.release();
@@ -25,10 +17,6 @@ export async function GET() {
   } catch (err: any) {
     checks.database = `ERROR: ${err.message}`;
     ready = false;
-  } finally {
-    if (pool) {
-      await pool.end();
-    }
   }
 
   // 2. Storage Client check
