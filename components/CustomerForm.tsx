@@ -9,6 +9,39 @@ import React, { useState } from 'react';
 import { User, Phone, MapPin, ShieldAlert, Upload, Check } from 'lucide-react';
 import { Customer } from '../types';
 
+const STATE_CITIES: Record<string, string[]> = {
+  "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Tirupati", "Kurnool", "Rajahmundry", "Kadapa"],
+  "Arunachal Pradesh": ["Itanagar", "Naharlagun", "Pasighat", "Tawang"],
+  "Assam": ["Guwahati", "Dibrugarh", "Silchar", "Jorhat", "Nagaon", "Tinsukia", "Tezpur"],
+  "Bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Purnia", "Darbhanga", "Ara", "Begusarai"],
+  "Chhattisgarh": ["Raipur", "Bhilai", "Bilaspur", "Korba", "Rajnandgaon", "Jagdalpur", "Raigarh"],
+  "Delhi": ["New Delhi", "North Delhi", "South Delhi", "West Delhi", "East Delhi"],
+  "Goa": ["Panaji", "Margao", "Vasco da Gama", "Mapusa", "Ponda"],
+  "Gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar", "Jamnagar", "Gandhinagar", "Junagadh"],
+  "Haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Yamunanagar", "Rohtak", "Hisar", "Karnal"],
+  "Himachal Pradesh": ["Shimla", "Dharamshala", "Solan", "Mandi", "Nahan"],
+  "Jammu & Kashmir": ["Srinagar", "Jammu", "Anantnag", "Baramulla", "Kathua", "Samba"],
+  "Jharkhand": ["Ranchi", "Jamshedpur", "Dhanbad", "Bokaro", "Deoghar", "Hazaribagh", "Giridih"],
+  "Karnataka": ["Bengaluru", "Mysuru", "Hubli-Dharwad", "Mangaluru", "Belagavi", "Davangere", "Ballari", "Kalaburagi"],
+  "Kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam", "Alappuzha", "Palakkad", "Kannur"],
+  "Madhya Pradesh": ["Indore", "Bhopal", "Jabalpur", "Gwalior", "Ujjain", "Sagar", "Dewas", "Satna"],
+  "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Thane", "Nashik", "Aurangabad", "Solapur", "Amravati", "Kolhapur", "Navi Mumbai"],
+  "Manipur": ["Imphal", "Thoubal", "Kakching", "Ukhrul"],
+  "Meghalaya": ["Shillong", "Tura", "Jowai", "Nongpoh"],
+  "Mizoram": ["Aizawl", "Lunglei", "Champhai", "Serchhip"],
+  "Nagaland": ["Kohima", "Dimapur", "Mokokchung", "Wokha"],
+  "Odisha": ["Bhubaneswar", "Cuttack", "Rourkela", "Sambalpur", "Puri", "Balasore", "Brahmapur"],
+  "Punjab": ["Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Bathinda", "Mohali", "Pathankot"],
+  "Rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Bikaner", "Ajmer", "Alwar", "Sikar", "Bhilwara"],
+  "Sikkim": ["Gangtok", "Namchi", "Geyzing", "Mangan"],
+  "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem", "Tiruppur", "Erode", "Vellore"],
+  "Telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam", "Ramagundam", "Mahbubnagar"],
+  "Tripura": ["Agartala", "Dharmanagar", "Udaipur", "Kailasahar"],
+  "Uttar Pradesh": ["Lucknow", "Kanpur", "Ghaziabad", "Agra", "Varanasi", "Meerut", "Allahabad", "Bareilly", "Aligarh", "Noida"],
+  "Uttarakhand": ["Dehradun", "Haridwar", "Rishikesh", "Haldwani", "Roorkee", "Rudrapur"],
+  "West Bengal": ["Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri", "Kharagpur", "Bardhaman", "Malda"]
+};
+
 interface CustomerFormProps {
   initialData?: Partial<Customer>;
   initialDoc?: { type: 'Aadhar' | 'Driving License' | 'Passport' | 'Voter ID'; number: string; front: string; back: string };
@@ -28,6 +61,16 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
   const [vehicleNumber, setVehicleNumber] = useState(initialData?.vehicle_number || '');
   const [emergencyContact, setEmergencyContact] = useState(initialData?.emergency_contact || '');
   const [nationality, setNationality] = useState(initialData?.nationality || 'Indian');
+
+  const [isOtherState, setIsOtherState] = useState(() => {
+    const val = initialData?.state || '';
+    return !!(val && !Object.keys(STATE_CITIES).includes(val));
+  });
+  const [isOtherCity, setIsOtherCity] = useState(() => {
+    const val = initialData?.city || '';
+    const st = initialData?.state || '';
+    return !!(val && (!st || !STATE_CITIES[st]?.includes(val)));
+  });
 
   // Documents
   const [docType, setDocType] = useState<'Aadhar' | 'Driving License' | 'Passport' | 'Voter ID'>(initialDoc?.type || 'Aadhar');
@@ -408,57 +451,152 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
             )}
           </div>
 
+          {/* State Section */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">City *</label>
-            <input
-              type="text"
-              required
-              value={city}
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">State *</label>
+            <select
+              value={isOtherState ? 'Other' : state}
               onChange={(e) => {
-                const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
-                setCity(val);
-                if (errors.city) {
-                  setErrors(prev => {
-                    const copy = { ...prev };
-                    delete copy.city;
-                    return copy;
-                  });
+                const val = e.target.value;
+                if (val === 'Other') {
+                  setState('');
+                  setIsOtherState(true);
+                  setCity('');
+                  setIsOtherCity(true);
+                } else {
+                  setState(val);
+                  setIsOtherState(false);
+                  setCity('');
+                  setIsOtherCity(false);
+                  if (errors.state) {
+                    setErrors(prev => {
+                      const copy = { ...prev };
+                      delete copy.state;
+                      return copy;
+                    });
+                  }
                 }
               }}
-              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
-                errors.city ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-250 ${
+                errors.state ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
-              placeholder="Bengaluru"
-            />
-            {errors.city && (
-              <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.city}</span>
+            >
+              <option value="">Select State</option>
+              {Object.keys(STATE_CITIES).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+              <option value="Other">Other State (Type manually)</option>
+            </select>
+
+            {isOtherState && (
+              <input
+                type="text"
+                required
+                value={state}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                  setState(val);
+                  if (errors.state) {
+                    setErrors(prev => {
+                      const copy = { ...prev };
+                      delete copy.state;
+                      return copy;
+                    });
+                  }
+                }}
+                className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 mt-2 ${
+                  errors.state ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
+                }`}
+                placeholder="Enter custom state name"
+              />
+            )}
+            {errors.state && (
+              <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.state}</span>
             )}
           </div>
 
+          {/* City Section */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">State *</label>
-            <input
-              type="text"
-              required
-              value={state}
-              onChange={(e) => {
-                const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
-                setState(val);
-                if (errors.state) {
-                  setErrors(prev => {
-                    const copy = { ...prev };
-                    delete copy.state;
-                    return copy;
-                  });
-                }
-              }}
-              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
-                errors.state ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
-              }`}
-              placeholder="Karnataka"
-            />
-            {errors.state && (
-              <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.state}</span>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">City *</label>
+            {isOtherState ? (
+              <input
+                type="text"
+                required
+                value={city}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                  setCity(val);
+                  if (errors.city) {
+                    setErrors(prev => {
+                      const copy = { ...prev };
+                      delete copy.city;
+                      return copy;
+                    });
+                  }
+                }}
+                className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+                  errors.city ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
+                }`}
+                placeholder="Enter city name"
+              />
+            ) : (
+              <>
+                <select
+                  value={isOtherCity ? 'Other' : city}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'Other') {
+                      setCity('');
+                      setIsOtherCity(true);
+                    } else {
+                      setCity(val);
+                      setIsOtherCity(false);
+                      if (errors.city) {
+                        setErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.city;
+                          return copy;
+                        });
+                      }
+                    }
+                  }}
+                  className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-250 ${
+                    errors.city ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
+                  }`}
+                >
+                  <option value="">Select City</option>
+                  {(STATE_CITIES[state] || []).map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                  <option value="Other">Other City (Type manually)</option>
+                </select>
+
+                {isOtherCity && (
+                  <input
+                    type="text"
+                    required
+                    value={city}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setCity(val);
+                      if (errors.city) {
+                        setErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.city;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 mt-2 ${
+                      errors.city ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
+                    }`}
+                    placeholder="Enter custom city name"
+                  />
+                )}
+              </>
+            )}
+            {errors.city && (
+              <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.city}</span>
             )}
           </div>
 
