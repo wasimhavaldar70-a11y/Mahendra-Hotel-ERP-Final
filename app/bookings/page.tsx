@@ -97,13 +97,20 @@ export default function BookingsPage() {
         loadData(hotelId);
       }, 0);
 
+      let syncTimeout: NodeJS.Timeout | null = null;
       const channel = new BroadcastChannel('hotelflow-sync');
       channel.onmessage = () => {
-        loadData(hotelId);
+        if (syncTimeout) clearTimeout(syncTimeout);
+        // Apply jittered debounce (300ms to 800ms) to stagger DB hits across open tabs
+        const delay = 300 + Math.random() * 500;
+        syncTimeout = setTimeout(() => {
+          loadData(hotelId);
+        }, delay);
       };
 
       return () => {
         clearTimeout(timer);
+        if (syncTimeout) clearTimeout(syncTimeout);
         channel.close();
       };
     }

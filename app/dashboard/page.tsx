@@ -154,14 +154,21 @@ export default function DashboardPage() {
     loadDashboardData(session.hotel.id);
     
     // Real-time synchronization event listener (BroadcastChannel)
+    let syncTimeout: NodeJS.Timeout | null = null;
     const channel = new BroadcastChannel('hotelflow-sync');
     channel.onmessage = (event) => {
       if (event.data && event.data.type === 'DB_UPDATE') {
-        loadDashboardData(session.hotel.id);
+        if (syncTimeout) clearTimeout(syncTimeout);
+        // Apply jittered debounce (300ms to 800ms) to stagger DB hits across open tabs
+        const delay = 300 + Math.random() * 500;
+        syncTimeout = setTimeout(() => {
+          loadDashboardData(session.hotel.id);
+        }, delay);
       }
     };
 
     return () => {
+      if (syncTimeout) clearTimeout(syncTimeout);
       channel.close();
     };
   }, []);
