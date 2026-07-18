@@ -9,7 +9,7 @@ import { logger } from '../../../lib/logger';
 export async function POST(request: Request) {
   // Apply rate limiter (10 requests per minute)
   const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
-  if (!isRequestAllowed(clientIp, 10, 60000)) {
+  if (!await isRequestAllowed(clientIp, 10, 60000)) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
   }
 
