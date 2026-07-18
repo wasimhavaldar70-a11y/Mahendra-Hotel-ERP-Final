@@ -1426,7 +1426,11 @@ export const supabaseDb = {
   },
 
   // Reports aggregations
-  getReports: async (hotelId: string): Promise<{
+  getReports: async (
+    hotelId: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<{
     dailyRevenue: { date: string; amount: number }[];
     monthlyRevenue: { month: string; amount: number }[];
     occupancyRate: number;
@@ -1439,7 +1443,9 @@ export const supabaseDb = {
     }
 
     const { data, error } = await supabase.rpc('get_hotel_reports', {
-      p_hotel_id: hotelId
+      p_hotel_id: hotelId,
+      p_start_date: startDate || null,
+      p_end_date: endDate || null
     });
 
     if (error || !data) {

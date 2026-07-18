@@ -135,8 +135,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Check Out', path: '/check-out', icon: DoorClosed },
         { name: 'Payments', path: '/payments', icon: Coins },
         { name: 'Reports', path: '/reports', icon: FilePieChart },
-        { name: 'Hotel Website', path: '/settings/website', icon: Globe },
-        { name: 'Visit Website', path: '/', icon: Globe, external: true },
         { name: 'Settings', path: '/settings', icon: Settings },
       ];
 

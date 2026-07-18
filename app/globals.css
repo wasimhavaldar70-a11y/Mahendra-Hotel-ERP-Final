@@ -50,11 +50,13 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
-/* Thermal receipt print styles */
+/* Thermal receipt and report print styles */
 @media print {
   body * {
     visibility: hidden;
   }
+  
+  /* Print Receipt Default Rule */
   #print-receipt, #print-receipt * {
     visibility: visible;
   }
@@ -71,5 +73,26 @@ input[type=number] {
     margin: 0;
     color: #000;
     background: #fff;
+  }
+
+  /* Print Report Overrides */
+  body.printing-report #print-receipt {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  body.printing-report #print-report,
+  body.printing-report #print-report * {
+    visibility: visible;
+  }
+  body.printing-report #print-report {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #000;
+    background: #fff;
+    padding: 20px;
   }
 }

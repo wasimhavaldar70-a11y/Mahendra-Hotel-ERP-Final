@@ -493,7 +493,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- High performance metrics pre-aggregation function
-CREATE OR REPLACE FUNCTION get_hotel_reports(p_hotel_id UUID)
+CREATE OR REPLACE FUNCTION get_hotel_reports(
+  p_hotel_id UUID,
+  p_start_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+  p_end_date TIMESTAMP WITH TIME ZONE DEFAULT NULL
+)
 RETURNS JSONB AS $$
 DECLARE
   v_occupancy_rate INT;
@@ -510,7 +514,7 @@ BEGIN
   ) INTO v_occupancy_rate
   FROM rooms WHERE hotel_id = p_hotel_id;
 
-  -- 2. Daily Revenue (last 7 days of advance payments)
+  -- 2. Daily Revenue (last 7 days of advance payments, or filtered by range)
   SELECT jsonb_agg(d) INTO v_daily_revenue
   FROM (
     SELECT 
@@ -519,9 +523,11 @@ BEGIN
     FROM payments p
     JOIN check_ins c ON p.checkin_id = c.id
     WHERE c.hotel_id = p_hotel_id AND p.advance > 0
+      AND (p_start_date IS NULL OR p.created_at >= p_start_date)
+      AND (p_end_date IS NULL OR p.created_at <= p_end_date)
     GROUP BY date, date_trunc('day', p.created_at)
     ORDER BY date_trunc('day', p.created_at) DESC
-    LIMIT 7
+    LIMIT CASE WHEN p_start_date IS NULL AND p_end_date IS NULL THEN 7 ELSE 100 END
   ) d;
 
   -- 3. Monthly Revenue
@@ -533,6 +539,8 @@ BEGIN
     FROM payments p
     JOIN check_ins c ON p.checkin_id = c.id
     WHERE c.hotel_id = p_hotel_id AND p.advance > 0
+      AND (p_start_date IS NULL OR p.created_at >= p_start_date)
+      AND (p_end_date IS NULL OR p.created_at <= p_end_date)
     GROUP BY month, date_trunc('month', p.created_at)
     ORDER BY date_trunc('month', p.created_at) DESC
   ) m;
@@ -547,6 +555,8 @@ BEGIN
     FROM check_ins c
     JOIN customers cust ON c.primary_customer_id = cust.id
     WHERE c.hotel_id = p_hotel_id
+      AND (p_start_date IS NULL OR c.check_in >= p_start_date)
+      AND (p_end_date IS NULL OR c.check_in <= p_end_date)
     GROUP BY cust.id, cust.full_name, cust.phone
     HAVING COUNT(*) > 1
     ORDER BY visits DESC
@@ -565,6 +575,8 @@ BEGIN
     JOIN customers cust ON c.primary_customer_id = cust.id
     JOIN rooms r ON c.room_id = r.id
     WHERE c.hotel_id = p_hotel_id AND c.status = 'Active' AND p.pending > 0
+      AND (p_start_date IS NULL OR c.check_in >= p_start_date)
+      AND (p_end_date IS NULL OR c.check_in <= p_end_date)
   ) pp;
 
   -- 6. Most Used Rooms
@@ -576,6 +588,8 @@ BEGIN
     FROM check_ins c
     JOIN rooms r ON c.room_id = r.id
     WHERE c.hotel_id = p_hotel_id
+      AND (p_start_date IS NULL OR c.check_in >= p_start_date)
+      AND (p_end_date IS NULL OR c.check_in <= p_end_date)
     GROUP BY r.room_number
     ORDER BY "usageCount" DESC
   ) mur;
