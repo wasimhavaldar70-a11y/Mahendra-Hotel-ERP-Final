@@ -322,15 +322,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
                   {currentHotel?.subscription_plan}
                 </span>
-                <a
-                  href="/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#0F4C45]/5 hover:bg-[#0F4C45]/15 text-primary border border-primary/10 transition-colors"
-                >
-                  <Globe className="w-3 h-3 text-[#D4AF37]" />
-                  Visit Website
-                </a>
               </div>
             )}
           </div>
