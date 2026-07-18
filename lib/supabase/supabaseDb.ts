@@ -1124,6 +1124,29 @@ export const supabaseDb = {
     return checkIn;
   },
 
+  // Get all active stays for the entire hotel in a single query to eliminate N+1 cascades
+  getActiveStaysForHotel: async (hotelId: string): Promise<ExtendedCheckIn[]> => {
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('check_ins')
+      .select('*, primary_customer:customers(*), payment:payments(*)')
+      .eq('hotel_id', hotelId)
+      .eq('status', 'Active')
+      .is('deleted_at', null);
+
+    if (error) {
+      console.error('Error fetching active stays for hotel:', error.message);
+      return [];
+    }
+
+    return (data || []).map((stay: any) => ({
+      ...stay,
+      primary_customer: stay.primary_customer || undefined,
+      payment: Array.isArray(stay.payment) ? stay.payment[0] : (stay.payment || undefined)
+    })) as ExtendedCheckIn[];
+  },
+
   // Full extended details for Room Modals
   getActiveStayForRoom: async (hotelId: string, roomId: string): Promise<ExtendedCheckIn | null> => {
     if (!supabase) return null;

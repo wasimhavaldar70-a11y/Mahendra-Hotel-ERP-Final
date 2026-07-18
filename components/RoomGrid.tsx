@@ -24,28 +24,27 @@ export default function RoomGrid({ rooms, hotelId, onRoomClick }: RoomGridProps)
     // For occupied rooms, load the guest names and checkout details to show on dashboard grid
     const loadOccupiedGuests = async () => {
       setLoading(true);
-      const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
-      const staysMap: Record<string, { guestName: string; phone: string; price: number }> = {};
-      
-      await Promise.all(
-        occupiedRooms.map(async (room) => {
-          try {
-            const stay = await db.getActiveStayForRoom(hotelId, room.id);
-            if (stay) {
-              staysMap[room.id] = {
-                guestName: stay.primary_customer?.full_name || 'Guest',
-                phone: stay.primary_customer?.phone || '',
-                price: Number(stay.payment?.room_price || room.price)
-              };
-            }
-          } catch (err) {
-            console.error(err);
+      try {
+        const stays = await db.getActiveStaysForHotel(hotelId);
+        const staysMap: Record<string, { guestName: string; phone: string; price: number }> = {};
+        
+        stays.forEach(stay => {
+          if (stay.room_id) {
+            const roomObj = rooms.find(r => r.id === stay.room_id);
+            staysMap[stay.room_id] = {
+              guestName: stay.primary_customer?.full_name || 'Guest',
+              phone: stay.primary_customer?.phone || '',
+              price: Number(stay.payment?.room_price || roomObj?.price || 0)
+            };
           }
-        })
-      );
-      
-      setActiveStays(staysMap);
-      setLoading(false);
+        });
+        
+        setActiveStays(staysMap);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     if (rooms.length > 0) {

@@ -258,7 +258,9 @@ CREATE POLICY "Hotel Owners can view their own hotel details" ON hotels
 
 DROP POLICY IF EXISTS "Hotel Owners can update their own hotel details" ON hotels;
 CREATE POLICY "Hotel Owners can update their own hotel details" ON hotels 
-  FOR UPDATE TO authenticated USING (id = get_user_hotel_id()) WITH CHECK (id = get_user_hotel_id());
+  FOR UPDATE TO authenticated 
+  USING (id = get_user_hotel_id() AND get_user_role() IN ('hotel_owner', 'superadmin')) 
+  WITH CHECK (id = get_user_hotel_id() AND get_user_role() IN ('hotel_owner', 'superadmin'));
 
 DROP POLICY IF EXISTS "Allow public select hotels" ON hotels;
 
@@ -281,6 +283,10 @@ CREATE POLICY "Users can view their own profile" ON users
 DROP POLICY IF EXISTS "Users can insert their own profile" ON users;
 CREATE POLICY "Users can insert their own profile" ON users 
   FOR INSERT TO authenticated WITH CHECK (id = auth.uid());
+
+DROP POLICY IF EXISTS "Users can update their own profile" ON users;
+CREATE POLICY "Users can update their own profile" ON users 
+  FOR UPDATE TO authenticated USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
 -- Policies for Rooms
 CREATE POLICY "Users can select rooms of their hotel" ON rooms 
@@ -333,8 +339,9 @@ CREATE POLICY "Users can insert check-ins of their hotel" ON check_ins
 CREATE POLICY "Users can update check-ins of their hotel" ON check_ins 
   FOR UPDATE TO authenticated USING (hotel_id = get_user_hotel_id()) WITH CHECK (hotel_id = get_user_hotel_id());
 
+DROP POLICY IF EXISTS "Users can delete check-ins of their hotel" ON check_ins;
 CREATE POLICY "Users can delete check-ins of their hotel" ON check_ins 
-  FOR DELETE TO authenticated USING (hotel_id = get_user_hotel_id());
+  FOR DELETE TO authenticated USING (is_super_admin());
 
 -- Policies for Check-In Guests
 CREATE POLICY "Users can select guests of their hotel" ON check_in_guests 
@@ -465,6 +472,9 @@ CREATE INDEX IF NOT EXISTS idx_check_ins_primary_customer_id ON check_ins(primar
 CREATE INDEX IF NOT EXISTS idx_check_in_guests_checkin_id ON check_in_guests(checkin_id);
 CREATE INDEX IF NOT EXISTS idx_check_in_guests_customer_id ON check_in_guests(customer_id);
 CREATE INDEX IF NOT EXISTS idx_payments_checkin_id ON payments(checkin_id);
+CREATE INDEX IF NOT EXISTS idx_customer_history_customer_id ON customer_history(customer_id);
+CREATE INDEX IF NOT EXISTS idx_booking_requests_hotel_id ON booking_requests(hotel_id);
+CREATE INDEX IF NOT EXISTS idx_users_hotel_id ON users(hotel_id);
 
 
 -- ========================================================
