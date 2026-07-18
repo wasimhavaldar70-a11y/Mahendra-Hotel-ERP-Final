@@ -13,44 +13,11 @@ import { Sparkles, Wrench, CheckCircle, Flame, User } from 'lucide-react';
 interface RoomGridProps {
   rooms: Room[];
   hotelId: string;
+  activeStays: Record<string, { guestName: string; phone: string; price: number }>;
   onRoomClick: (room: Room) => void;
 }
 
-export default function RoomGrid({ rooms, hotelId, onRoomClick }: RoomGridProps) {
-  const [activeStays, setActiveStays] = useState<Record<string, { guestName: string; phone: string; price: number }>>({});
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    // For occupied rooms, load the guest names and checkout details to show on dashboard grid
-    const loadOccupiedGuests = async () => {
-      setLoading(true);
-      try {
-        const stays = await db.getActiveStaysForHotel(hotelId);
-        const staysMap: Record<string, { guestName: string; phone: string; price: number }> = {};
-        
-        stays.forEach(stay => {
-          if (stay.room_id) {
-            const roomObj = rooms.find(r => r.id === stay.room_id);
-            staysMap[stay.room_id] = {
-              guestName: stay.primary_customer?.full_name || 'Guest',
-              phone: stay.primary_customer?.phone || '',
-              price: Number(stay.payment?.room_price || roomObj?.price || 0)
-            };
-          }
-        });
-        
-        setActiveStays(staysMap);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (rooms.length > 0) {
-      loadOccupiedGuests();
-    }
-  }, [rooms, hotelId]);
+export default function RoomGrid({ rooms, hotelId, activeStays, onRoomClick }: RoomGridProps) {
 
   // Group rooms by floor
   const floors = rooms.reduce((acc, room) => {

@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [currentHotel, setCurrentHotel] = useState<Hotel | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [activeStays, setActiveStays] = useState<Record<string, { guestName: string; phone: string; price: number }>>({});
   const [loading, setLoading] = useState(true);
 
   // Pending Booking Requests
@@ -72,6 +73,21 @@ export default function DashboardPage() {
       // Load pending booking requests
       const requestsList = await db.getPendingBookingRequests(hotelId);
       setPendingRequests(requestsList);
+
+      // Load active stays to pass to RoomGrid and prevent rendering waterfalls
+      const stays = await db.getActiveStaysForHotel(hotelId);
+      const staysMap: Record<string, { guestName: string; phone: string; price: number }> = {};
+      stays.forEach(stay => {
+        if (stay.room_id) {
+          const roomObj = roomsList.find(r => r.id === stay.room_id);
+          staysMap[stay.room_id] = {
+            guestName: stay.primary_customer?.full_name || 'Guest',
+            phone: stay.primary_customer?.phone || '',
+            price: Number(stay.payment?.room_price || roomObj?.price || 0)
+          };
+        }
+      });
+      setActiveStays(staysMap);
 
     } catch (err) {
       console.error("Error loading dashboard data:", err);
@@ -324,6 +340,7 @@ export default function DashboardPage() {
             <RoomGrid 
               rooms={rooms} 
               hotelId={currentHotel.id} 
+              activeStays={activeStays}
               onRoomClick={(room) => setSelectedRoom(room)} 
             />
           )}
