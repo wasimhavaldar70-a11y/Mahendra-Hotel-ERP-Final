@@ -79,30 +79,30 @@ export default function PaymentsPage() {
 
         {/* Quick summary totals */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-5 rounded-[18px] border border-slate-100 shadow-sm flex items-center justify-between">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Received Revenue</span>
-              <span className="text-xl font-black text-emerald-600 mt-1">₹{totalReceived.toLocaleString('en-IN')}</span>
+              <span className="text-xl font-bold text-emerald-600 mt-1">₹{totalReceived.toLocaleString('en-IN')}</span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <CheckCircle className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-[18px] border border-slate-100 shadow-sm flex items-center justify-between">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Pending Collect</span>
-              <span className="text-xl font-black text-red-600 mt-1">₹{totalPending.toLocaleString('en-IN')}</span>
+              <span className="text-xl font-bold text-red-650 mt-1">₹{totalPending.toLocaleString('en-IN')}</span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
               <AlertCircle className="w-5 h-5" />
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-[18px] border border-slate-100 shadow-sm flex items-center justify-between">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Net Billings booked</span>
-              <span className="text-xl font-black text-slate-800 mt-1">₹{(totalReceived + totalPending).toLocaleString('en-IN')}</span>
+              <span className="text-xl font-bold text-slate-800 mt-1">₹{(totalReceived + totalPending).toLocaleString('en-IN')}</span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center">
               <TrendingUp className="w-5 h-5" />
@@ -111,14 +111,14 @@ export default function PaymentsPage() {
         </div>
 
         {/* Filter bar */}
-        <div className="bg-white p-4 rounded-[18px] border border-slate-100 shadow-sm flex flex-wrap gap-4 items-center">
+        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-wrap gap-4 items-center">
           <div className="relative flex-1 min-w-[200px]">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by guest name or room..."
-              className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-lg py-2 px-3 focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
+              className="w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl py-2 px-3 focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white"
             />
           </div>
 
@@ -128,7 +128,7 @@ export default function PaymentsPage() {
               <select
                 value={paymentMethodFilter}
                 onChange={(e) => setPaymentMethodFilter(e.target.value)}
-                className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 focus:outline-none"
+                className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl py-1.5 px-3 focus:outline-none"
               >
                 <option value="All">All Modes</option>
                 <option value="UPI">UPI</option>
@@ -142,7 +142,7 @@ export default function PaymentsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 focus:outline-none"
+                className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl py-1.5 px-3 focus:outline-none"
               >
                 <option value="All">All Bills</option>
                 <option value="Paid">Fully Settled</option>
@@ -153,7 +153,7 @@ export default function PaymentsPage() {
         </div>
 
         {/* Payments Table */}
-        <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
@@ -166,7 +166,7 @@ export default function PaymentsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <tr className="bg-slate-50/50 border-b border-slate-200/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                     <th className="px-6 py-4">Transaction ID</th>
                     <th className="px-6 py-4">Guest Name</th>
                     <th className="px-6 py-4">Room No</th>
@@ -178,30 +178,30 @@ export default function PaymentsPage() {
                     <th className="px-6 py-4 text-right">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
+                <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                   {filteredPayments.map((p) => {
                     const isPending = Number(p.pending) > 0;
                     return (
                       <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4 font-mono text-[10px] text-slate-400 uppercase">TXN-{p.id.substring(0, 6)}</td>
-                        <td className="px-6 py-4 font-extrabold text-slate-900">{p.customerName}</td>
+                        <td className="px-6 py-4 font-semibold text-slate-900">{p.customerName}</td>
                         <td className="px-6 py-4 text-slate-500">Room {p.roomNumber}</td>
                         <td className="px-6 py-4 text-slate-500">
                           {new Date(p.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </td>
                         <td className="px-6 py-4">
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold uppercase">
+                          <span className="px-2 py-0.5 rounded bg-slate-100/80 text-slate-600 text-[10px] font-semibold uppercase">
                             {p.payment_method}
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-bold text-slate-800">₹{p.room_price}</td>
-                        <td className="px-6 py-4 text-emerald-600">₹{p.advance}</td>
-                        <td className="px-6 py-4 text-red-600">₹{p.pending}</td>
+                        <td className="px-6 py-4 font-semibold text-slate-800">₹{p.room_price}</td>
+                        <td className="px-6 py-4 text-emerald-600 font-semibold">₹{p.advance}</td>
+                        <td className="px-6 py-4 text-red-650 font-semibold font-mono">₹{p.pending}</td>
                         <td className="px-6 py-4 text-right">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
                             isPending 
-                              ? 'bg-red-50 text-red-700 border-red-100' 
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                              ? 'bg-red-50 text-red-700 border-red-200/60' 
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
                           }`}>
                             {isPending ? 'Pending' : 'Settled'}
                           </span>

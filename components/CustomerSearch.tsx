@@ -70,13 +70,13 @@ export default function CustomerSearch({ hotelId, onSelectCustomer, onClear }: C
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search returning guest (Phone, Name, Email, Doc, Vehicle)..."
-            className="block w-full rounded-xl border border-slate-200 bg-white py-3.5 pl-10 pr-3 text-sm font-medium placeholder-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
+            className="block w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-sm font-medium placeholder-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
           />
         </div>
         <button
           type="submit"
           disabled={searching}
-          className="bg-slate-800 text-white font-bold text-sm px-6 rounded-xl hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+          className="bg-primary hover:bg-primary-hover text-white font-semibold text-sm px-6 rounded-xl transition-colors shadow-sm disabled:opacity-50"
         >
           {searching ? 'Searching...' : 'Search'}
         </button>
@@ -84,7 +84,7 @@ export default function CustomerSearch({ hotelId, onSelectCustomer, onClear }: C
           <button
             type="button"
             onClick={handleClear}
-            className="px-4 py-2 rounded-xl text-slate-500 hover:bg-slate-100 font-bold text-sm"
+            className="px-4 py-2 rounded-xl text-slate-500 hover:bg-slate-100 font-semibold text-sm"
           >
             Clear
           </button>
@@ -101,20 +101,20 @@ export default function CustomerSearch({ hotelId, onSelectCustomer, onClear }: C
               ? `${primaryDoc.document_type} (XXXX-${primaryDoc.document_number.slice(-4)})` 
               : 'No Document';
             return (
-              <div key={res.customer.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/40 flex items-center justify-between hover:bg-slate-50 transition-all">
+              <div key={res.customer.id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/20 flex items-center justify-between hover:bg-slate-50/50 transition-all">
                 <div>
-                  <h4 className="font-extrabold text-slate-800 text-sm">{res.customer.full_name}</h4>
+                  <h4 className="font-bold text-slate-800 text-sm">{res.customer.full_name}</h4>
                   <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
                     Phone: {res.customer.phone} | Doc: {maskedNum} | Address: {res.customer.city || 'N/A'}, {res.customer.country || 'India'}
                   </p>
-                  <p className="text-[9px] text-emerald-600 font-bold mt-1 uppercase tracking-widest">
+                  <p className="text-[9px] text-emerald-600 font-semibold mt-1 uppercase tracking-widest">
                     {res.stayCount} Visits • Last stayed: {res.lastVisit ? new Date(res.lastVisit).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Never'}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => onSelectCustomer(res.customer, true)}
-                  className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all"
+                  className="bg-primary hover:bg-primary-hover text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm hover:shadow-md transition-all"
                 >
                   Verify & Select
                 </button>

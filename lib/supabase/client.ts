@@ -30,3 +30,32 @@ export const setSessionUser = (sessionData: any) => {
     document.cookie = 'hf_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   }
 };
+
+// Subscribe to auth state changes to auto-sync cookie & localStorage when token refreshes
+if (typeof window !== 'undefined' && supabase) {
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    console.log(`[Supabase Auth Event] ${event}`);
+    
+    if (session) {
+      const currentSession = getSessionUser();
+      
+      // Keep existing hotel and role metadata from current session if missing in JWT
+      const userRole = session.user.app_metadata?.role || currentSession?.user?.role || 'hotel_owner';
+      const hotelId = session.user.app_metadata?.hotel_id || currentSession?.user?.hotel_id || null;
+      
+      setSessionUser({
+        user: {
+          id: session.user.id,
+          email: session.user.email || '',
+          role: userRole,
+          hotel_id: hotelId,
+          created_at: session.user.created_at
+        },
+        hotel: currentSession?.hotel || null,
+        access_token: session.access_token
+      });
+    } else if (event === 'SIGNED_OUT') {
+      setSessionUser(null);
+    }
+  });
+}

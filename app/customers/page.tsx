@@ -170,8 +170,8 @@ export default function CustomersPage() {
         {/* Add Customer Modal Drawer */}
         {showAddForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white rounded-[24px] w-full max-w-2xl shadow-2xl border border-slate-100 overflow-hidden my-8">
-              <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+            <div className="bg-white rounded-xl w-full max-w-2xl shadow-2xl border border-slate-200/80 overflow-hidden my-8">
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <h3 className="text-sm font-bold text-slate-800">Register New Customer Profile</h3>
                 <button onClick={() => setShowAddForm(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
                   <X className="w-4 h-4" />
@@ -190,8 +190,8 @@ export default function CustomersPage() {
         {/* View Customer Details Modal */}
         {viewGuest && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white rounded-[24px] w-full max-w-xl shadow-2xl border border-slate-100 overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+            <div className="bg-white rounded-xl w-full max-w-xl shadow-2xl border border-slate-200/80 overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <h3 className="text-sm font-bold text-slate-800">
                   {isEditing ? 'Edit Guest Profile' : 'Guest Dossier'}
                 </h3>
@@ -199,7 +199,7 @@ export default function CustomersPage() {
                   {!isEditing && (
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="p-2 rounded-xl text-primary bg-red-50 hover:bg-red-100 hover:text-primary-hover transition-colors flex items-center justify-center"
+                      className="p-2 rounded-xl text-primary bg-blue-50 border border-blue-100 hover:bg-blue-100 hover:text-primary-hover transition-colors flex items-center justify-center"
                       title="Edit Guest Details"
                     >
                       <Pencil className="w-4 h-4" />
@@ -411,7 +411,7 @@ export default function CustomersPage() {
         )}
 
         {/* Customers Table */}
-        <div className="bg-white rounded-[24px] border border-[#E2E8F0]/40 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
@@ -424,7 +424,7 @@ export default function CustomersPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <tr className="bg-slate-50/50 border-b border-slate-200/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                     <th className="px-6 py-4">Guest Name</th>
                     <th className="px-6 py-4">Phone Number</th>
                     <th className="px-6 py-4">Gender</th>
@@ -434,7 +434,7 @@ export default function CustomersPage() {
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
+                <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                   {filteredCustomers.map((cust) => {
                     const stats = guestStats[cust.id];
                     return (
@@ -447,25 +447,25 @@ export default function CustomersPage() {
                         }}
                         className="hover:bg-slate-50/50 transition-colors cursor-pointer"
                       >
-                        <td className="px-6 py-4 font-extrabold text-slate-900">{cust.full_name}</td>
-                        <td className="px-6 py-4 text-slate-500">{cust.phone}</td>
-                        <td className="px-6 py-4">{cust.gender}</td>
+                        <td className="px-6 py-4 font-semibold text-slate-900">{cust.full_name}</td>
+                        <td className="px-6 py-4 text-slate-650">{cust.phone}</td>
+                        <td className="px-6 py-4 text-slate-650">{cust.gender}</td>
                         <td className="px-6 py-4 text-slate-800">
                           <span className="inline-flex items-center gap-1">
                             <History className="w-3.5 h-3.5 text-slate-400" />
                             {stats?.stayCount || 0} stays
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-slate-500 font-semibold">
+                        <td className="px-6 py-4 text-slate-600 font-semibold">
                           {stats?.lastVisit 
                             ? new Date(stats.lastVisit).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                             : 'Never'}
                         </td>
                         <td className="px-6 py-4">
                           {stats && stats.pendingBalance > 0 ? (
-                            <span className="text-red-600 font-extrabold">₹{stats.pendingBalance}</span>
+                            <span className="text-red-650 font-semibold">₹{stats.pendingBalance.toLocaleString('en-IN')}</span>
                           ) : (
-                            <span className="text-emerald-600 font-bold">₹0</span>
+                            <span className="text-emerald-600 font-semibold">₹0</span>
                           )}
                         </td>
                         <td className="px-6 py-4 text-right flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -486,7 +486,7 @@ export default function CustomersPage() {
                               setViewGuest({ customer: cust, stats });
                               fetchGuestDetails(cust.id);
                             }}
-                            className="p-2 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg text-primary transition-colors"
+                            className="p-2 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg text-primary transition-colors"
                             title="Edit Profile"
                           >
                             <Pencil className="w-4 h-4" />

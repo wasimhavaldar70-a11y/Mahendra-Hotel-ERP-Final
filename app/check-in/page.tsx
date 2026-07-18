@@ -766,8 +766,8 @@ function CheckInFormContent() {
 
         {/* Room & Billing Checklist (Right Sidebar panel) */}
         <div className="space-y-6">
-          <div className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm space-y-5">
-            <h2 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-50 pb-2">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-5">
+            <h2 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-150 pb-2">
               <BedDouble className="w-4 h-4 text-primary" />
               2. Room Assignment & Bill
             </h2>
@@ -924,9 +924,9 @@ function CheckInFormContent() {
 
       {/* Additional Guest Search Modal */}
       {activeGuestSearchIndex !== null && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl border border-slate-100 p-6 space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-2">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl border border-slate-200/80 p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-primary" />
                 Search & Auto-fill Guest #{activeGuestSearchIndex}

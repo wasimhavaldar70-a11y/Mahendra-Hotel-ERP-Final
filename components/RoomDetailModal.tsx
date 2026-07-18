@@ -203,12 +203,11 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
           </div>
         </div>
       )}
-
       {/* Screen Modal Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-        <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col max-h-[90vh]">
           {/* Header */}
-          <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
             <div>
               <div className="flex items-center gap-2.5">
                 <h3 className="text-xl font-bold text-slate-800">Room {room.room_number}</h3>
@@ -216,7 +215,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                   {room.status}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">{room.room_type} • {room.floor}</p>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">{room.room_type} • {room.floor}</p>
             </div>
             <button 
               onClick={onClose} 
@@ -238,21 +237,21 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
               ) : stayData ? (
                 <div className="space-y-6">
                   {/* Guest Primary Card */}
-                  <div className="p-4 rounded-[18px] bg-slate-50 border border-slate-100 space-y-3.5">
+                  <div className="p-4 rounded-xl bg-slate-50/50 border border-slate-200/60 space-y-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center text-primary">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                         <User className="w-5 h-5" />
                       </div>
                       <div>
                         <h4 className="font-bold text-slate-800 text-sm leading-none">{stayData.primary_customer?.full_name}</h4>
                         <span className="text-xs font-semibold text-slate-400 mt-1 flex items-center gap-1">
-                          <Phone className="w-3 h-3" />
+                          <Phone className="w-3 h-3 text-slate-400" />
                           {stayData.primary_customer?.phone}
                         </span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-150">
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Checked In</span>
                         <span className="text-xs font-bold text-slate-700 mt-0.5 flex items-center gap-1">
@@ -270,11 +269,11 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                     </div>
 
                     {stayData.primary_customer?.customer_documents && stayData.primary_customer.customer_documents.length > 0 && (
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <div className="pt-3 border-t border-slate-150 flex items-center justify-between text-xs">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                           {stayData.primary_customer.customer_documents[0].document_type} ID
                         </span>
-                        <span className="font-extrabold text-slate-700">
+                        <span className="font-bold text-slate-700">
                           {stayData.primary_customer.customer_documents[0].document_number}
                         </span>
                       </div>
@@ -287,19 +286,19 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Additional Guests</h4>
                       <div className="space-y-2">
                         {stayData.guests.filter(g => g.relationship !== 'Self').map((g) => (
-                          <div key={g.id} className="p-3 rounded-xl border border-slate-100 text-xs font-medium bg-slate-50/30 space-y-2">
+                          <div key={g.id} className="p-3 rounded-xl border border-slate-200/60 text-xs font-medium bg-slate-50/20 space-y-2">
                             <div className="flex items-center justify-between">
                               <span className="text-slate-800 font-bold">{g.customer?.full_name} ({g.relationship})</span>
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                                 g.document_verified 
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
-                                  : 'bg-red-50 text-red-700 border border-red-100'
+                                  ? 'bg-green-50 text-green-700 border border-green-200/60' 
+                                  : 'bg-red-50 text-red-700 border border-red-200/60'
                               }`}>
                                 {g.document_verified ? 'Docs Verified' : 'No Docs'}
                               </span>
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 pt-1.5 border-t border-slate-100/60">
+                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-505 pt-1.5 border-t border-slate-200/40">
                               {g.customer?.phone && (
                                 <div>
                                   <span className="font-bold text-slate-400 uppercase tracking-wider block">Phone</span>
@@ -325,24 +324,24 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                   <div>
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Payments & Billing</h4>
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="p-3 rounded-xl border border-slate-100 text-center bg-white shadow-sm">
+                      <div className="p-3 rounded-xl border border-slate-200/60 text-center bg-white shadow-sm">
                         <span className="text-[10px] font-bold text-slate-400 block">Room Charge</span>
-                        <span className="text-sm font-bold text-slate-800 mt-1">₹{Number(stayData.payment?.room_price)}</span>
+                        <span className="text-sm font-bold text-slate-800 mt-1">₹{Number(stayData.payment?.room_price).toLocaleString('en-IN')}</span>
                       </div>
-                      <div className="p-3 rounded-xl border border-slate-100 text-center bg-emerald-50/20 border-emerald-100/55">
-                        <span className="text-[10px] font-bold text-emerald-600 block">Advance Paid</span>
-                        <span className="text-sm font-extrabold text-emerald-600 mt-1">₹{Number(stayData.payment?.advance)}</span>
+                      <div className="p-3 rounded-xl border border-green-150 text-center bg-green-50/10">
+                        <span className="text-[10px] font-bold text-green-600 block">Advance Paid</span>
+                        <span className="text-sm font-bold text-green-600 mt-1">₹{Number(stayData.payment?.advance).toLocaleString('en-IN')}</span>
                       </div>
-                      <div className="p-3 rounded-xl border border-slate-100 text-center bg-red-50/20 border-red-100/55">
+                      <div className="p-3 rounded-xl border border-red-150 text-center bg-red-50/10">
                         <span className="text-[10px] font-bold text-red-600 block">Pending Balance</span>
-                        <span className="text-sm font-extrabold text-red-600 mt-1">₹{Number(stayData.payment?.pending)}</span>
+                        <span className="text-sm font-bold text-red-600 mt-1">₹{Number(stayData.payment?.pending).toLocaleString('en-IN')}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* EXTEND STAY DRAWER */}
                   {extending ? (
-                    <div className="p-4 rounded-xl border border-primary/20 bg-red-50/5 space-y-4">
+                    <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/10 space-y-4">
                       <h4 className="text-sm font-bold text-slate-800">Extend Stay details</h4>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
@@ -351,7 +350,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                             type="date"
                             value={newCheckoutDate}
                             onChange={(e) => setNewCheckoutDate(e.target.value)}
-                            className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                            className="w-full text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
                           />
                         </div>
                         <div>
@@ -360,7 +359,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                             type="number" 
                             value={additionalCharges}
                             onChange={(e) => setAdditionalCharges(Number(e.target.value))}
-                            className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                            className="w-full text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
                             placeholder="0"
                           />
                         </div>
@@ -368,13 +367,13 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                       <div className="flex gap-2">
                         <button
                           onClick={handleExtendStay}
-                          className="flex-1 bg-primary text-white text-xs font-bold py-2.5 rounded-lg hover:bg-primary-hover shadow-md transition-colors"
+                          className="flex-1 bg-primary text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-primary-hover shadow-md transition-colors"
                         >
                           Confirm Extension
                         </button>
                         <button
                           onClick={() => setExtending(false)}
-                          className="bg-slate-100 text-slate-600 text-xs font-bold px-4 py-2.5 rounded-lg hover:bg-slate-200 transition-colors"
+                          className="bg-slate-100 text-slate-600 text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-slate-200 transition-colors"
                         >
                           Cancel
                         </button>
@@ -382,10 +381,10 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                     </div>
                   ) : checkingOut ? (
                     /* CHECKOUT DRAWER */
-                    <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/10 space-y-4">
+                    <div className="p-4 rounded-xl border border-emerald-250 bg-emerald-50/10 space-y-4">
                       <h4 className="text-sm font-bold text-slate-800">Settle & Checkout</h4>
                       <p className="text-xs text-slate-500 font-medium">
-                        Confirm checkout and settle the final pending balance of <strong className="text-red-600 font-extrabold text-sm">₹{Number(stayData.payment?.pending)}</strong>.
+                        Confirm checkout and settle the final pending balance of <strong className="text-red-650 font-bold text-sm">₹{Number(stayData.payment?.pending).toLocaleString('en-IN')}</strong>.
                       </p>
                       <div>
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Payment Method</label>
@@ -395,9 +394,9 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                               key={method}
                               type="button"
                               onClick={() => setPaymentMethod(method)}
-                              className={`py-2 rounded-lg border text-xs font-bold transition-all duration-200 ${
+                              className={`py-2 rounded-lg border text-xs font-semibold transition-all duration-200 ${
                                 paymentMethod === method 
-                                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                                  ? 'bg-emerald-600 border-emerald-650 text-white shadow-sm'
                                   : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                               }`}
                             >
@@ -409,13 +408,13 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                       <div className="flex gap-2 pt-2">
                         <button
                           onClick={handleCheckoutSubmit}
-                          className="flex-1 bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-lg hover:bg-emerald-700 shadow-md shadow-emerald-200 transition-colors"
+                          className="flex-1 bg-emerald-600 text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-emerald-750 shadow-md transition-colors"
                         >
                           Settle & Mark Room Green
                         </button>
                         <button
                           onClick={() => setCheckingOut(false)}
-                          className="bg-slate-100 text-slate-600 text-xs font-bold px-4 py-2.5 rounded-lg hover:bg-slate-200 transition-colors"
+                          className="bg-slate-100 text-slate-600 text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-slate-200 transition-colors"
                         >
                           Cancel
                         </button>
@@ -436,16 +435,16 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                   {room.status !== 'Ready' && (
                     <button
                       onClick={() => changeRoomStatus('Ready')}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-emerald-100 hover:bg-emerald-50/30 text-emerald-700 transition-all duration-200"
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-green-200/60 hover:bg-green-50/40 text-green-700 transition-all duration-200"
                     >
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
                       <span className="text-xs font-bold">Ready</span>
                     </button>
                   )}
                   {room.status !== 'Cleaning' && (
                     <button
                       onClick={() => changeRoomStatus('Cleaning')}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-amber-100 hover:bg-amber-50/30 text-amber-700 transition-all duration-200"
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-amber-200/60 hover:bg-amber-50/40 text-amber-700 transition-all duration-200"
                     >
                       <Sparkles className="w-5 h-5 text-amber-600" />
                       <span className="text-xs font-bold">Cleaning</span>
@@ -454,7 +453,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                   {room.status !== 'Maintenance' && (
                     <button
                       onClick={() => changeRoomStatus('Maintenance')}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-blue-100 hover:bg-blue-50/30 text-blue-700 transition-all duration-200"
+                      className="flex flex-col items-center gap-2 p-4 rounded-xl border border-blue-200/60 hover:bg-blue-50/40 text-blue-700 transition-all duration-200"
                     >
                       <Wrench className="w-5 h-5 text-blue-600" />
                       <span className="text-xs font-bold">Maintenance</span>
@@ -463,13 +462,13 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                 </div>
 
                 {room.status === 'Ready' && (
-                  <div className="pt-4 border-t border-slate-50">
+                  <div className="pt-4 border-t border-slate-100">
                     <button
                       onClick={() => {
                         router.push(`/check-in?room_id=${room.id}`);
                         onClose();
                       }}
-                      className="flex items-center justify-between w-full p-4 rounded-[18px] bg-primary text-white font-bold hover:bg-primary-hover shadow-lg transition-all duration-200 group"
+                      className="flex items-center justify-between w-full p-4 rounded-xl bg-primary text-white font-semibold hover:bg-primary-hover shadow-md transition-all duration-200 group"
                     >
                       <span className="text-sm">Proceed to Guest Check-In</span>
                       <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -482,22 +481,22 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
           {/* Footer (when occupied, showing base actions) */}
           {room.status === 'Occupied' && !extending && !checkingOut && (
-            <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/50 flex gap-2">
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex gap-2">
               <button
                 onClick={() => setCheckingOut(true)}
-                className="flex-1 bg-emerald-600 text-white text-xs font-bold py-3 px-4 rounded-xl hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-100 flex items-center justify-center gap-1.5"
+                className="flex-1 bg-emerald-600 text-white text-xs font-semibold py-3 px-4 rounded-xl hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-100 flex items-center justify-center gap-1.5"
               >
                 Checkout Room
               </button>
               <button
                 onClick={() => setExtending(true)}
-                className="bg-white border border-slate-200 text-slate-700 text-xs font-bold py-3 px-4 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
+                className="bg-white border border-slate-200 text-slate-700 text-xs font-semibold py-3 px-4 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
               >
                 Extend Stay
               </button>
               <button
                 onClick={handlePrintBill}
-                className="bg-white border border-slate-200 text-slate-700 text-xs font-bold py-3 px-4 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
+                className="bg-white border border-slate-200 text-slate-700 text-xs font-semibold py-3 px-4 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
                 title="Print Receipt"
               >
                 <Printer className="w-4 h-4 text-slate-500" />

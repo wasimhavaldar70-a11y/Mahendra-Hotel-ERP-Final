@@ -216,8 +216,8 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* 1. Guest Details Section */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-800 border-b border-slate-50 pb-2 flex items-center gap-1.5">
+      <div className="bg-white rounded-xl border border-slate-200/80 p-5 space-y-4 shadow-sm">
+        <h3 className="text-sm font-bold text-slate-900 border-b border-slate-150 pb-2 flex items-center gap-1.5">
           <User className="w-4 h-4 text-primary" />
           Guest Details
         </h3>
@@ -240,7 +240,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.fullName ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder="Rahul Verma"
@@ -267,7 +267,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.phone ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder="10-digit number"
@@ -285,9 +285,9 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   key={g}
                   type="button"
                   onClick={() => setGender(g)}
-                  className={`flex-1 py-3 text-xs font-bold rounded-xl border transition-all duration-200 ${
+                  className={`flex-1 py-3 text-xs font-semibold rounded-xl border transition-all duration-200 ${
                     gender === g 
-                      ? 'bg-slate-800 border-slate-800 text-white shadow-sm'
+                      ? 'bg-primary border-primary text-white shadow-sm'
                       : 'bg-slate-50/50 border-slate-200 text-slate-600 hover:bg-slate-100/50'
                   }`}
                 >
@@ -314,7 +314,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.email ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder="rahul@example.com"
@@ -330,7 +330,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
               type="text"
               value={nationality}
               onChange={(e) => setNationality(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
-              className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
+              className="w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
               placeholder="Indian"
             />
           </div>
@@ -341,7 +341,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
               type="text"
               value={vehicleNumber}
               onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
-              className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
+              className="w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
               placeholder="MH 12 AB 1234"
             />
           </div>
@@ -362,7 +362,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.emergencyContact ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder="10-digit number"
@@ -375,8 +375,8 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
       </div>
 
       {/* 2. Address Details Section */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-800 border-b border-slate-50 pb-2 flex items-center gap-1.5">
+      <div className="bg-white rounded-xl border border-slate-200/80 p-5 space-y-4 shadow-sm">
+        <h3 className="text-sm font-bold text-slate-900 border-b border-slate-150 pb-2 flex items-center gap-1.5">
           <MapPin className="w-4 h-4 text-primary" />
           Address Details
         </h3>
@@ -398,7 +398,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.address ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder="Flat 104, Royal Apartments, MG Road"
@@ -425,7 +425,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.city ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder="Bengaluru"
@@ -452,7 +452,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.state ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder="Karnataka"
@@ -479,7 +479,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.country ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder="India"
@@ -492,8 +492,8 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
       </div>
 
       {/* 3. Document Verification Section */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-800 border-b border-slate-50 pb-2 flex items-center gap-1.5">
+      <div className="bg-white rounded-xl border border-slate-200/80 p-5 space-y-4 shadow-sm">
+        <h3 className="text-sm font-bold text-slate-900 border-b border-slate-150 pb-2 flex items-center gap-1.5">
           <ShieldAlert className="w-4 h-4 text-primary" />
           Document Upload & Verification
         </h3>
@@ -504,7 +504,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
             <select
               value={docType}
               onChange={(e) => handleDocTypeChange(e.target.value as any)}
-              className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
+              className="w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200"
             >
               <option value="Aadhar">Aadhaar Card</option>
               <option value="Driving License">Driving License</option>
@@ -547,7 +547,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   });
                 }
               }}
-              className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
+              className={`w-full text-xs font-semibold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary transition-all duration-200 ${
                 errors.docNumber ? 'border-red-500 focus:ring-red-500 focus:bg-white' : 'border-slate-200'
               }`}
               placeholder={
@@ -635,7 +635,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 transition-colors"
+            className="px-6 py-3 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 bg-white hover:bg-slate-50 transition-colors"
           >
             Cancel
           </button>
@@ -643,7 +643,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
         <button
           type="submit"
           disabled={loading}
-          className="bg-primary hover:bg-primary-hover text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-55"
+          className="bg-primary hover:bg-primary-hover text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-55"
         >
           {loading ? 'Saving Guest...' : 'Save Guest Details'}
         </button>

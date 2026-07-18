@@ -23,7 +23,8 @@ import {
   Lock,
   DoorClosed,
   Calendar,
-  Globe
+  Globe,
+  ChevronLeft
 } from 'lucide-react';
 import { getSessionUser, setSessionUser, supabase, isRealSupabase, db } from '../lib/supabase/client';
 import { User, Hotel } from '../types';
@@ -36,10 +37,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentHotel, setCurrentHotel] = useState<Hotel | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('hf_sidebar_collapsed');
+      if (stored === 'true') {
+        setIsCollapsed(true);
+      }
+    }
+  }, []);
+
+  const toggleCollapse = () => {
+    const newVal = !isCollapsed;
+    setIsCollapsed(newVal);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hf_sidebar_collapsed', String(newVal));
+    }
+  };
 
   const loadPendingCount = async (hotelId: string) => {
     try {
@@ -139,24 +158,37 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#FCFBF7]">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex md:w-64 md:flex-col bg-gradient-to-b from-[#0B2C24] via-[#0F4C45] to-[#12372A] flex-shrink-0 border-r border-[#12372A]/20 shadow-2xl">
+      <aside className={`hidden md:flex md:flex-col bg-white flex-shrink-0 border-r border-slate-200/80 shadow-none transition-all duration-300 ${
+        isCollapsed ? 'md:w-20' : 'md:w-64'
+      }`}>
         {/* Brand Header */}
-        <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10 bg-black/10">
-          <img 
-            src="/logo.jpg" 
-            alt="StayDesk Logo" 
-            className="w-10 h-10 rounded-xl object-cover border border-white/15 shadow-md animate-pulse"
-          />
-          <div>
-            <h1 className="font-black text-white text-base leading-none tracking-tight">StayDesk</h1>
-            <span className="text-[9px] text-[#A0AEC0] font-bold uppercase tracking-widest mt-1 block">PMS Platform</span>
+        <div className="flex items-center justify-between px-5 py-5 border-b border-slate-100 bg-white">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <img 
+              src="/logo.jpg" 
+              alt="StayDesk Logo" 
+              className="w-9 h-9 rounded-xl object-cover border border-slate-100 shadow-sm shrink-0"
+            />
+            {!isCollapsed && (
+              <div className="animate-in fade-in duration-300">
+                <h1 className="font-bold text-slate-800 text-sm leading-none tracking-tight">StayDesk</h1>
+                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-widest mt-1 block">PMS Console</span>
+              </div>
+            )}
           </div>
+          <button 
+            onClick={toggleCollapse} 
+            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-600 hidden md:block shrink-0"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${isCollapsed ? 'rotate-180' : ''}`} />
+          </button>
         </div>
 
         {/* Sidebar Nav */}
-        <nav className="flex-1 px-4 py-6 space-y-2.5 overflow-y-auto">
+        <nav className={`flex-1 py-6 space-y-1.5 overflow-y-auto ${isCollapsed ? 'px-3' : 'px-4'}`}>
           {menuItems.map((item) => {
             const isActive = pathname === item.path;
             const Icon = item.icon;
@@ -168,10 +200,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   href={item.path}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] tracking-widest font-black uppercase text-[#A0AEC0] hover:text-white hover:bg-white/5 hover:translate-x-0.5 transition-all duration-200 transform"
+                  className={`flex items-center gap-3 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all duration-150 ${
+                    isCollapsed ? 'justify-center p-2.5' : 'px-4 py-2.5'
+                  }`}
+                  title={isCollapsed ? item.name : undefined}
                 >
-                  <Icon className="w-4.5 h-4.5 text-[#64748B]" />
-                  {item.name}
+                  <Icon className="w-4 h-4 text-slate-400 shrink-0" />
+                  {!isCollapsed && <span className="truncate">{item.name}</span>}
                 </a>
               );
             }
@@ -180,20 +215,26 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <Link
                 key={item.path}
                 href={item.path}
-                className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] tracking-widest font-black uppercase transition-all duration-200 transform ${
+                className={`flex items-center rounded-lg text-sm font-medium transition-all duration-150 ${
+                  isCollapsed ? 'justify-center p-2.5' : 'justify-between px-4 py-2.5'
+                } ${
                   isActive 
-                    ? 'bg-white/10 text-white border-l-2 border-accent-gold shadow-sm translate-x-1' 
-                    : 'text-[#A0AEC0] hover:text-white hover:bg-white/5 hover:translate-x-0.5'
+                    ? 'bg-purple-50 text-primary font-semibold shadow-none' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
+                title={isCollapsed ? item.name : undefined}
               >
-                <div className="flex items-center gap-3">
-                  <Icon className={`w-4.5 h-4.5 ${isActive ? 'text-accent-gold' : 'text-[#64748B]'}`} />
-                  {item.name}
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                  {!isCollapsed && <span className="truncate">{item.name}</span>}
                 </div>
-                {item.name === 'Dashboard' && pendingCount > 0 && (
+                {!isCollapsed && item.name === 'Dashboard' && pendingCount > 0 && (
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white shadow-sm animate-pulse normal-case shrink-0">
                     {pendingCount}
                   </span>
+                )}
+                {isCollapsed && item.name === 'Dashboard' && pendingCount > 0 && (
+                  <span className="absolute top-1 right-1 flex h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white"></span>
                 )}
               </Link>
             );
@@ -201,39 +242,42 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         {/* Sign Out Footer */}
-        <div className="p-4 border-t border-white/10 bg-black/10">
+        <div className="p-4 border-t border-slate-100 bg-white">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-[10px] tracking-widest font-black uppercase text-[#A0AEC0] hover:bg-white/5 hover:text-white transition-all duration-200"
+            className={`flex items-center gap-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all duration-150 ${
+              isCollapsed ? 'justify-center p-2.5 w-full' : 'px-4 py-2.5 w-full'
+            }`}
+            title={isCollapsed ? "Sign Out" : undefined}
           >
-            <LogOut className="w-4.5 h-4.5 text-[#64748B]" />
-            Sign Out
+            <LogOut className="w-4 h-4 text-slate-400 shrink-0" />
+            {!isCollapsed && <span>Sign Out</span>}
           </button>
         </div>
       </aside>
 
       {/* Sidebar - Mobile drawer */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden bg-slate-950/60 backdrop-blur-md animate-fade-in">
-          <div className="relative w-full max-w-[260px] flex flex-col bg-gradient-to-b from-[#0B2C24] via-[#0F4C45] to-[#12372A] h-full shadow-2xl animate-in slide-in-from-left duration-200">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-black/10">
+        <div className="fixed inset-0 z-50 flex md:hidden bg-slate-950/40 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-[260px] flex flex-col bg-white border-r border-slate-200 h-full shadow-2xl animate-in slide-in-from-left duration-200">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
               <div className="flex items-center gap-3">
                 <img 
                   src="/logo.jpg" 
                   alt="StayDesk Logo" 
-                  className="w-8 h-8 rounded-lg object-cover border border-white/15 shadow-md animate-pulse"
+                  className="w-8 h-8 rounded-lg object-cover border border-slate-100 shadow-sm"
                 />
-                <h1 className="font-black text-white text-sm tracking-tight">StayDesk</h1>
+                <h1 className="font-bold text-slate-800 text-sm tracking-tight">StayDesk</h1>
               </div>
               <button 
                 onClick={() => setSidebarOpen(false)}
-                className="p-1 rounded-lg text-[#A0AEC0] hover:bg-white/5 hover:text-white"
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+            <nav className="flex-1 px-4 py-4 space-y-1.5 overflow-y-auto">
               {menuItems.map((item) => {
                 const isActive = pathname === item.path;
                 const Icon = item.icon;
@@ -246,9 +290,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => setSidebarOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] tracking-widest font-black uppercase text-[#A0AEC0] hover:text-white hover:bg-white/5 transition-all duration-200"
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all duration-150"
                     >
-                      <Icon className="w-4.5 h-4.5 text-[#64748B]" />
+                      <Icon className="w-4 h-4 text-slate-400" />
                       {item.name}
                     </a>
                   );
@@ -259,14 +303,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     key={item.path}
                     href={item.path}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] tracking-widest font-black uppercase transition-all duration-200 ${
+                    className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                       isActive 
-                        ? 'bg-white/10 text-white border-l-2 border-accent-gold shadow-sm' 
-                        : 'text-[#A0AEC0] hover:text-white hover:bg-white/5'
+                        ? 'bg-purple-50 text-primary font-semibold shadow-none' 
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-4.5 h-4.5 ${isActive ? 'text-accent-gold' : 'text-[#64748B]'}`} />
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-primary' : 'text-slate-400 group-hover:text-slate-600'}`} />
                       {item.name}
                     </div>
                     {item.name === 'Dashboard' && pendingCount > 0 && (
@@ -279,12 +323,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               })}
             </nav>
 
-            <div className="p-4 border-t border-white/10 bg-black/10">
+            <div className="p-4 border-t border-slate-100 bg-white">
               <button
                 onClick={handleLogout}
-                className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-[10px] tracking-widest font-black uppercase text-[#A0AEC0] hover:bg-white/5 hover:text-white transition-all duration-200"
+                className="flex w-full items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all duration-150"
               >
-                <LogOut className="w-4.5 h-4.5 text-[#64748B]" />
+                <LogOut className="w-4 h-4 text-slate-400" />
                 Sign Out
               </button>
             </div>
@@ -295,7 +339,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white/60 backdrop-blur-md border-b border-[#E2E8F0]/30 h-[70px] sticky top-0 z-40 shadow-sm">
+        <header className="flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-md border-b border-slate-200/50 h-[70px] sticky top-0 z-40 shadow-sm">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -313,13 +357,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#FCFBF7] border border-[#E2E8F0]/50 text-primary">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-600">
                   <Building2 className="w-4.5 h-4.5" />
                 </div>
-                <span className="font-extrabold text-slate-800 text-base leading-tight truncate max-w-[200px] sm:max-w-none">
+                <span className="font-bold text-slate-800 text-sm leading-tight truncate max-w-[200px] sm:max-w-none">
                   {currentHotel?.hotel_name}
                 </span>
-                <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100">
+                <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-semibold bg-purple-50 text-primary border border-purple-100/60">
                   {currentHotel?.subscription_plan}
                 </span>
               </div>
@@ -328,20 +372,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+              <span className="text-[9px] font-medium text-slate-400 uppercase tracking-wider leading-none">
                 {isSuperAdmin ? 'Administrator' : currentHotel?.owner_name || 'Owner'}
               </span>
-              <span className="text-xs font-bold text-slate-700 mt-1">{currentUser.email}</span>
+              <span className="text-xs font-semibold text-slate-600 mt-1">{currentUser.email}</span>
             </div>
             
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-[#FCFBF7] to-white border border-[#E2E8F0]/60 shadow-sm font-black text-slate-700 text-xs">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-slate-50 border border-slate-200/80 shadow-sm font-semibold text-slate-700 text-xs">
               {(isSuperAdmin ? 'Admin' : currentHotel?.owner_name || 'O').substring(0, 2).toUpperCase()}
             </div>
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#FCFBF7] pb-10">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/30 pb-10">
           {children}
         </main>
       </div>

@@ -73,16 +73,16 @@ export default function RoomGrid({ rooms, hotelId, onRoomClick }: RoomGridProps)
     return a.localeCompare(b);
   });
 
-  const getStatusColor = (status: Room['status']) => {
+  const getStatusBadge = (status: Room['status']) => {
     switch (status) {
       case 'Ready':
-        return 'bg-gradient-to-br from-[#0F4C45] to-[#0B2C24] text-white hover:shadow-lg hover:shadow-[#0F4C45]/20 border border-white/10';
+        return 'bg-green-50 text-green-700 border-green-200/60';
       case 'Occupied':
-        return 'bg-gradient-to-br from-[#8C2A2A] to-[#601A1A] text-white hover:shadow-lg hover:shadow-[#8C2A2A]/25 border border-white/10';
+        return 'bg-red-50 text-red-700 border-red-200/60';
       case 'Maintenance':
-        return 'bg-gradient-to-br from-[#475569] to-[#334155] text-white hover:shadow-lg hover:shadow-slate-500/20 border border-white/10';
+        return 'bg-slate-100 text-slate-700 border-slate-200/60';
       case 'Cleaning':
-        return 'bg-gradient-to-br from-[#D4AF37] to-[#B8902C] text-white hover:shadow-lg hover:shadow-[#D4AF37]/20 border border-white/10';
+        return 'bg-amber-50 text-amber-700 border-amber-200/60';
     }
   };
 
@@ -93,10 +93,10 @@ export default function RoomGrid({ rooms, hotelId, onRoomClick }: RoomGridProps)
         return (
           <div key={floorName} className="space-y-3.5">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-full">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100/80 border border-slate-200/30 px-3 py-1 rounded-full">
                 {floorName}
               </span>
-              <div className="h-[1px] bg-slate-100 flex-1"></div>
+              <div className="h-[1px] bg-slate-200/60 flex-1"></div>
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -108,42 +108,43 @@ export default function RoomGrid({ rooms, hotelId, onRoomClick }: RoomGridProps)
                   <button
                     key={room.id}
                     onClick={() => onRoomClick(room)}
-                    className={`flex flex-col p-4 rounded-[22px] text-left transition-all duration-300 cursor-pointer shadow-lg select-none transform hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.98] ${getStatusColor(room.status)}`}
+                    className="flex flex-col p-4 rounded-xl text-left bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer select-none transform hover:-translate-y-0.5 active:scale-[0.98]"
                   >
                     {/* Status Icons */}
-                    <div className="flex justify-between items-start w-full">
-                      <span className="text-lg font-black tracking-tight">{room.room_number}</span>
-                      <div className="opacity-90">
-                        {room.status === 'Ready' && <CheckCircle className="w-4 h-4" />}
-                        {room.status === 'Cleaning' && <Sparkles className="w-4 h-4" />}
-                        {room.status === 'Maintenance' && <Wrench className="w-4 h-4" />}
-                        {room.status === 'Occupied' && <User className="w-4 h-4" />}
-                      </div>
+                    <div className="flex justify-between items-center w-full">
+                      <span className="text-base font-bold text-slate-800 tracking-tight">{room.room_number}</span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border ${getStatusBadge(room.status)}`}>
+                        {room.status === 'Ready' && <CheckCircle className="w-3 h-3" />}
+                        {room.status === 'Cleaning' && <Sparkles className="w-3 h-3" />}
+                        {room.status === 'Maintenance' && <Wrench className="w-3 h-3" />}
+                        {room.status === 'Occupied' && <User className="w-3 h-3" />}
+                        <span>{room.status}</span>
+                      </span>
                     </div>
 
                     {/* Room Metadata */}
-                    <div className="mt-4 w-full min-h-[58px] flex flex-col justify-end">
+                    <div className="mt-4 w-full min-h-[54px] flex flex-col justify-end">
                       {isOccupied ? (
                         <>
-                          <span className="text-xs font-extrabold truncate uppercase tracking-wide block">
+                          <span className="text-xs font-bold text-slate-900 truncate block">
                             {stayInfo ? stayInfo.guestName : 'Occupied'}
                           </span>
                           {stayInfo?.phone && (
-                            <span className="text-[10px] font-semibold opacity-90 truncate block mt-0.5">
+                            <span className="text-[10px] font-medium text-slate-500 truncate block mt-0.5">
                               {stayInfo.phone}
                             </span>
                           )}
-                          <span className="text-[11px] font-medium opacity-90 block mt-0.5">
-                            ₹{stayInfo ? stayInfo.price : room.price}
+                          <span className="text-[11px] font-semibold text-slate-800 block mt-1">
+                            ₹{stayInfo ? stayInfo.price.toLocaleString('en-IN') : Number(room.price).toLocaleString('en-IN')}
                           </span>
                         </>
                       ) : (
                         <div className="flex flex-col">
-                          <span className="text-[10px] uppercase font-bold opacity-80 leading-none">
-                            {room.room_type.split(' ')[0]}
+                          <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
+                            {room.room_type}
                           </span>
-                          <span className="text-xs font-bold mt-1 block">
-                            {room.status}
+                          <span className="text-xs font-bold text-slate-700 mt-1 block">
+                            ₹{Number(room.price).toLocaleString('en-IN')}/night
                           </span>
                         </div>
                       )}

@@ -175,32 +175,32 @@ export default function DashboardPage() {
         {/* Large Stats Cards Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
           {/* Revenue */}
-          <div className="col-span-2 bg-white p-5 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="col-span-2 bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Today's Revenue</span>
-              <span className="text-2xl font-black text-slate-800">₹{stats.todayRevenue.toLocaleString('en-IN')}</span>
+              <span className="text-2xl font-bold text-slate-900">₹{stats.todayRevenue.toLocaleString('en-IN')}</span>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-[#0F4C45]/5 text-[#0F4C45] flex items-center justify-center">
-              <IndianRupee className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-primary flex items-center justify-center">
+              <IndianRupee className="w-5 h-5" />
             </div>
           </div>
 
           {/* Check-ins */}
-          <div className="bg-white p-5 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Check-ins</span>
-              <span className="text-2xl font-black text-slate-800">{stats.checkInsCount}</span>
+              <span className="text-2xl font-bold text-slate-900">{stats.checkInsCount}</span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
               <UserCheck className="w-5 h-5" />
             </div>
           </div>
 
           {/* Checkouts */}
-          <div className="bg-white p-5 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Checkouts</span>
-              <span className="text-2xl font-black text-slate-800">{stats.checkOutsCount}</span>
+              <span className="text-2xl font-bold text-slate-900">{stats.checkOutsCount}</span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center">
               <UserX className="w-5 h-5" />
@@ -208,56 +208,56 @@ export default function DashboardPage() {
           </div>
 
           {/* Occupied */}
-          <div className="bg-white p-5 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Occupied</span>
-              <span className="text-2xl font-black text-red-700">{stats.occupiedRooms}</span>
+              <span className="text-2xl font-bold text-slate-900">{stats.occupiedRooms}</span>
             </div>
             <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-600"></div>
+              <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></div>
             </div>
           </div>
 
           {/* Available */}
-          <div className="bg-white p-5 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Available</span>
-              <span className="text-2xl font-black text-[#0F4C45]">{stats.availableRooms}</span>
+              <span className="text-2xl font-bold text-slate-900">{stats.availableRooms}</span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-[#0F4C45]/5 text-[#0F4C45] flex items-center justify-center">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#0F4C45]"></div>
+            <div className="w-10 h-10 rounded-xl bg-green-50 text-green-700 flex items-center justify-center">
+              <div className="w-2.5 h-2.5 rounded-full bg-green-600"></div>
             </div>
           </div>
         </div>
 
         {/* Room Status Categories Mini Bar */}
-        <div className="flex flex-wrap gap-4 items-center bg-white py-3.5 px-5 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm text-xs font-semibold text-slate-500">
+        <div className="flex flex-wrap gap-4 items-center bg-white py-3 px-5 rounded-xl border border-slate-200/80 shadow-sm text-xs font-semibold text-slate-500">
           <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Quick Legend:</span>
           
           <div className="flex items-center gap-2">
-            <span className="w-3.5 h-3.5 rounded-lg bg-primary block"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-green-600 block"></span>
             <span>Ready ({stats.availableRooms})</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="w-3.5 h-3.5 rounded-lg bg-red-700 block"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-red-600 block"></span>
             <span>Occupied ({stats.occupiedRooms})</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="w-3.5 h-3.5 rounded-lg bg-maintenance block"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-500 block"></span>
             <span>Maintenance ({stats.maintenanceRooms})</span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="w-3.5 h-3.5 rounded-lg bg-accent-gold block"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 block"></span>
             <span>Cleaning ({stats.cleaningRooms})</span>
           </div>
         </div>
 
         {/* PENDING BOOKING REQUESTS WIDGET */}
         {pendingRequests.length > 0 && (
-          <div className="bg-white p-6 rounded-[24px] border border-red-100 shadow-sm space-y-4">
+          <div className="bg-white p-6 rounded-xl border border-red-100 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -268,11 +268,11 @@ export default function DashboardPage() {
                   Online reservation requests waiting for your approval before room/customer generation.
                 </p>
               </div>
-              <span className="bg-red-50 text-red-700 font-bold px-2.5 py-1 rounded-full text-[10px]">
+              <span className="bg-red-50 text-red-700 font-bold px-2.5 py-1 rounded-full text-[10px] border border-red-100/50">
                 {pendingRequests.length} New Requests
               </span>
             </div>
-
+ 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {pendingRequests.map((req) => (
                 <div 
@@ -283,16 +283,16 @@ export default function DashboardPage() {
                     const matching = rooms.find(r => r.room_type === req.room_type && r.status === 'Ready');
                     setSelectedRoomId(matching ? matching.id : '');
                   }}
-                  className="bg-slate-50/50 hover:bg-slate-50 p-4 rounded-2xl border border-[#E2E8F0]/40 cursor-pointer hover:border-primary/20 hover:shadow-sm transition-all duration-200 group flex flex-col justify-between"
+                  className="bg-slate-50/40 hover:bg-slate-50 p-4 rounded-xl border border-slate-200/80 cursor-pointer hover:border-purple-300 hover:shadow-sm transition-all duration-150 group flex flex-col justify-between"
                 >
                   <div className="space-y-2">
                     <div className="flex justify-between items-start">
                       <h3 className="text-xs font-bold text-slate-800">{req.full_name}</h3>
-                      <span className="text-[9px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-lg">
+                      <span className="text-[9px] bg-purple-50 text-primary border border-purple-200/60 font-bold px-2 py-0.5 rounded-lg">
                         {req.room_type}
                       </span>
                     </div>
-
+ 
                     <div className="space-y-1 text-[11px] font-semibold text-slate-500">
                       <p>📞 {req.phone}</p>
                       <p>📧 {req.email}</p>
@@ -300,8 +300,8 @@ export default function DashboardPage() {
                       <p>👥 {req.number_of_guests} Guests</p>
                     </div>
                   </div>
-
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-[#0F4C45] group-hover:text-primary-hover">
+ 
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-primary group-hover:text-primary-hover">
                     <span>Review & Allocate Room</span>
                     <span>→</span>
                   </div>
@@ -310,16 +310,16 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
-
+ 
         {/* Visual Room Grid / Floor Map */}
-        <div className="bg-white p-6 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-800">Visual Desk Layout</h2>
+              <h2 className="text-lg font-bold text-slate-900">Visual Desk Layout</h2>
               <p className="text-xs text-slate-400 font-semibold mt-0.5">Click any room card to check-in guest, extend stay, or settle bill.</p>
             </div>
           </div>
-
+ 
           {currentHotel && (
             <RoomGrid 
               rooms={rooms} 
@@ -329,7 +329,7 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
-
+ 
       {/* Room Detail Popup Modal */}
       {selectedRoom && currentHotel && (
         <RoomDetailModal 
@@ -339,14 +339,14 @@ export default function DashboardPage() {
           onStatusChanged={handleRoomStatusChanged}
         />
       )}
-
+ 
       {/* BOOKING REQUEST REVIEW MODAL */}
       {selectedRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-[28px] w-full max-w-lg shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
-            <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
                 <h3 className="text-sm font-bold text-slate-800">Review Booking Request</h3>
               </div>
               <button 
@@ -463,7 +463,7 @@ export default function DashboardPage() {
                 type="button"
                 disabled={submitting}
                 onClick={handleRejectRequest}
-                className="flex-1 bg-white hover:bg-red-50 border border-red-200 text-red-600 text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 bg-white hover:bg-red-50 border border-slate-200 text-slate-700 hover:text-red-600 hover:border-red-200 text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <X className="w-4 h-4" />
                 Reject Request
@@ -475,7 +475,7 @@ export default function DashboardPage() {
                 onClick={handleApproveRequest}
                 className={`flex-1 text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md ${
                   selectedRoomId && !submitting
-                    ? 'bg-[#0F4C45] hover:bg-[#0C3E38] hover:shadow-lg'
+                    ? 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
                     : 'bg-slate-300 cursor-not-allowed shadow-none'
                 }`}
               >

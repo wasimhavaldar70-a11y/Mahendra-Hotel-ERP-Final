@@ -181,13 +181,19 @@ RETURNS UUID AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
+-- Helper function to get the current user's role
+CREATE OR REPLACE FUNCTION get_user_role()
+RETURNS VARCHAR AS $$
+  SELECT COALESCE(
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role', ''),
+    (SELECT role FROM public.users WHERE id = auth.uid())
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
 -- Helper function to check if the user is a Super Admin
 CREATE OR REPLACE FUNCTION is_super_admin()
 RETURNS BOOLEAN AS $$
-  SELECT COALESCE(
-    (current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role') = 'superadmin',
-    COALESCE((SELECT role = 'superadmin' FROM public.users WHERE id = auth.uid()), false)
-  );
+  SELECT COALESCE(get_user_role() = 'superadmin', false);
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Helper function to check access to customer documents (bypasses soft delete check of customers table RLS)
@@ -231,21 +237,19 @@ CREATE POLICY "Hotel Owners can update their own hotel details" ON hotels
   FOR UPDATE TO authenticated USING (id = get_user_hotel_id()) WITH CHECK (id = get_user_hotel_id());
 
 DROP POLICY IF EXISTS "Allow public select hotels" ON hotels;
-CREATE POLICY "Allow public select hotels" ON hotels 
-  FOR SELECT TO anon, authenticated USING (true);
 
 -- Policies for Users
 CREATE POLICY "Super Admins can select users" ON users 
-  FOR SELECT TO authenticated USING (is_super_admin());
+  FOR SELECT TO authenticated USING ((current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role') = 'superadmin');
 
 CREATE POLICY "Super Admins can insert users" ON users 
-  FOR INSERT TO authenticated WITH CHECK (is_super_admin());
+  FOR INSERT TO authenticated WITH CHECK ((current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role') = 'superadmin');
 
 CREATE POLICY "Super Admins can update users" ON users 
-  FOR UPDATE TO authenticated USING (is_super_admin()) WITH CHECK (is_super_admin());
+  FOR UPDATE TO authenticated USING ((current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role') = 'superadmin') WITH CHECK ((current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role') = 'superadmin');
 
 CREATE POLICY "Super Admins can delete users" ON users 
-  FOR DELETE TO authenticated USING (is_super_admin());
+  FOR DELETE TO authenticated USING ((current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role') = 'superadmin');
 
 CREATE POLICY "Users can view their own profile" ON users 
   FOR SELECT TO authenticated USING (id = auth.uid());
@@ -259,8 +263,6 @@ CREATE POLICY "Users can select rooms of their hotel" ON rooms
   FOR SELECT TO authenticated USING (hotel_id = get_user_hotel_id() OR is_super_admin());
 
 DROP POLICY IF EXISTS "Allow public select rooms" ON rooms;
-CREATE POLICY "Allow public select rooms" ON rooms 
-  FOR SELECT TO anon, authenticated USING (deleted_at IS NULL);
 
 CREATE POLICY "Users can insert rooms of their hotel" ON rooms 
   FOR INSERT TO authenticated WITH CHECK (hotel_id = get_user_hotel_id() OR is_super_admin());
@@ -828,7 +830,7 @@ DROP POLICY IF EXISTS "Owners can insert rooms of their hotel" ON rooms;
 DROP POLICY IF EXISTS "Users can insert rooms of their hotel" ON rooms;
 CREATE POLICY "Owners can insert rooms of their hotel" ON rooms 
   FOR INSERT TO authenticated WITH CHECK (
-    (hotel_id = get_user_hotel_id() AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')) 
+    (hotel_id = get_user_hotel_id() AND get_user_role() IN ('hotel_owner', 'superadmin')) 
     OR is_super_admin()
   );
 
@@ -836,10 +838,10 @@ DROP POLICY IF EXISTS "Owners can update rooms of their hotel" ON rooms;
 DROP POLICY IF EXISTS "Users can update rooms of their hotel" ON rooms;
 CREATE POLICY "Owners can update rooms of their hotel" ON rooms 
   FOR UPDATE TO authenticated USING (
-    (hotel_id = get_user_hotel_id() AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')) 
+    (hotel_id = get_user_hotel_id() AND get_user_role() IN ('hotel_owner', 'superadmin')) 
     OR is_super_admin()
   ) WITH CHECK (
-    (hotel_id = get_user_hotel_id() AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')) 
+    (hotel_id = get_user_hotel_id() AND get_user_role() IN ('hotel_owner', 'superadmin')) 
     OR is_super_admin()
   );
 
@@ -847,7 +849,7 @@ DROP POLICY IF EXISTS "Owners can delete rooms of their hotel" ON rooms;
 DROP POLICY IF EXISTS "Users can delete rooms of their hotel" ON rooms;
 CREATE POLICY "Owners can delete rooms of their hotel" ON rooms 
   FOR DELETE TO authenticated USING (
-    (hotel_id = get_user_hotel_id() AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')) 
+    (hotel_id = get_user_hotel_id() AND get_user_role() IN ('hotel_owner', 'superadmin')) 
     OR is_super_admin()
   );
 
@@ -866,16 +868,16 @@ DROP POLICY IF EXISTS "Owners can update payments of their hotel" ON payments;
 DROP POLICY IF EXISTS "Users can update payments of their hotel" ON payments;
 CREATE POLICY "Owners can update payments of their hotel" ON payments 
   FOR UPDATE TO authenticated USING (
-    check_payment_access(checkin_id) AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
+    check_payment_access(checkin_id) AND get_user_role() IN ('hotel_owner', 'superadmin')
   ) WITH CHECK (
-    check_payment_access(checkin_id) AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
+    check_payment_access(checkin_id) AND get_user_role() IN ('hotel_owner', 'superadmin')
   );
 
 DROP POLICY IF EXISTS "Owners can delete payments of their hotel" ON payments;
 DROP POLICY IF EXISTS "Users can delete payments of their hotel" ON payments;
 CREATE POLICY "Owners can delete payments of their hotel" ON payments 
   FOR DELETE TO authenticated USING (
-    check_payment_access(checkin_id) AND (SELECT role FROM users WHERE id = auth.uid()) IN ('hotel_owner', 'superadmin')
+    check_payment_access(checkin_id) AND get_user_role() IN ('hotel_owner', 'superadmin')
   );
 
 -- ========================================================

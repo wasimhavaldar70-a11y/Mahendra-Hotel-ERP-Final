@@ -227,9 +227,9 @@ export default function ReportsPage() {
         </div>
 
         {/* Filter Controls Card */}
-        <div className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Report Period:</span>
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Report Period:</span>
             <div className="flex flex-wrap gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
               {[
                 { label: 'All Time', value: 'all' },
@@ -241,9 +241,9 @@ export default function ReportsPage() {
                 <button
                   key={preset.value}
                   onClick={() => setFilterType(preset.value)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-all duration-200 ${
                     filterType === preset.value
-                      ? 'bg-[#0F4C45] text-white shadow-sm'
+                      ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
                   }`}
                 >
@@ -280,7 +280,7 @@ export default function ReportsPage() {
         {/* Visual Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Daily Revenue Bar Chart (Custom SVG) */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm space-y-4">
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
                 <DollarSign className="w-4 h-4 text-emerald-600" />
@@ -309,7 +309,7 @@ export default function ReportsPage() {
                           
                           {/* Bar */}
                           <div 
-                            className="w-8 sm:w-12 rounded-t-lg bg-emerald-500 group-hover:bg-emerald-600 shadow-lg shadow-emerald-100 transition-all duration-300"
+                            className="w-8 sm:w-12 rounded-t bg-blue-500 group-hover:bg-blue-600 shadow-md shadow-blue-100 transition-all duration-300"
                             style={{ height: `${Math.max(10, percentHeight * 1.2)}px` }}
                           ></div>
                         </div>
@@ -325,7 +325,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Occupancy Rate Speedometer Meter (Custom SVG) */}
-          <div className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex flex-col justify-between space-y-4">
+          <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
                 <DoorClosed className="w-4 h-4 text-primary" />
@@ -339,16 +339,16 @@ export default function ReportsPage() {
                 {/* Background Ring */}
                 <circle 
                   cx="72" cy="72" r="58" 
-                  stroke="#E2E8F0" strokeWidth="12" fill="transparent" 
+                  stroke="#F1F5F9" strokeWidth="12" fill="transparent" 
                 />
                 {/* Foreground Progress Ring */}
                 <circle 
                   cx="72" cy="72" r="58" 
-                  stroke="#C62828" strokeWidth="12" fill="transparent" 
+                  stroke="#2563EB" strokeWidth="12" fill="transparent" 
                   strokeDasharray={2 * Math.PI * 58}
                   strokeDashoffset={2 * Math.PI * 58 * (1 - reportsData.occupancyRate / 100)}
                   strokeLinecap="round"
-                  className="transition-all duration-1000 ease-out"
+                  className="transition-all duration-1000 ease-out animate-pulse"
                 />
               </svg>
               <div className="absolute flex flex-col items-center">
@@ -357,7 +357,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="text-center text-[11px] font-bold text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+            <div className="text-center text-[11px] font-semibold text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
               Good occupancy rates are above 65%.
             </div>
           </div>
@@ -366,8 +366,8 @@ export default function ReportsPage() {
         {/* Detailed reports columns */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Column 1: Repeat Customers */}
-          <div className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-50 pb-2">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
               <History className="w-4.5 h-4.5 text-emerald-600" />
               Repeat Customers
             </h3>
@@ -377,12 +377,12 @@ export default function ReportsPage() {
             ) : (
               <div className="space-y-3">
                 {reportsData.repeatCustomers.map((c, index) => (
-                  <div key={index} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
                     <div>
                       <h4 className="text-xs font-bold text-slate-800">{c.name}</h4>
                       <span className="text-[10px] text-slate-400 font-semibold block">{c.phone}</span>
                     </div>
-                    <span className="px-2 py-1 rounded bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-black">
+                    <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold">
                       {c.visits} Visits
                     </span>
                   </div>
@@ -392,8 +392,8 @@ export default function ReportsPage() {
           </div>
 
           {/* Column 2: Outstanding Balances */}
-          <div className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-50 pb-2">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
               <Users className="w-4.5 h-4.5 text-red-600" />
               Pending Payments
             </h3>
@@ -403,13 +403,13 @@ export default function ReportsPage() {
             ) : (
               <div className="space-y-3">
                 {reportsData.pendingPayments.map((p, index) => (
-                  <div key={index} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
                     <div>
                       <h4 className="text-xs font-bold text-slate-800">{p.guest} (Room {p.room})</h4>
                       <span className="text-[10px] text-slate-400 font-semibold block">{p.phone}</span>
                     </div>
-                    <span className="text-red-600 text-xs font-extrabold">
-                      ₹{p.amount}
+                    <span className="text-red-600 text-xs font-bold">
+                      ₹{p.amount.toLocaleString('en-IN')}
                     </span>
                   </div>
                 ))}
@@ -418,8 +418,8 @@ export default function ReportsPage() {
           </div>
 
           {/* Column 3: Room Occupancy count */}
-          <div className="bg-white p-5 rounded-[24px] border border-slate-100 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-50 pb-2">
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
               <CalendarDays className="w-4.5 h-4.5 text-blue-600" />
               Most Used Rooms
             </h3>
@@ -429,12 +429,12 @@ export default function ReportsPage() {
             ) : (
               <div className="space-y-3">
                 {reportsData.mostUsedRooms.slice(0, 5).map((r, index) => (
-                  <div key={index} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                  <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
                     <div>
                       <h4 className="text-xs font-bold text-slate-800">Room {r.room}</h4>
-                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Standard layout</span>
+                      <span className="text-[9px] text-slate-400 font-medium uppercase tracking-wider block">Standard layout</span>
                     </div>
-                    <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-bold">
+                    <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-semibold">
                       {r.usageCount} Bookings
                     </span>
                   </div>
@@ -447,19 +447,19 @@ export default function ReportsPage() {
 
       {/* Print Report Container (Hidden from screen, visible during print via global.css) */}
       <div id="print-report" className="hidden">
-        <div style={{ borderBottom: '2px solid #0B2C24', paddingBottom: '15px', marginBottom: '20px' }}>
+        <div style={{ borderBottom: '2px solid #2563EB', paddingBottom: '15px', marginBottom: '20px' }}>
           <table style={{ width: '100%' }}>
             <tbody>
               <tr>
                 <td>
-                  <h1 style={{ margin: '0', fontSize: '24px', color: '#0B2C24', fontWeight: 'bold' }}>
+                  <h1 style={{ margin: '0', fontSize: '24px', color: '#111827', fontWeight: 'bold' }}>
                     {currentHotel?.hotel_name || 'StayDesk Hotel'}
                   </h1>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#666' }}>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#6B7280' }}>
                     Business Intelligence & Performance Report
                   </p>
                 </td>
-                <td style={{ textAlign: 'right', fontSize: '11px', color: '#444' }}>
+                <td style={{ textAlign: 'right', fontSize: '11px', color: '#4B5563' }}>
                   <p style={{ margin: '0' }}><strong>Period:</strong> {getPeriodLabel()}</p>
                   <p style={{ margin: '2px 0 0 0' }}><strong>Generated On:</strong> {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                   <p style={{ margin: '2px 0 0 0' }}><strong>System:</strong> StayDesk PMS Platform</p>
@@ -470,8 +470,8 @@ export default function ReportsPage() {
         </div>
 
         {/* Executive Summary */}
-        <div style={{ marginBottom: '25px', backgroundColor: '#f9f9f9', padding: '15px', borderRadius: '8px', border: '1px solid #eee' }}>
-          <h2 style={{ margin: '0 0 10px 0', fontSize: '14px', textTransform: 'uppercase', color: '#0B2C24', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>Executive Summary</h2>
+        <div style={{ marginBottom: '25px', backgroundColor: '#F8FAFC', padding: '15px', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+          <h2 style={{ margin: '0 0 10px 0', fontSize: '14px', textTransform: 'uppercase', color: '#2563EB', borderBottom: '1px solid #E5E7EB', paddingBottom: '5px' }}>Executive Summary</h2>
           <table style={{ width: '100%', fontSize: '12px' }}>
             <tbody>
               <tr>
@@ -492,19 +492,19 @@ export default function ReportsPage() {
         {/* Revenue Tables */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
           <div>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#0B2C24', borderBottom: '1px solid #eee', paddingBottom: '3px' }}>Daily Revenue (Last 7 Days)</h3>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#2563EB', borderBottom: '1px solid #E5E7EB', paddingBottom: '3px' }}>Daily Revenue (Last 7 Days)</h3>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                  <th style={{ padding: '6px', border: '1px solid #ddd' }}>Date</th>
-                  <th style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>Revenue</th>
+                <tr style={{ backgroundColor: '#F8FAFC', textAlign: 'left' }}>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB' }}>Date</th>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right' }}>Revenue</th>
                 </tr>
               </thead>
               <tbody>
                 {reportsData.dailyRevenue.map((r, i) => (
                   <tr key={i}>
-                    <td style={{ padding: '6px', border: '1px solid #ddd' }}>{r.date}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>₹{r.amount.toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '6px', border: '1px solid #E5E7EB' }}>{r.date}</td>
+                    <td style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right' }}>₹{r.amount.toLocaleString('en-IN')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -512,19 +512,19 @@ export default function ReportsPage() {
           </div>
 
           <div>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#0B2C24', borderBottom: '1px solid #eee', paddingBottom: '3px' }}>Monthly Revenue</h3>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#2563EB', borderBottom: '1px solid #E5E7EB', paddingBottom: '3px' }}>Monthly Revenue</h3>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                  <th style={{ padding: '6px', border: '1px solid #ddd' }}>Month</th>
-                  <th style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>Revenue</th>
+                <tr style={{ backgroundColor: '#F8FAFC', textAlign: 'left' }}>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB' }}>Month</th>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right' }}>Revenue</th>
                 </tr>
               </thead>
               <tbody>
                 {reportsData.monthlyRevenue.map((r, i) => (
                   <tr key={i}>
-                    <td style={{ padding: '6px', border: '1px solid #ddd' }}>{r.month}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>₹{r.amount.toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '6px', border: '1px solid #E5E7EB' }}>{r.month}</td>
+                    <td style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right' }}>₹{r.amount.toLocaleString('en-IN')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -535,26 +535,26 @@ export default function ReportsPage() {
         {/* Pending Payments & Repeat Customers */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
           <div>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#0B2C24', borderBottom: '1px solid #eee', paddingBottom: '3px' }}>Pending Payments</h3>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#2563EB', borderBottom: '1px solid #E5E7EB', paddingBottom: '3px' }}>Pending Payments</h3>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                  <th style={{ padding: '6px', border: '1px solid #ddd' }}>Guest</th>
-                  <th style={{ padding: '6px', border: '1px solid #ddd' }}>Room</th>
-                  <th style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>Pending</th>
+                <tr style={{ backgroundColor: '#F8FAFC', textAlign: 'left' }}>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB' }}>Guest</th>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB' }}>Room</th>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right' }}>Pending</th>
                 </tr>
               </thead>
               <tbody>
                 {reportsData.pendingPayments.length === 0 ? (
                   <tr>
-                    <td colSpan={3} style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'center', color: '#888' }}>No pending collections.</td>
+                    <td colSpan={3} style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'center', color: '#888' }}>No pending collections.</td>
                   </tr>
                 ) : (
                   reportsData.pendingPayments.map((p, i) => (
                     <tr key={i}>
-                      <td style={{ padding: '6px', border: '1px solid #ddd' }}>{p.guest}<br/><span style={{ fontSize: '9px', color: '#666' }}>{p.phone}</span></td>
-                      <td style={{ padding: '6px', border: '1px solid #ddd' }}>Room {p.room}</td>
-                      <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right', color: '#c62828', fontWeight: 'bold' }}>₹{p.amount.toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '6px', border: '1px solid #E5E7EB' }}>{p.guest}<br/><span style={{ fontSize: '9px', color: '#666' }}>{p.phone}</span></td>
+                      <td style={{ padding: '6px', border: '1px solid #E5E7EB' }}>Room {p.room}</td>
+                      <td style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right', color: '#DC2626', fontWeight: 'bold' }}>₹{p.amount.toLocaleString('en-IN')}</td>
                     </tr>
                   ))
                 )}
@@ -563,24 +563,24 @@ export default function ReportsPage() {
           </div>
 
           <div>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#0B2C24', borderBottom: '1px solid #eee', paddingBottom: '3px' }}>Repeat & Loyal Customers</h3>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#2563EB', borderBottom: '1px solid #E5E7EB', paddingBottom: '3px' }}>Repeat & Loyal Customers</h3>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                  <th style={{ padding: '6px', border: '1px solid #ddd' }}>Guest</th>
-                  <th style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>Visits</th>
+                <tr style={{ backgroundColor: '#F8FAFC', textAlign: 'left' }}>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB' }}>Guest</th>
+                  <th style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right' }}>Visits</th>
                 </tr>
               </thead>
               <tbody>
                 {reportsData.repeatCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={2} style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'center', color: '#888' }}>No repeat guests registered yet.</td>
+                    <td colSpan={2} style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'center', color: '#888' }}>No repeat guests registered yet.</td>
                   </tr>
                 ) : (
                   reportsData.repeatCustomers.map((c, i) => (
                     <tr key={i}>
-                      <td style={{ padding: '6px', border: '1px solid #ddd' }}>{c.name}<br/><span style={{ fontSize: '9px', color: '#666' }}>{c.phone}</span></td>
-                      <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right', fontWeight: 'bold' }}>{c.visits} Visits</td>
+                      <td style={{ padding: '6px', border: '1px solid #E5E7EB' }}>{c.name}<br/><span style={{ fontSize: '9px', color: '#666' }}>{c.phone}</span></td>
+                      <td style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right', fontWeight: 'bold' }}>{c.visits} Visits</td>
                     </tr>
                   ))
                 )}
@@ -591,24 +591,24 @@ export default function ReportsPage() {
 
         {/* Room Utilisation */}
         <div style={{ marginBottom: '20px' }}>
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#0B2C24', borderBottom: '1px solid #eee', paddingBottom: '3px' }}>Most Utilised Rooms</h3>
+          <h3 style={{ margin: '0 0 8px 0', fontSize: '12px', textTransform: 'uppercase', color: '#2563EB', borderBottom: '1px solid #E5E7EB', paddingBottom: '3px' }}>Most Utilised Rooms</h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
             <thead>
-              <tr style={{ backgroundColor: '#f0f0f0', textAlign: 'left' }}>
-                <th style={{ padding: '6px', border: '1px solid #ddd' }}>Room Number</th>
-                <th style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>Bookings Count</th>
+              <tr style={{ backgroundColor: '#F8FAFC', textAlign: 'left' }}>
+                <th style={{ padding: '6px', border: '1px solid #E5E7EB' }}>Room Number</th>
+                <th style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right' }}>Bookings Count</th>
               </tr>
             </thead>
             <tbody>
               {reportsData.mostUsedRooms.length === 0 ? (
                 <tr>
-                  <td colSpan={2} style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'center', color: '#888' }}>No bookings registered yet.</td>
+                  <td colSpan={2} style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'center', color: '#888' }}>No bookings registered yet.</td>
                 </tr>
               ) : (
                 reportsData.mostUsedRooms.map((r, i) => (
                   <tr key={i}>
-                    <td style={{ padding: '6px', border: '1px solid #ddd' }}>Room {r.room}</td>
-                    <td style={{ padding: '6px', border: '1px solid #ddd', textAlign: 'right' }}>{r.usageCount} Bookings</td>
+                    <td style={{ padding: '6px', border: '1px solid #E5E7EB' }}>Room {r.room}</td>
+                    <td style={{ padding: '6px', border: '1px solid #E5E7EB', textAlign: 'right' }}>{r.usageCount} Bookings</td>
                   </tr>
                 ))
               )}
@@ -617,7 +617,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Footer */}
-        <div style={{ marginTop: '50px', borderTop: '1px solid #ddd', paddingTop: '10px', textAlign: 'center', fontSize: '10px', color: '#888' }}>
+        <div style={{ marginTop: '50px', borderTop: '1px solid #E5E7EB', paddingTop: '10px', textAlign: 'center', fontSize: '10px', color: '#8B95A5' }}>
           <p style={{ margin: '0' }}>StayDesk CRM System &copy; {new Date().getFullYear()}. All Rights Reserved.</p>
           <p style={{ margin: '2px 0 0 0' }}>Confidential Report for Internal Hotel Operations Only.</p>
         </div>

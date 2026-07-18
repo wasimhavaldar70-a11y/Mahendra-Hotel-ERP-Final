@@ -110,7 +110,7 @@ export default function CheckOutPage() {
         </div>
 
         {/* List */}
-        <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
@@ -130,7 +130,7 @@ export default function CheckOutPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <tr className="bg-slate-50/50 border-b border-slate-200/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                     <th className="px-6 py-4">Room No</th>
                     <th className="px-6 py-4">Primary Guest</th>
                     <th className="px-6 py-4">Phone Number</th>
@@ -148,25 +148,25 @@ export default function CheckOutPage() {
                     
                     return (
                       <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4 font-extrabold text-slate-900">{room.room_number}</td>
-                        <td className="px-6 py-4 font-bold text-slate-800">{stay?.primary_customer?.full_name || 'Loading...'}</td>
-                        <td className="px-6 py-4 text-slate-500">{stay?.primary_customer?.phone || 'Loading...'}</td>
-                        <td className="px-6 py-4 text-slate-500">
+                        <td className="px-6 py-4 font-semibold text-slate-900">{room.room_number}</td>
+                        <td className="px-6 py-4 font-semibold text-slate-800">{stay?.primary_customer?.full_name || 'Loading...'}</td>
+                        <td className="px-6 py-4 text-slate-600">{stay?.primary_customer?.phone || 'Loading...'}</td>
+                        <td className="px-6 py-4 text-slate-600">
                           <span className="inline-flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-slate-300" />
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
                             {stay ? new Date(stay.check_in).toLocaleDateString('en-IN') : '-'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${isOverdue ? 'bg-red-50 text-red-700 border border-red-100 font-bold' : 'text-slate-500'}`}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${isOverdue ? 'bg-red-50 text-red-700 border border-red-200/60 font-semibold' : 'text-slate-600'}`}>
                             <Calendar className="w-3.5 h-3.5" />
                             {stay ? new Date(stay.expected_checkout).toLocaleDateString('en-IN') : '-'}
                             {isOverdue && ' (Overdue)'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-extrabold">
+                        <td className="px-6 py-4 font-semibold">
                           {stay && Number(stay.payment?.pending) > 0 ? (
-                            <span className="text-red-600">₹{stay.payment.pending}</span>
+                            <span className="text-red-600">₹{Number(stay.payment.pending).toLocaleString('en-IN')}</span>
                           ) : (
                             <span className="text-emerald-600">₹0</span>
                           )}
@@ -174,7 +174,7 @@ export default function CheckOutPage() {
                         <td className="px-6 py-4 text-right">
                           <button
                             onClick={() => setSelectedRoom(room)}
-                            className="bg-primary hover:bg-primary-hover text-white font-bold px-3 py-1.5 rounded-lg transition-colors text-[10px] inline-flex items-center gap-1 shadow-sm shadow-red-100"
+                            className="bg-primary hover:bg-primary-hover text-white font-semibold px-3 py-1.5 rounded-lg transition-colors text-[11px] inline-flex items-center gap-1 shadow-sm"
                           >
                             <DoorClosed className="w-3.5 h-3.5" />
                             Process Checkout

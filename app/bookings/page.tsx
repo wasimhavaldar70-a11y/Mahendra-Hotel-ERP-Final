@@ -372,9 +372,9 @@ export default function BookingsPage() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header Controls */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white p-6 rounded-3xl border border-slate-100/80 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm">
           <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
               <CalendarIcon className="w-5.5 h-5.5 text-primary" />
               Booking & Stay Timeline
             </h2>
@@ -385,13 +385,13 @@ export default function BookingsPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             {/* View Toggle */}
-            <div className="flex p-1 bg-slate-50 border border-slate-100 rounded-xl">
+            <div className="flex p-1 bg-slate-100/80 border border-slate-200/60 rounded-xl">
               <button
                 onClick={() => setActiveTab('timeline')}
-                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
+                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wider rounded-lg transition-all ${
                   activeTab === 'timeline'
-                    ? 'bg-white text-slate-800 shadow-sm border border-slate-100'
-                    : 'text-slate-400 hover:text-slate-600'
+                    ? 'bg-white text-primary shadow-sm border border-slate-200/40'
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 <CalendarIcon className="w-4 h-4" />
@@ -399,10 +399,10 @@ export default function BookingsPage() {
               </button>
               <button
                 onClick={() => setActiveTab('list')}
-                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
+                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold uppercase tracking-wider rounded-lg transition-all ${
                   activeTab === 'list'
-                    ? 'bg-white text-slate-800 shadow-sm border border-slate-100'
-                    : 'text-slate-400 hover:text-slate-600'
+                    ? 'bg-white text-primary shadow-sm border border-slate-200/40'
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 <List className="w-4 h-4" />
@@ -424,7 +424,7 @@ export default function BookingsPage() {
                 setShowNewCustomerForm(false);
                 setIsCreateOpen(true);
               }}
-              className="flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-primary to-rose-600 rounded-xl hover:shadow-lg hover:shadow-red-500/20 active:scale-95 transition-all"
+              className="flex items-center gap-2 px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white bg-primary hover:bg-primary-hover rounded-xl shadow-sm hover:shadow-md active:scale-98 transition-all"
             >
               <Plus className="w-4 h-4" />
               New Booking
@@ -434,10 +434,10 @@ export default function BookingsPage() {
 
         {/* TIMELINE CALENDAR VIEW */}
         {activeTab === 'timeline' && (
-          <div className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden flex flex-col">
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
             
             {/* Timeline Sub-header Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-b border-slate-50 gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-b border-slate-150 gap-4">
               <div className="flex items-center gap-1">
                 <button
                   onClick={handlePrevWeek}
@@ -448,7 +448,7 @@ export default function BookingsPage() {
                 </button>
                 <button
                   onClick={handleToday}
-                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-xs font-black uppercase tracking-wider text-slate-700 rounded-xl transition-all"
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-700 rounded-xl transition-all"
                 >
                   Today
                 </button>
@@ -461,7 +461,7 @@ export default function BookingsPage() {
                 </button>
               </div>
 
-              <div className="text-sm font-black text-slate-700 uppercase tracking-wider bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 flex items-center gap-2">
+              <div className="text-sm font-semibold text-slate-700 uppercase tracking-wider bg-slate-50 px-4 py-2 rounded-xl border border-slate-200/80 flex items-center gap-2">
                 <Clock className="w-4.5 h-4.5 text-slate-400" />
                 <span>
                   {startDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -480,9 +480,9 @@ export default function BookingsPage() {
             >
               <div className="min-w-[1940px]"> {/* 260px (Left Col) + 14 * 120px (Date Cols) */}
                 {/* Grid Headings */}
-                <div className="flex bg-slate-50/50 border-b border-slate-100">
+                <div className="flex bg-slate-50/50 border-b border-slate-200/60">
                   {/* Left Column Spacer */}
-                  <div className="w-64 p-4 font-black text-slate-400 text-[10px] uppercase tracking-wider border-r border-slate-100 flex-shrink-0 flex items-center bg-white sticky left-0 z-10">
+                  <div className="w-64 p-4 font-bold text-slate-400 text-[11px] uppercase tracking-wider border-r border-slate-200/60 flex-shrink-0 flex items-center bg-white sticky left-0 z-10">
                     Room Details
                   </div>
                   {/* Date Columns */}
@@ -491,16 +491,16 @@ export default function BookingsPage() {
                     return (
                       <div
                         key={idx}
-                        className={`w-[120px] p-3 text-center border-r border-slate-100 flex-shrink-0 flex flex-col justify-center items-center ${
-                          isToday ? 'bg-primary/5 relative' : ''
+                        className={`w-[120px] p-3 text-center border-r border-slate-200/60 flex-shrink-0 flex flex-col justify-center items-center ${
+                          isToday ? 'bg-primary/[0.03] relative' : ''
                         }`}
                       >
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                        <span className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">
                           {date.toLocaleDateString('en-IN', { weekday: 'short' })}
                         </span>
-                        <span className={`text-base font-black mt-0.5 w-8 h-8 flex items-center justify-center rounded-xl transition-all ${
+                        <span className={`text-sm font-semibold mt-1 w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
                           isToday 
-                            ? 'bg-primary text-white shadow-md shadow-red-500/20' 
+                            ? 'bg-primary text-white shadow-sm' 
                             : 'text-slate-700'
                         }`}>
                           {date.getDate()}
@@ -536,14 +536,14 @@ export default function BookingsPage() {
                         {/* Sticky Left Column: Room info */}
                         <div className="w-64 p-4 border-r border-slate-100 flex-shrink-0 flex flex-col justify-center bg-white sticky left-0 z-10 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.05)]">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-black text-slate-800">
+                            <span className="text-xs font-semibold text-slate-800">
                               Room {room.room_number}
                             </span>
-                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                              room.status === 'Ready' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                              room.status === 'Occupied' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
-                              room.status === 'Maintenance' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                              'bg-slate-50 text-slate-500 border border-slate-150'
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                              room.status === 'Ready' ? 'bg-emerald-50/80 text-emerald-700 border-emerald-200/60' :
+                              room.status === 'Occupied' ? 'bg-indigo-50/80 text-indigo-700 border-indigo-200/60' :
+                              room.status === 'Maintenance' ? 'bg-amber-50/80 text-amber-700 border-amber-200/60' :
+                              'bg-slate-50 text-slate-500 border border-slate-200'
                             }`}>
                               {room.status}
                             </span>
@@ -562,11 +562,11 @@ export default function BookingsPage() {
                               <div
                                 key={colIdx}
                                 onClick={() => handleCellClick(room.id, date)}
-                                className={`w-[120px] border-r border-slate-100/60 cursor-pointer flex-shrink-0 relative group hover:bg-slate-50/80 transition-all ${
+                                className={`w-[120px] border-r border-slate-200/60 cursor-pointer flex-shrink-0 relative group hover:bg-slate-50/80 transition-all ${
                                   isToday ? 'bg-primary/[0.01]' : ''
                                 }`}
                               >
-                                <span className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-300 font-black opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-400 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
                                   + BOOK
                                 </span>
                               </div>
@@ -604,7 +604,7 @@ export default function BookingsPage() {
                                   left: `${leftPx + 4}px`,
                                   width: `${widthPx - 8}px`
                                 }}
-                                className={`absolute top-3 bottom-3 rounded-2xl border px-3 flex flex-col justify-center cursor-pointer shadow-sm hover:shadow-md hover:scale-[1.01] active:scale-99 transition-all duration-200 overflow-hidden ${
+                                className={`absolute top-3 bottom-3 rounded-xl border px-3 flex flex-col justify-center cursor-pointer shadow-sm hover:shadow-md hover:scale-[1.01] active:scale-99 transition-all duration-200 overflow-hidden ${
                                   isReserved 
                                     ? 'bg-gradient-to-r from-indigo-500/10 to-purple-600/10 text-indigo-700 border-indigo-200/50 hover:bg-indigo-50/20' 
                                     : isActive 
@@ -617,7 +617,7 @@ export default function BookingsPage() {
                                     isReserved ? 'bg-indigo-500 animate-pulse' :
                                     isActive ? 'bg-emerald-500' : 'bg-slate-400'
                                   }`}></div>
-                                  <span className="text-xs font-black truncate">
+                                  <span className="text-xs font-semibold truncate">
                                     {b.primary_customer?.full_name || 'Guest'}
                                   </span>
                                 </div>
@@ -641,7 +641,7 @@ export default function BookingsPage() {
 
         {/* LIST VIEW TAB */}
         {activeTab === 'list' && (
-          <div className="bg-white rounded-3xl border border-slate-100/80 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
             {/* Search & Filters */}
             <div className="p-6 border-b border-slate-50 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               {/* Search Bar */}
@@ -652,9 +652,7 @@ export default function BookingsPage() {
                 <input
                   type="text"
                   placeholder="Search bookings (Guest Name, Phone, Room)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="block w-full rounded-xl border border-slate-200 bg-white py-3.5 pl-10 pr-3 text-xs font-bold placeholder-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
+                  className="block w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-3 text-xs font-semibold placeholder-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
                 />
               </div>
 
@@ -664,9 +662,9 @@ export default function BookingsPage() {
                   <button
                     key={status}
                     onClick={() => setStatusFilter(status)}
-                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all ${
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold uppercase tracking-wider border transition-all ${
                       statusFilter === status
-                        ? 'bg-[#0F4C45] text-white border-[#0F4C45] shadow-sm'
+                        ? 'bg-primary text-white border-primary shadow-sm'
                         : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-500'
                     }`}
                   >
@@ -680,17 +678,17 @@ export default function BookingsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-100">
-                    <th className="p-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Guest</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Room</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Check In / Out</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Status</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Total Price</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-wider text-slate-400">Advance / Pending</th>
-                    <th className="p-4 text-[10px] font-black uppercase tracking-wider text-slate-400 text-right">Actions</th>
+                  <tr className="bg-slate-50/50 border-b border-slate-200/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className="p-4">Guest</th>
+                    <th className="p-4">Room</th>
+                    <th className="p-4">Check In / Out</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4">Total Price</th>
+                    <th className="p-4">Advance / Pending</th>
+                    <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
+                <tbody className="divide-y divide-slate-100 text-slate-700 text-xs font-medium">
                   {filteredListBookings.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="p-12 text-center text-slate-400 italic text-xs">
@@ -706,7 +704,7 @@ export default function BookingsPage() {
                         <tr key={b.id} className="hover:bg-slate-50/40 transition-colors">
                           <td className="p-4">
                             <div className="flex flex-col">
-                              <span className="text-xs font-black text-slate-800">{b.primary_customer?.full_name}</span>
+                              <span className="text-xs font-semibold text-slate-800">{b.primary_customer?.full_name}</span>
                               <span className="text-[10px] text-slate-400 font-bold mt-0.5 flex items-center gap-1">
                                 <Phone className="w-3 h-3" /> {b.primary_customer?.phone}
                               </span>
@@ -714,7 +712,7 @@ export default function BookingsPage() {
                           </td>
                           <td className="p-4">
                             <div className="flex flex-col">
-                              <span className="text-xs font-black text-slate-800">Room {b.room?.room_number}</span>
+                              <span className="text-xs font-semibold text-slate-800">Room {b.room?.room_number}</span>
                               <span className="text-[10px] text-slate-400 font-bold mt-0.5">{b.room?.room_type}</span>
                             </div>
                           </td>
@@ -729,29 +727,29 @@ export default function BookingsPage() {
                             </div>
                           </td>
                           <td className="p-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
-                              b.status === 'Pending' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                              b.status === 'Reserved' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                              b.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                              b.status === 'Completed' ? 'bg-slate-100 text-slate-600 border-slate-200' :
-                              'bg-rose-50 text-rose-700 border-rose-100'
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border ${
+                              b.status === 'Pending' ? 'bg-amber-50 text-amber-700 border-amber-200/60' :
+                              b.status === 'Reserved' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
+                              b.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
+                              b.status === 'Completed' ? 'bg-slate-100 text-slate-600 border-slate-200/60' :
+                              'bg-rose-50 text-rose-700 border-rose-200/60'
                             }`}>
                               {b.status}
                             </span>
                           </td>
-                          <td className="p-4 text-xs font-black text-slate-800">
-                            ₹{b.payment ? Number(b.payment.room_price).toLocaleString() : 'N/A'}
+                          <td className="p-4 text-xs font-semibold text-slate-800">
+                            ₹{b.payment ? Number(b.payment.room_price).toLocaleString('en-IN') : 'N/A'}
                           </td>
                           <td className="p-4">
                             <div className="flex flex-col">
-                              <span className="text-xs font-bold text-emerald-600">Paid: ₹{b.payment ? Number(b.payment.advance).toLocaleString() : '0'}</span>
-                              <span className="text-[10px] font-bold text-amber-600 mt-0.5">Due: ₹{b.payment ? Number(b.payment.pending).toLocaleString() : '0'}</span>
+                              <span className="text-xs font-bold text-emerald-600">Paid: ₹{b.payment ? Number(b.payment.advance).toLocaleString('en-IN') : '0'}</span>
+                              <span className="text-[10px] font-bold text-amber-600 mt-0.5">Due: ₹{b.payment ? Number(b.payment.pending).toLocaleString('en-IN') : '0'}</span>
                             </div>
                           </td>
                           <td className="p-4 text-right">
                             <button
                               onClick={() => setSelectedBooking(b)}
-                              className="px-3.5 py-2 border border-slate-200 hover:border-slate-800 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors bg-white hover:bg-slate-50"
+                              className="px-3 py-1.5 border border-slate-200 hover:border-slate-300 text-xs font-semibold rounded-lg transition-colors bg-white hover:bg-slate-50 text-slate-700 shadow-sm"
                             >
                               Manage
                             </button>

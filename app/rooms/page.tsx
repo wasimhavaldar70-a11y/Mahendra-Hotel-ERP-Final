@@ -154,13 +154,13 @@ export default function RoomsPage() {
   const getStatusBadge = (status: RoomStatus) => {
     switch (status) {
       case 'Ready':
-        return 'bg-[#0F4C45]/5 text-[#0F4C45] border-[#0F4C45]/20';
+        return 'bg-green-50 text-green-700 border-green-200/60';
       case 'Occupied':
-        return 'bg-red-50 text-red-700 border-red-200';
+        return 'bg-red-50 text-red-700 border-red-200/60';
       case 'Maintenance':
-        return 'bg-slate-50 text-slate-700 border-slate-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200/60';
       case 'Cleaning':
-        return 'bg-[#D4AF37]/5 text-[#B8902C] border-[#D4AF37]/20';
+        return 'bg-amber-50 text-amber-700 border-amber-200/60';
     }
   };
 
@@ -189,8 +189,8 @@ export default function RoomsPage() {
         {/* Add Room Modal Drawer */}
         {showAddForm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-[24px] w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-50 flex items-center justify-between">
+            <div className="bg-white rounded-xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-800">Add New Hotel Room</h3>
                 <button onClick={() => setShowAddForm(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
                   <X className="w-4 h-4" />
@@ -336,8 +336,8 @@ export default function RoomsPage() {
         )}
 
         {/* Filter Bar */}
-        <div className="bg-white p-4 rounded-[24px] border border-[#E2E8F0]/40 shadow-sm flex flex-wrap gap-4 items-center">
-          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1">
+        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-wrap gap-4 items-center">
+          <span className="text-slate-400 font-semibold text-[10px] uppercase tracking-wider flex items-center gap-1">
             <Filter className="w-3.5 h-3.5" />
             Filters:
           </span>
@@ -375,7 +375,7 @@ export default function RoomsPage() {
         </div>
 
         {/* Rooms Table List */}
-        <div className="bg-white rounded-[24px] border border-[#E2E8F0]/40 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
@@ -388,7 +388,7 @@ export default function RoomsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <tr className="bg-slate-50/50 border-b border-slate-200/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                     <th className="px-6 py-4">Room Number</th>
                     <th className="px-6 py-4">Floor</th>
                     <th className="px-6 py-4">Room Type</th>
@@ -401,13 +401,13 @@ export default function RoomsPage() {
                 <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
                   {filteredRooms.map((room) => (
                     <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 font-extrabold text-slate-900">{room.room_number}</td>
-                      <td className="px-6 py-4 text-slate-500">{room.floor}</td>
-                      <td className="px-6 py-4">{room.room_type}</td>
-                      <td className="px-6 py-4 text-slate-500">{room.capacity} Persons</td>
-                      <td className="px-6 py-4 font-bold text-slate-800">₹{room.price}</td>
+                      <td className="px-6 py-4 font-semibold text-slate-900">{room.room_number}</td>
+                      <td className="px-6 py-4 text-slate-600">{room.floor}</td>
+                      <td className="px-6 py-4 text-slate-700">{room.room_type}</td>
+                      <td className="px-6 py-4 text-slate-600">{room.capacity} Persons</td>
+                      <td className="px-6 py-4 font-bold text-slate-900">₹{Number(room.price).toLocaleString('en-IN')}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(room.status)}`}>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadge(room.status)}`}>
                           {room.status}
                         </span>
                       </td>
@@ -417,7 +417,7 @@ export default function RoomsPage() {
                         ) : (
                           <button
                             onClick={() => handleToggleStatus(room.id, room.status)}
-                            className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-600 font-bold px-3 py-1.5 rounded-lg transition-colors text-[10px]"
+                            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-semibold px-2.5 py-1.5 rounded-lg transition-colors text-[11px]"
                           >
                             Cycle Status
                           </button>
