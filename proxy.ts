@@ -47,6 +47,23 @@ export async function proxy(request: NextRequest) {
 
   const role = user.app_metadata?.role || 'hotel_owner';
 
+  // Prevent receptionists from accessing settings screens
+  if (pathname.startsWith('/settings') && role === 'receptionist') {
+    const dashboardRedirect = NextResponse.redirect(new URL('/dashboard', request.url));
+    response.cookies.getAll().forEach(cookie => {
+      dashboardRedirect.cookies.set(cookie.name, cookie.value, {
+        path: cookie.path,
+        domain: cookie.domain,
+        maxAge: cookie.maxAge,
+        secure: cookie.secure,
+        sameSite: cookie.sameSite,
+        httpOnly: cookie.httpOnly,
+        expires: cookie.expires
+      });
+    });
+    return dashboardRedirect;
+  }
+
   // Role-based routing restrictions
   if (pathname.startsWith('/super-admin') && role !== 'superadmin') {
     const dashboardRedirect = NextResponse.redirect(new URL('/dashboard', request.url));

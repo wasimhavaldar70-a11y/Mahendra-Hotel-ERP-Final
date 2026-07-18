@@ -139,6 +139,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   if (!currentUser) return null;
 
   const isSuperAdmin = currentUser.role === 'superadmin';
+  const isReceptionist = currentUser.role === 'receptionist';
 
   // Navigation Items
   const menuItems = isSuperAdmin
@@ -154,7 +155,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Check Out', path: '/check-out', icon: DoorClosed },
         { name: 'Payments', path: '/payments', icon: Coins },
         { name: 'Reports', path: '/reports', icon: FilePieChart },
-        { name: 'Settings', path: '/settings', icon: Settings },
+        ...(!isReceptionist ? [{ name: 'Settings', path: '/settings', icon: Settings }] : []),
       ];
 
   return (

@@ -24,6 +24,7 @@ export default function RoomsPage() {
   const [currentHotel, setCurrentHotel] = useState<any>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>('receptionist');
   
   // Filter states
   const [floorFilter, setFloorFilter] = useState('All');
@@ -54,6 +55,7 @@ export default function RoomsPage() {
     const session = getSessionUser();
     if (session && session.hotel) {
       setCurrentHotel(session.hotel);
+      setUserRole(session.user?.role || 'receptionist');
       loadRooms(session.hotel.id);
       
       const channel = new BroadcastChannel('hotelflow-sync');
@@ -177,13 +179,15 @@ export default function RoomsPage() {
             <p className="text-xs text-slate-400 font-semibold mt-0.5">Define room configurations, pricing, and update clean status.</p>
           </div>
 
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            Add New Room
-          </button>
+          {userRole !== 'receptionist' && (
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              Add New Room
+            </button>
+          )}
         </div>
 
         {/* Add Room Modal Drawer */}
