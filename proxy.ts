@@ -1,23 +1,11 @@
 // ========================================================
-// StayDesk / HotelFlow Next.js Request Proxy
+// StayDesk / HotelFlow Next.js Request Proxy (Middleware)
 // Location: proxy.ts
 // ========================================================
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-const isRealSupabase = !!(
-  supabaseUrl && 
-  supabaseAnonKey && 
-  !supabaseAnonKey.includes('[YOUR-') && 
-  !supabaseUrl.includes('[YOUR-')
-);
-
-const supabase = isRealSupabase ? createClient(supabaseUrl!, supabaseAnonKey!) : null;
+import { updateSession } from './lib/supabase/middleware';
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -36,45 +24,76 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionCookie = request.cookies.get('hf_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // Refresh session cookies and retrieve the updated session and user
+  const { response, user } = await updateSession(request);
+
+  if (!user) {
+    // If no user is logged in, redirect to login page
+    const loginRedirect = NextResponse.redirect(new URL('/login', request.url));
+    // Propagate cookie clears if any occurred during updateSession
+    response.cookies.getAll().forEach(cookie => {
+      loginRedirect.cookies.set(cookie.name, cookie.value, {
+        path: cookie.path,
+        domain: cookie.domain,
+        maxAge: cookie.maxAge,
+        secure: cookie.secure,
+        sameSite: cookie.sameSite,
+        httpOnly: cookie.httpOnly,
+        expires: cookie.expires
+      });
+    });
+    return loginRedirect;
   }
 
-  let session: any;
-  try {
-    session = JSON.parse(decodeURIComponent(sessionCookie));
-  } catch (e) {
-    // Clear invalid cookie
-    const response = NextResponse.redirect(new URL('/login', request.url));
-    response.cookies.delete('hf_session');
-    return response;
-  }
-
-  if (isRealSupabase && supabase) {
-    const token = session?.access_token;
-    if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) {
-      const response = NextResponse.redirect(new URL('/login', request.url));
-      response.cookies.delete('hf_session');
-      return response;
-    }
-  }
+  const role = user.app_metadata?.role || 'hotel_owner';
 
   // Role-based routing restrictions
-  if (pathname.startsWith('/super-admin') && session?.user?.role !== 'superadmin') {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  if (pathname.startsWith('/super-admin') && role !== 'superadmin') {
+    const dashboardRedirect = NextResponse.redirect(new URL('/dashboard', request.url));
+    // Sync refreshed cookies to the redirect response
+    response.cookies.getAll().forEach(cookie => {
+      dashboardRedirect.cookies.set(cookie.name, cookie.value, {
+        path: cookie.path,
+        domain: cookie.domain,
+        maxAge: cookie.maxAge,
+        secure: cookie.secure,
+        sameSite: cookie.sameSite,
+        httpOnly: cookie.httpOnly,
+        expires: cookie.expires
+      });
+    });
+    return dashboardRedirect;
   }
 
-  if ((pathname.startsWith('/dashboard') || pathname.startsWith('/rooms') || pathname.startsWith('/bookings') || pathname.startsWith('/check-in') || pathname.startsWith('/check-out') || pathname.startsWith('/customers') || pathname.startsWith('/payments') || pathname.startsWith('/reports') || pathname.startsWith('/settings')) && session?.user?.role === 'superadmin') {
-    return NextResponse.redirect(new URL('/super-admin', request.url));
+  if (
+    (pathname.startsWith('/dashboard') || 
+     pathname.startsWith('/rooms') || 
+     pathname.startsWith('/bookings') || 
+     pathname.startsWith('/check-in') || 
+     pathname.startsWith('/check-out') || 
+     pathname.startsWith('/customers') || 
+     pathname.startsWith('/payments') || 
+     pathname.startsWith('/reports') || 
+     pathname.startsWith('/settings')) && 
+    role === 'superadmin'
+  ) {
+    const superadminRedirect = NextResponse.redirect(new URL('/super-admin', request.url));
+    // Sync refreshed cookies to the redirect response
+    response.cookies.getAll().forEach(cookie => {
+      superadminRedirect.cookies.set(cookie.name, cookie.value, {
+        path: cookie.path,
+        domain: cookie.domain,
+        maxAge: cookie.maxAge,
+        secure: cookie.secure,
+        sameSite: cookie.sameSite,
+        httpOnly: cookie.httpOnly,
+        expires: cookie.expires
+      });
+    });
+    return superadminRedirect;
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export default proxy;

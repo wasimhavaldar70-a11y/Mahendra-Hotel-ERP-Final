@@ -42,3 +42,10 @@ next-env.d.ts
 
 # scratch directory
 /scratch/
+
+# agents
+.agents/
+skills-lock.json
+
+# temporary compilation files
+compiled_auth_session_code.txt

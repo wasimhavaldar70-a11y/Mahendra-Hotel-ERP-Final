@@ -11,7 +11,7 @@ export { supabase, isRealSupabase };
 // Unified database operations client
 export const db = supabaseDb;
 
-// Mock/Real Session helpers
+// Mock/Real Session helpers (Syncing local storage read-only cache for layout/UI)
 export const getSessionUser = () => {
   if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem('hf_session');
@@ -22,16 +22,14 @@ export const setSessionUser = (sessionData: any) => {
   if (typeof window === 'undefined') return;
   if (sessionData) {
     localStorage.setItem('hf_session', JSON.stringify(sessionData));
-    // Set cookie for Next.js Middleware and API routes to access the session
-    document.cookie = `hf_session=${encodeURIComponent(JSON.stringify(sessionData))}; path=/; max-age=86400; SameSite=Lax`;
   } else {
     localStorage.removeItem('hf_session');
-    // Clear the session cookie
-    document.cookie = 'hf_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   }
+  // Clear any legacy custom hf_session cookie to ensure no collision with official Supabase cookies
+  document.cookie = 'hf_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 };
 
-// Subscribe to auth state changes to auto-sync cookie & localStorage when token refreshes
+// Subscribe to auth state changes to auto-sync localStorage cache when token refreshes
 if (typeof window !== 'undefined' && supabase) {
   supabase.auth.onAuthStateChange(async (event, session) => {
     console.log(`[Supabase Auth Event] ${event}`);
@@ -43,6 +41,24 @@ if (typeof window !== 'undefined' && supabase) {
       const userRole = session.user.app_metadata?.role || currentSession?.user?.role || 'hotel_owner';
       const hotelId = session.user.app_metadata?.hotel_id || currentSession?.user?.hotel_id || null;
       
+      let hotel = currentSession?.hotel || null;
+      
+      // Lazily resolve hotel details if missing
+      if (hotelId && (!hotel || hotel.id !== hotelId)) {
+        try {
+          const { data } = await supabase
+            .from('hotels')
+            .select('*')
+            .eq('id', hotelId)
+            .maybeSingle();
+          if (data) {
+            hotel = data;
+          }
+        } catch (err) {
+          console.error('Failed to fetch hotel details in client auth listener:', err);
+        }
+      }
+      
       setSessionUser({
         user: {
           id: session.user.id,
@@ -51,7 +67,7 @@ if (typeof window !== 'undefined' && supabase) {
           hotel_id: hotelId,
           created_at: session.user.created_at
         },
-        hotel: currentSession?.hotel || null,
+        hotel: hotel,
         access_token: session.access_token
       });
     } else if (event === 'SIGNED_OUT') {

@@ -10,6 +10,7 @@
     "test": "node tests/pricing.test.js"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.110.4",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
