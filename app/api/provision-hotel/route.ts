@@ -157,6 +157,29 @@ export async function POST(request: Request) {
       throw new Error(authError?.message || 'Failed to create user account via Supabase Admin API');
     }
 
+    // Ensure standard storage buckets exist on the storage backend using admin privileges
+    try {
+      const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
+      if (listError) throw listError;
+
+      if (!buckets?.some((b: any) => b.id === 'customer-documents')) {
+        const { error: bucketError } = await supabaseAdmin.storage.createBucket('customer-documents', {
+          public: false,
+          fileSizeLimit: 5242880 // 5MB
+        });
+        if (bucketError) throw bucketError;
+      }
+      if (!buckets?.some((b: any) => b.id === 'hotel-assets')) {
+        const { error: bucketError } = await supabaseAdmin.storage.createBucket('hotel-assets', {
+          public: true,
+          fileSizeLimit: 5242880 // 5MB
+        });
+        if (bucketError) throw bucketError;
+      }
+    } catch (err: any) {
+      logger.warn('Provision', 'Non-blocking storage bucket initialization check failed: ' + (err.message || err));
+    }
+
     // C. Ensure matching role and reference mapping in public schemas
     await pgClient.query(`
       INSERT INTO public.users (id, email, role, hotel_id)

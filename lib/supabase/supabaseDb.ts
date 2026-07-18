@@ -33,18 +33,6 @@ const uploadImageToStorage = async (hotelId: string, customerId: string, side: '
   if (!base64Data.startsWith('data:')) return base64Data; // Already URL/path
 
   try {
-    // Check if bucket exists
-    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
-    if (listError) throw listError;
-
-    if (!buckets?.some(b => b.id === 'customer-documents')) {
-      const { error: createError } = await supabase.storage.createBucket('customer-documents', {
-        public: false,
-        fileSizeLimit: 5242880 // 5MB
-      });
-      if (createError) throw createError;
-    }
-
     const blob = dataURItoBlob(base64Data);
     const fileExt = blob.type.split('/')[1] || 'png';
     const filePath = `${hotelId}/${customerId}/${side}-${Date.now()}.${fileExt}`;
@@ -70,16 +58,6 @@ const uploadRoomImageToStorage = async (hotelId: string, roomId: string, base64D
   if (!base64Data.startsWith('data:')) return base64Data;
 
   try {
-    // Check if hotel-assets bucket exists
-    const { data: buckets } = await supabase.storage.listBuckets();
-    if (!buckets?.some(b => b.id === 'hotel-assets')) {
-      const { error: createError } = await supabase.storage.createBucket('hotel-assets', {
-        public: true,
-        fileSizeLimit: 5242880 // 5MB
-      });
-      if (createError) throw createError;
-    }
-
     const blob = dataURItoBlob(base64Data);
     const fileExt = blob.type.split('/')[1] || 'png';
     const filePath = `${hotelId}/rooms/${roomId}/${Date.now()}.${fileExt}`;
