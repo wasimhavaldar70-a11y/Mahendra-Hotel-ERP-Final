@@ -51,20 +51,31 @@ export async function POST(request: Request) {
       }
     }
 
-    // Ensure pgcrypto is available for crypt
-    await pgClient.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
-
-    // Update password in auth.users
-    const result = await pgClient.query(
-      `UPDATE auth.users 
-       SET encrypted_password = crypt($1::text, gen_salt('bf', 10)),
-           updated_at = now()
-       WHERE email = $2::text;`,
-      [password, email.toLowerCase().trim()]
-    );
-
-    if (result.rowCount === 0) {
+    // Resolve User ID by email from public.users mapping table
+    const lowercaseEmail = email.toLowerCase().trim();
+    const userRes = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+    
+    if (userRes.rows.length === 0) {
       return NextResponse.json({ error: 'No user account found for this email' }, { status: 404 });
+    }
+    const targetUserId = userRes.rows[0].id;
+
+    // Securely update password using GoTrue Admin Client
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey || serviceRoleKey.includes('[YOUR-')) {
+      return NextResponse.json({ error: 'Configuration Error: SUPABASE_SERVICE_ROLE_KEY is not configured on the server.' }, { status: 500 });
+    }
+
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAdmin = createClient(supabaseUrl!, serviceRoleKey!);
+
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+      password: password
+    });
+
+    if (authError) {
+      return NextResponse.json({ error: authError.message || 'Failed to update user account password via GoTrue Admin API' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
