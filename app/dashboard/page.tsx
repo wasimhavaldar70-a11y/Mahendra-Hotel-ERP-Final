@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import RoomGrid from '../../components/RoomGrid';
 import RoomDetailModal from '../../components/RoomDetailModal';
-import { db, getSessionUser } from '../../lib/supabase/client';
+import { db, getSessionUser, setSessionUser } from '../../lib/supabase/client';
 import { Room, Hotel } from '../../types';
 import { 
   IndianRupee, 
@@ -129,6 +129,7 @@ export default function DashboardPage() {
 
     if (!session.hotel) {
       alert('Error: No hotel linked to this user account.');
+      setSessionUser(null);
       window.location.href = '/login';
       return;
     }
