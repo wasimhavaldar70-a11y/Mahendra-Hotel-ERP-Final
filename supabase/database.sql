@@ -223,22 +223,32 @@ $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 -- Helper function to check access to customer documents (bypasses soft delete check of customers table RLS)
 CREATE OR REPLACE FUNCTION check_document_access(p_customer_id UUID)
 RETURNS BOOLEAN AS $$
+DECLARE
+  v_exists BOOLEAN;
+BEGIN
   SELECT EXISTS (
     SELECT 1 FROM public.customers
     WHERE id = p_customer_id
     AND hotel_id = get_user_hotel_id()
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+  ) INTO v_exists;
+  RETURN v_exists;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 -- Helper function to check access to payments (bypasses soft delete check of check_ins table RLS)
 CREATE OR REPLACE FUNCTION check_payment_access(p_checkin_id UUID)
 RETURNS BOOLEAN AS $$
+DECLARE
+  v_exists BOOLEAN;
+BEGIN
   SELECT EXISTS (
     SELECT 1 FROM public.check_ins
     WHERE id = p_checkin_id
     AND hotel_id = get_user_hotel_id()
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+  ) INTO v_exists;
+  RETURN v_exists;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 -- Policies for Hotels
 CREATE POLICY "Super Admins can select hotels" ON hotels 
