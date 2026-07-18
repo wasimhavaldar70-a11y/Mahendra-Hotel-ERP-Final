@@ -669,13 +669,13 @@ BEGIN
     AND check_in AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
     AND deleted_at IS NULL;
 
-  -- 3. Checkouts Count Today (status completed and expected_checkout is today)
+  -- 3. Checkouts Count Today (status completed and actual_checkout is today)
   SELECT COUNT(*)::INT INTO v_checkouts_count
   FROM public.check_ins
   WHERE hotel_id = p_hotel_id
     AND status = 'Completed'
-    AND expected_checkout AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
-    AND expected_checkout AT TIME ZONE 'Asia/Kolkata'::text < date_trunc('day', timezone('Asia/Kolkata'::text, now())) + INTERVAL '1 day'
+    AND actual_checkout AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
+    AND actual_checkout AT TIME ZONE 'Asia/Kolkata'::text < date_trunc('day', timezone('Asia/Kolkata'::text, now())) + INTERVAL '1 day'
     AND deleted_at IS NULL;
 
   -- 4. Room Counts
@@ -726,6 +726,7 @@ ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME
 ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS actual_checkout TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.hotels ADD COLUMN IF NOT EXISTS cms_data JSONB DEFAULT '{}'::jsonb;
 
 -- 3. Add Arithmetic Check Constraints
@@ -1120,8 +1121,10 @@ BEGIN
   SELECT room_id INTO v_room_id FROM public.check_ins
   WHERE id = p_checkin_id AND hotel_id = p_hotel_id;
 
-  -- 2. Set Check-In status to Completed
-  UPDATE public.check_ins SET status = 'Completed'
+  -- 2. Set Check-In status to Completed and update actual checkout time
+  UPDATE public.check_ins 
+  SET status = 'Completed', 
+      actual_checkout = timezone('utc'::text, now())
   WHERE id = p_checkin_id AND hotel_id = p_hotel_id;
 
   -- 3. Settle payment
