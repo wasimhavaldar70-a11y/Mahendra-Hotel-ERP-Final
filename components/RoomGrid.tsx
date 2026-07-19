@@ -43,30 +43,30 @@ export default function RoomGrid({ rooms, hotelId, activeStays, onRoomClick }: R
     switch (status) {
       case 'Ready':
         return {
-          card: 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500/20 shadow-emerald-100/50',
-          badge: 'bg-white/20 text-white border-white/20',
-          subText: 'text-emerald-100/80',
+          card: 'bg-[#15803D] hover:bg-[#115E59] text-white border-[#115E59]/40 shadow-sm hover:shadow-md',
+          badge: 'bg-white/10 text-white border-white/15 backdrop-blur-sm',
+          subText: 'text-teal-50/80',
           primaryText: 'text-white'
         };
       case 'Occupied':
         return {
-          card: 'bg-rose-600 hover:bg-rose-700 text-white border-rose-500/20 shadow-rose-100/50',
-          badge: 'bg-white/20 text-white border-white/20',
-          subText: 'text-rose-100/80',
+          card: 'bg-[#B91C1C] hover:bg-[#991B1B] text-white border-[#991B1B]/40 shadow-sm hover:shadow-md',
+          badge: 'bg-white/10 text-white border-white/15 backdrop-blur-sm',
+          subText: 'text-rose-50/80',
           primaryText: 'text-white'
         };
       case 'Cleaning':
         return {
-          card: 'bg-amber-500 hover:bg-amber-600 text-white border-amber-400/20 shadow-amber-100/50',
-          badge: 'bg-white/20 text-white border-white/20',
-          subText: 'text-amber-100/80',
+          card: 'bg-[#D97706] hover:bg-[#B45309] text-white border-[#B45309]/40 shadow-sm hover:shadow-md',
+          badge: 'bg-white/10 text-white border-white/15 backdrop-blur-sm',
+          subText: 'text-amber-50/80',
           primaryText: 'text-white'
         };
       case 'Maintenance':
         return {
-          card: 'bg-slate-500 hover:bg-slate-600 text-white border-slate-400/20 shadow-slate-100/50',
-          badge: 'bg-white/20 text-white border-white/20',
-          subText: 'text-slate-200/80',
+          card: 'bg-[#4B5563] hover:bg-[#374151] text-white border-[#374151]/40 shadow-sm hover:shadow-md',
+          badge: 'bg-white/10 text-white border-white/15 backdrop-blur-sm',
+          subText: 'text-slate-100/80',
           primaryText: 'text-white'
         };
     }
@@ -95,7 +95,7 @@ export default function RoomGrid({ rooms, hotelId, activeStays, onRoomClick }: R
                   <button
                     key={room.id}
                     onClick={() => onRoomClick(room)}
-                    className={`flex flex-col p-4 rounded-xl text-left border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer select-none transform hover:-translate-y-0.5 active:scale-[0.98] ${styles.card}`}
+                    className={`flex flex-col p-4 rounded-2xl text-left border shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer select-none transform hover:-translate-y-0.5 active:scale-[0.98] ${styles.card}`}
                   >
                     {/* Status Icons */}
                     <div className="flex justify-between items-center w-full">

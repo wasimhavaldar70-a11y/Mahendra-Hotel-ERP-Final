@@ -353,18 +353,18 @@ export default function DashboardPage() {
         {/* Large Stats Cards Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
           {/* Revenue */}
-          <div className="col-span-2 bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="col-span-2 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Today's Revenue</span>
               <span className="text-2xl font-bold text-slate-900">₹{stats.todayRevenue.toLocaleString('en-IN')}</span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-primary flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-[#0F5D52]/10 text-primary flex items-center justify-center">
               <IndianRupee className="w-5 h-5" />
             </div>
           </div>
 
           {/* Check-ins */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Check-ins</span>
               <span className="text-2xl font-bold text-slate-900">{stats.checkInsCount}</span>
@@ -375,7 +375,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Checkouts */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Checkouts</span>
               <span className="text-2xl font-bold text-slate-900">{stats.checkOutsCount}</span>
@@ -386,18 +386,18 @@ export default function DashboardPage() {
           </div>
 
           {/* Occupied */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Occupied</span>
               <span className="text-2xl font-bold text-slate-900">{stats.occupiedRooms}</span>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-red-50 text-red-650 flex items-center justify-center">
               <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></div>
             </div>
           </div>
 
           {/* Available */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Available</span>
               <span className="text-2xl font-bold text-slate-900">{stats.availableRooms}</span>
@@ -409,7 +409,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Room Status Categories Mini Bar */}
-        <div className="flex flex-wrap gap-4 items-center bg-white py-3 px-5 rounded-xl border border-slate-200/80 shadow-sm text-xs font-semibold text-slate-500">
+        <div className="flex flex-wrap gap-4 items-center bg-white py-3 px-5 rounded-2xl border border-slate-100 shadow-sm text-xs font-semibold text-slate-500">
           <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Quick Legend:</span>
           
           <div className="flex items-center gap-2">
@@ -435,7 +435,7 @@ export default function DashboardPage() {
 
         {/* PENDING BOOKING REQUESTS WIDGET */}
         {pendingRequests.length > 0 && (
-          <div className="bg-white p-6 rounded-xl border border-red-100 shadow-sm space-y-4">
+          <div className="bg-white p-6 rounded-2xl border border-red-50 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-50 pb-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
@@ -461,12 +461,12 @@ export default function DashboardPage() {
                     const matching = rooms.find(r => r.room_type === req.room_type && r.status === 'Ready');
                     setSelectedRoomId(matching ? matching.id : '');
                   }}
-                  className="bg-slate-50/40 hover:bg-slate-50 p-4 rounded-xl border border-slate-200/80 cursor-pointer hover:border-purple-300 hover:shadow-sm transition-all duration-150 group flex flex-col justify-between"
+                  className="bg-slate-50/40 hover:bg-slate-50 p-4 rounded-2xl border border-slate-200/65 cursor-pointer hover:border-[#0F5D52]/40 hover:shadow-sm transition-all duration-150 group flex flex-col justify-between"
                 >
                   <div className="space-y-2">
                     <div className="flex justify-between items-start">
                       <h3 className="text-xs font-bold text-slate-800">{req.full_name}</h3>
-                      <span className="text-[9px] bg-purple-50 text-primary border border-purple-200/60 font-bold px-2 py-0.5 rounded-lg">
+                      <span className="text-[9px] bg-[#0F5D52]/10 text-primary border border-[#0F5D52]/20 font-bold px-2 py-0.5 rounded-lg">
                         {req.room_type}
                       </span>
                     </div>
@@ -490,7 +490,7 @@ export default function DashboardPage() {
         )}
  
         {/* Visual Room Grid / Floor Map */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Visual Desk Layout</h2>

@@ -5,15 +5,16 @@
   --background: #F8FAFC;
   --foreground: #111827;
   
-  --primary: #7C3AED;
-  --primary-hover: #6D28D9;
+  --primary: #0F5D52;
+  --primary-hover: #083B36;
   --accent-gold: #F59E0B;
   --available: #16A34A;
-  --maintenance: #64748B;
+  --maintenance: #6B7280;
   --cleaning: #F59E0B;
   
   --card: #ffffff;
-  --radius-card: 12px;
+  --radius-card: 16px;
+  --sidebar: #083B36;
 }
 
 @theme inline {
@@ -27,6 +28,7 @@
   --color-cleaning: var(--cleaning);
   --color-card: var(--card);
   --radius-card: var(--radius-card);
+  --color-sidebar: var(--sidebar);
   --font-sans: 'Outfit', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   --font-serif: 'Playfair Display', Georgia, Cambria, "Times New Roman", Times, serif;
 }
