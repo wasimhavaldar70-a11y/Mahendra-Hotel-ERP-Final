@@ -65,14 +65,11 @@ input[type=number] {
     position: absolute;
     left: 0;
     top: 0;
-    width: 80mm;
-    font-family: monospace;
-    font-size: 11px;
-    line-height: 1.3;
-    padding: 10px;
-    margin: 0;
+    width: 100%;
+    font-family: system-ui, -apple-system, sans-serif;
     color: #000;
     background: #fff;
+    padding: 20px;
   }
 
   /* Print Report Overrides */

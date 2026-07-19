@@ -225,76 +225,114 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
     <>
       {/* Print receipt container (Hidden from screen, visible during print via global.css) */}
       {stayData && (
-        <div id="print-receipt" className="hidden">
-          <div style={{ textAlign: 'center', borderBottom: '1px dashed #000', paddingBottom: '10px', marginBottom: '10px' }}>
-            <h3 style={{ margin: '0 0 5px 0', fontSize: '14px', textTransform: 'uppercase' }}>STAYDESK RECEIPT</h3>
-            <p style={{ margin: '0', fontSize: '10px', fontWeight: 'bold' }}>{currentHotel?.hotel_name || 'Grand Palace Hotel'}</p>
-            <p style={{ margin: '0', fontSize: '10px' }}>Phone: {currentHotel?.phone || '9876543210'}</p>
-            <p style={{ margin: '0', fontSize: '10px' }}>Email: {currentHotel?.email || 'support@grandpalace.com'}</p>
-          </div>
-
-          <div style={{ marginBottom: '10px', fontSize: '10px' }}>
-            <p style={{ margin: '3px 0' }}><strong>Receipt ID:</strong> RCPT-{stayData.id.substring(0, 6).toUpperCase()}</p>
-            <p style={{ margin: '3px 0' }}><strong>Date:</strong> {new Date().toLocaleDateString('en-IN')}</p>
-            <p style={{ margin: '3px 0' }}><strong>Room No:</strong> {room.room_number} ({room.room_type})</p>
-            <p style={{ margin: '3px 0' }}><strong>Guest:</strong> {stayData.primary_customer?.full_name}</p>
-            <p style={{ margin: '3px 0' }}><strong>Phone:</strong> {stayData.primary_customer?.phone}</p>
-          </div>
-
-          <div style={{ borderBottom: '1px dashed #000', borderTop: '1px dashed #000', padding: '5px 0', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px' }}>
-              <span>Check-in:</span>
-              <span>{new Date(stayData.check_in).toLocaleDateString('en-IN')}</span>
+        <div id="print-receipt" className="hidden" style={{ width: '100%', fontFamily: 'system-ui, -apple-system, sans-serif', color: '#1e293b' }}>
+          {/* Header section with two columns */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #3b82f6', paddingBottom: '20px', marginBottom: '25px' }}>
+            <div>
+              <h1 style={{ margin: '0 0 5px 0', fontSize: '24px', fontWeight: '800', color: '#1e3a8a', letterSpacing: '-0.5px' }}>
+                {currentHotel?.hotel_name || 'Grand Palace Hotel'}
+              </h1>
+              <p style={{ margin: '2px 0', fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Phone: {currentHotel?.phone || '9876543210'}</p>
+              <p style={{ margin: '2px 0', fontSize: '12px', color: '#64748b', fontWeight: '500' }}>Email: {currentHotel?.email || 'support@grandpalace.com'}</p>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px' }}>
-              <span>Checkout:</span>
-              <span>{new Date(stayData.expected_checkout).toLocaleDateString('en-IN')}</span>
+            <div style={{ textAlign: 'right' }}>
+              <h2 style={{ margin: '0 0 5px 0', fontSize: '18px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>GUEST FOLIO / INVOICE</h2>
+              <p style={{ margin: '2px 0', fontSize: '12px', color: '#64748b' }}><strong>Invoice ID:</strong> RCPT-{stayData.id.substring(0, 8).toUpperCase()}</p>
+              <p style={{ margin: '2px 0', fontSize: '12px', color: '#64748b' }}><strong>Billing Date:</strong> {new Date().toLocaleDateString('en-IN')}</p>
+            </div>
+          </div>
+
+          {/* Guest and Stay Details Boxes */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+            <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>Billed To (Guest)</h3>
+              <p style={{ margin: '3px 0', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{stayData.primary_customer?.full_name}</p>
+              <p style={{ margin: '3px 0', fontSize: '12px', color: '#475569' }}>📞 {stayData.primary_customer?.phone}</p>
+              {stayData.primary_customer?.email && (
+                <p style={{ margin: '3px 0', fontSize: '12px', color: '#475569' }}>✉️ {stayData.primary_customer?.email}</p>
+              )}
+            </div>
+            
+            <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>Stay Details</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '6px 12px', fontSize: '12px', color: '#475569' }}>
+                <span style={{ fontWeight: '500' }}>Room Assigned:</span>
+                <span style={{ fontWeight: '700', color: '#0f172a' }}>Room {room.room_number} ({room.room_type})</span>
+                
+                <span style={{ fontWeight: '500' }}>Check-in Date:</span>
+                <span>{new Date(stayData.check_in).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                
+                <span style={{ fontWeight: '500' }}>Checkout Date:</span>
+                <span>{new Date(stayData.expected_checkout).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              </div>
             </div>
           </div>
 
           {/* Detailed Transaction ledger printout */}
-          <div style={{ marginBottom: '10px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 'bold', borderBottom: '1px solid #000', paddingBottom: '3px', margin: '0 0 5px 0' }}>FOLIO TRANSACTIONS</p>
-            <table style={{ width: '100%', fontSize: '9px', textAlign: 'left', borderCollapse: 'collapse' }}>
+          <div style={{ marginBottom: '30px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#475569', borderBottom: '1px solid #e2e8f0', paddingBottom: '5px' }}>Itemized Folio Transactions</h3>
+            <table style={{ width: '100%', fontSize: '12px', textAlign: 'left', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1.5px solid #000', fontWeight: 'bold' }}>
-                  <th style={{ padding: '3px 0' }}>Date</th>
-                  <th style={{ padding: '3px 0' }}>Item Description</th>
-                  <th style={{ padding: '3px 0', textAlign: 'right' }}>Charges</th>
-                  <th style={{ padding: '3px 0', textAlign: 'right' }}>Payments</th>
+                <tr style={{ borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: '700' }}>
+                  <th style={{ padding: '8px 10px', background: '#f8fafc' }}>Date</th>
+                  <th style={{ padding: '8px 10px', background: '#f8fafc' }}>Item Description</th>
+                  <th style={{ padding: '8px 10px', background: '#f8fafc' }}>Category</th>
+                  <th style={{ padding: '8px 10px', background: '#f8fafc', textAlign: 'right' }}>Charges (Debit)</th>
+                  <th style={{ padding: '8px 10px', background: '#f8fafc', textAlign: 'right' }}>Payments (Credit)</th>
                 </tr>
               </thead>
               <tbody>
-                {ledgerEntries.filter(e => e.status === 'Active').map(e => (
-                  <tr key={e.id} style={{ borderBottom: '0.5px solid #eee' }}>
-                    <td style={{ padding: '3px 0' }}>{new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit' })}</td>
-                    <td style={{ padding: '3px 0' }}>{e.description}</td>
-                    <td style={{ padding: '3px 0', textAlign: 'right' }}>{e.debit > 0 ? `₹${Number(e.debit).toFixed(2)}` : '-'}</td>
-                    <td style={{ padding: '3px 0', textAlign: 'right' }}>{e.credit > 0 ? `₹${Number(e.credit).toFixed(2)}` : '-'}</td>
+                {ledgerEntries.filter(e => e.status === 'Active').map((e, idx) => (
+                  <tr key={e.id} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                    <td style={{ padding: '10px' }}>{new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</td>
+                    <td style={{ padding: '10px', fontWeight: '500', color: '#0f172a' }}>{e.description}</td>
+                    <td style={{ padding: '10px' }}>
+                      <span style={{ fontSize: '10px', fontWeight: '700', background: '#e2e8f0', color: '#475569', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>{e.category}</span>
+                    </td>
+                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: '600', color: '#ef4444' }}>{e.debit > 0 ? `₹${Number(e.debit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
+                    <td style={{ padding: '10px', textAlign: 'right', fontWeight: '600', color: '#22c55e' }}>{e.credit > 0 ? `₹${Number(e.credit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div style={{ marginBottom: '10px', borderTop: '1px solid #000', paddingTop: '5px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px' }}>
-              <span>Total Charges (Debit):</span>
-              <span>₹{Number(stayData.payment?.room_price || 0).toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px' }}>
-              <span>Total Payments (Credit):</span>
-              <span>₹{Number(stayData.payment?.advance || 0).toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px', fontWeight: 'bold' }}>
-              <span>Outstanding Balance:</span>
-              <span>₹{Number(stayData.payment?.pending || 0).toFixed(2)}</span>
+          {/* Totals Summary Box aligned Right */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '50px' }}>
+            <div style={{ width: '320px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0', fontSize: '13px', color: '#475569' }}>
+                <span>Total Charges (Debits):</span>
+                <span style={{ fontWeight: '600' }}>₹{Number(stayData.payment?.room_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0', fontSize: '13px', color: '#475569' }}>
+                <span>Total Payments (Credits):</span>
+                <span style={{ fontWeight: '600' }}>₹{Number(stayData.payment?.advance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0 0 0', fontSize: '15px', fontWeight: '800', color: '#0f172a', borderTop: '2px solid #e2e8f0', paddingTop: '12px' }}>
+                <span>Outstanding Balance:</span>
+                <span style={{ color: Number(stayData.payment?.pending || 0) > 0 ? '#ef4444' : '#1e3a8a' }}>
+                  ₹{Number(stayData.payment?.pending || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div style={{ borderTop: '1px dashed #000', paddingTop: '10px', textAlign: 'center' }}>
-            <p style={{ margin: '0', fontSize: '11px', fontWeight: 'bold' }}>StayDesk PMS Ledger Receipt</p>
-            <p style={{ margin: '10px 0 0 0', fontSize: '10px', fontStyle: 'italic' }}>Thank you for staying with us!</p>
+          {/* Signatures section */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '60px', padding: '0 20px', fontSize: '12px', color: '#475569' }}>
+            <div style={{ textAlign: 'center', width: '200px' }}>
+              <div style={{ borderBottom: '1px solid #cbd5e1', marginBottom: '8px', height: '40px' }}></div>
+              <p style={{ margin: '0', fontWeight: '700' }}>Guest's Signature</p>
+            </div>
+            <div style={{ textAlign: 'center', width: '200px' }}>
+              <div style={{ borderBottom: '1px solid #cbd5e1', marginBottom: '8px', height: '40px' }}></div>
+              <p style={{ margin: '0', fontWeight: '700' }}>Authorized Signatory</p>
+            </div>
+          </div>
+
+          {/* Invoice footer */}
+          <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '60px', paddingTop: '15px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
+            <p style={{ margin: '0', fontWeight: '700' }}>StayDesk PMS Ledger System</p>
+            <p style={{ margin: '4px 0 0 0', fontStyle: 'italic' }}>Thank you for staying with us. Have a safe journey ahead!</p>
           </div>
         </div>
       )}
