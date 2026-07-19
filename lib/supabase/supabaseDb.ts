@@ -4,7 +4,7 @@
 // ========================================================
 
 import { supabase } from './supabaseClient';
-import { User, Hotel, Room, Customer, CustomerDocument, CustomerHistory, CheckIn, CheckInGuest, Payment, ExtendedCheckIn, RoomStatus } from '../../types';
+import { User, Hotel, Room, Customer, CustomerDocument, CustomerHistory, CheckIn, CheckInGuest, Payment, ExtendedCheckIn, RoomStatus, FolioLedger } from '../../types';
 
 // Broadcast changes locally so that multiple open tabs refresh automatically on edits
 const broadcastChannel = typeof window !== 'undefined' ? new BroadcastChannel('hotelflow-sync') : null;
@@ -1091,28 +1091,29 @@ export const supabaseDb = {
       .select()
       .single();
 
-    if (error) return null;
+    if (error || !checkIn) return null;
 
-    // Update payment details if extra cost is added
+    // Update payment details if extra cost is added by appending a ledger transaction
     if (extraPrice > 0) {
-      const { data: currentPayment } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('checkin_id', checkInId)
-        .maybeSingle();
-
-      if (currentPayment) {
-        const newPrice = Number(currentPayment.room_price) + extraPrice;
-        const newPending = Number(currentPayment.pending) + extraPrice;
-
-        await supabase
-          .from('payments')
-          .update({
-            room_price: newPrice,
-            pending: newPending
-          })
-          .eq('id', currentPayment.id);
-      }
+      const formattedDate = new Date(newExpectedCheckout).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+      await supabase
+        .from('folio_ledger')
+        .insert({
+          hotel_id: hotelId,
+          checkin_id: checkInId,
+          customer_id: checkIn.primary_customer_id,
+          room_id: checkIn.room_id,
+          transaction_type: 'Debit',
+          category: 'Room Charge',
+          description: `Stay Extension Charge (New checkout: ${formattedDate})`,
+          debit: extraPrice,
+          credit: 0.00,
+          created_by: 'System'
+        });
     }
 
     broadcastDbUpdate('checkins');
@@ -1700,5 +1701,68 @@ export const supabaseDb = {
 
     broadcastDbUpdate('booking_requests');
     return true;
+  },
+
+  getLedgerEntries: async (checkinId: string): Promise<FolioLedger[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('folio_ledger')
+      .select('*')
+      .eq('checkin_id', checkinId)
+      .order('created_at', { ascending: true });
+    
+    return error ? [] : data || [];
+  },
+
+  addLedgerEntry: async (entry: Omit<FolioLedger, 'id' | 'created_at' | 'updated_at' | 'status'>): Promise<FolioLedger | null> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from('folio_ledger')
+      .insert({
+        ...entry,
+        status: 'Active'
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Failed to post ledger entry:', error.message);
+      throw new Error('Failed to post ledger entry: ' + error.message);
+    }
+
+    broadcastDbUpdate('payments');
+    return data;
+  },
+
+  voidLedgerEntry: async (hotelId: string, entryId: string): Promise<boolean> => {
+    if (!supabase) return false;
+    const { error } = await supabase
+      .from('folio_ledger')
+      .update({ status: 'Void' })
+      .eq('id', entryId)
+      .eq('hotel_id', hotelId);
+
+    if (error) {
+      console.error('Failed to void ledger entry:', error.message);
+      return false;
+    }
+
+    broadcastDbUpdate('payments');
+    return true;
+  },
+
+  getLedgerReports: async (hotelId: string, startDate?: string, endDate?: string): Promise<any> => {
+    if (!supabase) return null;
+    const { data, error } = await supabase.rpc('get_ledger_reports', {
+      p_hotel_id: hotelId,
+      p_start_date: startDate || null,
+      p_end_date: endDate || null
+    });
+
+    if (error) {
+      console.error('Failed to get ledger reports:', error.message);
+      return null;
+    }
+    return data;
   }
 };

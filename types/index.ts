@@ -138,3 +138,23 @@ export interface BookingRequest {
   status: 'Pending' | 'Approved' | 'Rejected';
   created_at: string;
 }
+
+export interface FolioLedger {
+  id: string;
+  hotel_id: string;
+  checkin_id: string;
+  customer_id: string;
+  room_id?: string | null;
+  transaction_type: 'Debit' | 'Credit';
+  category: string;
+  description: string;
+  debit: number;
+  credit: number;
+  tax: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  reference_number?: string | null;
+  status: 'Active' | 'Void' | 'Adjusted';
+}
+

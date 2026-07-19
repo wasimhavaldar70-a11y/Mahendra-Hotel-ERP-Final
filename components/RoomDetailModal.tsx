@@ -20,10 +20,14 @@ import {
   Clock, 
   ChevronRight,
   TrendingUp,
-  CreditCard
+  CreditCard,
+  Plus,
+  Trash2,
+  AlertCircle,
+  Receipt
 } from 'lucide-react';
 import { db } from '../lib/supabase/client';
-import { Room, ExtendedCheckIn, RoomStatus } from '../types';
+import { Room, ExtendedCheckIn, RoomStatus, FolioLedger } from '../types';
 
 interface RoomDetailModalProps {
   room: Room;
@@ -48,6 +52,18 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
   // Dynamic Hotel Info state
   const [currentHotel, setCurrentHotel] = useState<any>(null);
+
+  // Ledger states
+  const [ledgerEntries, setLedgerEntries] = useState<FolioLedger[]>([]);
+  const [showLedger, setShowLedger] = useState(true);
+  const [showAddEntry, setShowAddEntry] = useState(false);
+  const [newEntry, setNewEntry] = useState({
+    type: 'Debit' as 'Debit' | 'Credit',
+    category: 'Restaurant',
+    description: '',
+    amount: 0,
+    tax: 0
+  });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -81,11 +97,65 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         const expDate = new Date(data.expected_checkout);
         expDate.setDate(expDate.getDate() + 1);
         setNewCheckoutDate(expDate.toISOString().substring(0, 10));
+
+        // Load folio ledger entries
+        const entries = await db.getLedgerEntries(data.id);
+        setLedgerEntries(entries);
       }
     } catch (err) {
       console.error("Error loading stay data:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddLedgerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stayData) return;
+
+    try {
+      const entryData = {
+        hotel_id: hotelId,
+        checkin_id: stayData.id,
+        customer_id: stayData.primary_customer_id,
+        room_id: room.id,
+        transaction_type: newEntry.type,
+        category: newEntry.category,
+        description: newEntry.description,
+        debit: newEntry.type === 'Debit' ? newEntry.amount : 0,
+        credit: newEntry.type === 'Credit' ? newEntry.amount : 0,
+        tax: newEntry.tax || 0,
+        created_by: currentHotel?.owner_name || 'System'
+      };
+
+      await db.addLedgerEntry(entryData);
+
+      // Reset Form
+      setNewEntry({
+        type: 'Debit',
+        category: 'Restaurant',
+        description: '',
+        amount: 0,
+        tax: 0
+      });
+      setShowAddEntry(false);
+
+      // Reload
+      await loadActiveStay();
+      onStatusChanged();
+    } catch (err) {
+      console.error('Failed to post ledger entry:', err);
+    }
+  };
+
+  const handleVoidEntry = async (entryId: string) => {
+    if (!confirm('Are you sure you want to void this transaction? This will adjust the outstanding bill.')) return;
+    try {
+      await db.voidLedgerEntry(hotelId, entryId);
+      await loadActiveStay();
+      onStatusChanged();
+    } catch (err) {
+      console.error('Failed to void ledger entry:', err);
     }
   };
 
@@ -172,34 +242,59 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
           </div>
 
           <div style={{ borderBottom: '1px dashed #000', borderTop: '1px dashed #000', padding: '5px 0', marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px' }}>
               <span>Check-in:</span>
               <span>{new Date(stayData.check_in).toLocaleDateString('en-IN')}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px' }}>
               <span>Checkout:</span>
               <span>{new Date(stayData.expected_checkout).toLocaleDateString('en-IN')}</span>
             </div>
           </div>
 
+          {/* Detailed Transaction ledger printout */}
           <div style={{ marginBottom: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
-              <span>Room Charges:</span>
-              <span>₹{Number(stayData.payment?.room_price).toFixed(2)}</span>
+            <p style={{ fontSize: '10px', fontWeight: 'bold', borderBottom: '1px solid #000', paddingBottom: '3px', margin: '0 0 5px 0' }}>FOLIO TRANSACTIONS</p>
+            <table style={{ width: '100%', fontSize: '9px', textAlign: 'left', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1.5px solid #000', fontWeight: 'bold' }}>
+                  <th style={{ padding: '3px 0' }}>Date</th>
+                  <th style={{ padding: '3px 0' }}>Item Description</th>
+                  <th style={{ padding: '3px 0', textAlign: 'right' }}>Charges</th>
+                  <th style={{ padding: '3px 0', textAlign: 'right' }}>Payments</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledgerEntries.filter(e => e.status === 'Active').map(e => (
+                  <tr key={e.id} style={{ borderBottom: '0.5px solid #eee' }}>
+                    <td style={{ padding: '3px 0' }}>{new Date(e.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit' })}</td>
+                    <td style={{ padding: '3px 0' }}>{e.description}</td>
+                    <td style={{ padding: '3px 0', textAlign: 'right' }}>{e.debit > 0 ? `₹${Number(e.debit).toFixed(2)}` : '-'}</td>
+                    <td style={{ padding: '3px 0', textAlign: 'right' }}>{e.credit > 0 ? `₹${Number(e.credit).toFixed(2)}` : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginBottom: '10px', borderTop: '1px solid #000', paddingTop: '5px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px' }}>
+              <span>Total Charges (Debit):</span>
+              <span>₹{Number(stayData.payment?.room_price || 0).toFixed(2)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0' }}>
-              <span>Advance Paid:</span>
-              <span>₹{Number(stayData.payment?.advance).toFixed(2)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px' }}>
+              <span>Total Payments (Credit):</span>
+              <span>₹{Number(stayData.payment?.advance || 0).toFixed(2)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontWeight: 'bold' }}>
-              <span>Pending Settle:</span>
-              <span>₹{Number(stayData.payment?.pending).toFixed(2)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '3px 0', fontSize: '10px', fontWeight: 'bold' }}>
+              <span>Outstanding Balance:</span>
+              <span>₹{Number(stayData.payment?.pending || 0).toFixed(2)}</span>
             </div>
           </div>
 
           <div style={{ borderTop: '1px dashed #000', paddingTop: '10px', textAlign: 'center' }}>
-            <p style={{ margin: '0', fontSize: '11px', fontWeight: 'bold' }}>Total Settled: ₹{Number(stayData.payment?.room_price).toFixed(2)}</p>
-            <p style={{ margin: '15px 0 0 0', fontSize: '10px', fontStyle: 'italic' }}>Thank you for staying with us!</p>
+            <p style={{ margin: '0', fontSize: '11px', fontWeight: 'bold' }}>StayDesk PMS Ledger Receipt</p>
+            <p style={{ margin: '10px 0 0 0', fontSize: '10px', fontStyle: 'italic' }}>Thank you for staying with us!</p>
           </div>
         </div>
       )}
@@ -321,21 +416,202 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                   )}
 
                   {/* Bill Details */}
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Payments & Billing</h4>
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Guest Folio & Ledger Balance</h4>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="p-3 rounded-xl border border-slate-200/60 text-center bg-white shadow-sm">
-                        <span className="text-[10px] font-bold text-slate-400 block">Room Charge</span>
-                        <span className="text-sm font-bold text-slate-800 mt-1">₹{Number(stayData.payment?.room_price).toLocaleString('en-IN')}</span>
+                        <span className="text-[10px] font-bold text-slate-400 block">Total Charges</span>
+                        <span className="text-sm font-bold text-slate-800 mt-1">₹{Number(stayData.payment?.room_price || 0).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="p-3 rounded-xl border border-green-150 text-center bg-green-50/10">
-                        <span className="text-[10px] font-bold text-green-600 block">Advance Paid</span>
-                        <span className="text-sm font-bold text-green-600 mt-1">₹{Number(stayData.payment?.advance).toLocaleString('en-IN')}</span>
+                        <span className="text-[10px] font-bold text-green-600 block">Total Payments</span>
+                        <span className="text-sm font-bold text-green-600 mt-1">₹{Number(stayData.payment?.advance || 0).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="p-3 rounded-xl border border-red-150 text-center bg-red-50/10">
-                        <span className="text-[10px] font-bold text-red-600 block">Pending Balance</span>
-                        <span className="text-sm font-bold text-red-600 mt-1">₹{Number(stayData.payment?.pending).toLocaleString('en-IN')}</span>
+                        <span className="text-[10px] font-bold text-red-600 block">Outstanding</span>
+                        <span className="text-sm font-bold text-red-650 mt-1">₹{Number(stayData.payment?.pending || 0).toLocaleString('en-IN')}</span>
                       </div>
+                    </div>
+
+                    {/* Folio Ledger details panel */}
+                    <div className="border border-slate-200/80 rounded-xl overflow-hidden bg-white shadow-sm">
+                      <div className="bg-slate-50/80 px-4 py-3 border-b border-slate-150 flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <Receipt className="w-4 h-4 text-slate-500" />
+                          PMS Transactions Audit Trail
+                        </span>
+                        <button 
+                          type="button"
+                          onClick={() => setShowLedger(!showLedger)}
+                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5"
+                        >
+                          {showLedger ? 'Collapse' : 'Expand'}
+                        </button>
+                      </div>
+
+                      {showLedger && (
+                        <div className="p-4 space-y-3">
+                          <div className="overflow-x-auto max-h-60 overflow-y-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr className="border-b border-slate-200 text-slate-400 font-bold text-[10px] uppercase">
+                                  <th className="pb-2">Date</th>
+                                  <th className="pb-2">Description</th>
+                                  <th className="pb-2 text-right">Debit (+)</th>
+                                  <th className="pb-2 text-right">Credit (-)</th>
+                                  <th className="pb-2 text-right">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 font-medium">
+                                {ledgerEntries.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={5} className="py-4 text-center text-slate-400 italic">No ledger transactions posted yet.</td>
+                                  </tr>
+                                ) : (
+                                  ledgerEntries.map(entry => (
+                                    <tr 
+                                      key={entry.id} 
+                                      className={`text-slate-600 ${entry.status === 'Void' ? 'line-through text-slate-400 bg-slate-50/40' : ''}`}
+                                    >
+                                      <td className="py-2 text-[10px] whitespace-nowrap">
+                                        {new Date(entry.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                                      </td>
+                                      <td className="py-2">
+                                        <div className="font-semibold text-slate-700">{entry.description}</div>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{entry.category}</div>
+                                      </td>
+                                      <td className="py-2 text-right text-red-600 font-bold">
+                                        {entry.debit > 0 ? `₹${entry.debit}` : '-'}
+                                      </td>
+                                      <td className="py-2 text-right text-green-600 font-bold">
+                                        {entry.credit > 0 ? `₹${entry.credit}` : '-'}
+                                      </td>
+                                      <td className="py-2 text-right">
+                                        {entry.status === 'Active' ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleVoidEntry(entry.id)}
+                                            className="text-[9px] text-red-500 font-bold border border-red-200 px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors"
+                                          >
+                                            Void
+                                          </button>
+                                        ) : (
+                                          <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400 bg-slate-100 px-1 rounded">{entry.status}</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Quick Actions Form to Add Charges/Credits */}
+                          <div className="pt-3 border-t border-slate-150">
+                            <button
+                              type="button"
+                              onClick={() => setShowAddEntry(!showAddEntry)}
+                              className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              {showAddEntry ? 'Cancel Post Transaction' : 'Post Charge, Payment or Discount'}
+                            </button>
+
+                            {showAddEntry && (
+                              <form onSubmit={handleAddLedgerSubmit} className="mt-3 p-3 border border-slate-250 bg-slate-50/50 rounded-xl space-y-3 animate-fade-in">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Entry Type</label>
+                                    <select
+                                      value={newEntry.type}
+                                      onChange={(e) => {
+                                        const type = e.target.value as 'Debit' | 'Credit';
+                                        setNewEntry({
+                                          ...newEntry,
+                                          type,
+                                          category: type === 'Credit' ? 'Payment' : 'Restaurant'
+                                        });
+                                      }}
+                                      className="w-full text-xs font-medium border border-slate-200 rounded-lg p-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                                    >
+                                      <option value="Debit">Charge (Debit)</option>
+                                      <option value="Credit">Credit / Settlement</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Category</label>
+                                    <select
+                                      value={newEntry.category}
+                                      onChange={(e) => setNewEntry({ ...newEntry, category: e.target.value })}
+                                      className="w-full text-xs font-medium border border-slate-200 rounded-lg p-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                                    >
+                                      {newEntry.type === 'Debit' ? (
+                                        <>
+                                          <option value="Restaurant">Restaurant (Food POS)</option>
+                                          <option value="Laundry">Laundry Service</option>
+                                          <option value="Spa">Spa & Gym</option>
+                                          <option value="Extra Bed">Extra Bed / Rollaway</option>
+                                          <option value="Taxi">Taxi & Transport</option>
+                                          <option value="Airport Pickup">Airport Pickup</option>
+                                          <option value="Custom Charges">Custom Fee / Amenity</option>
+                                          <option value="Refund">Refund Debit</option>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <option value="Payment">Payment Collection</option>
+                                          <option value="Discount">Manager Discount</option>
+                                        </>
+                                      )}
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="col-span-2">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Item Description</label>
+                                    <input
+                                      type="text"
+                                      value={newEntry.description}
+                                      onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
+                                      placeholder="e.g. Dinner - Room Service"
+                                      className="w-full text-xs font-medium border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-primary bg-white"
+                                      required
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Amount (₹)</label>
+                                    <input
+                                      type="number"
+                                      value={newEntry.amount || ''}
+                                      onChange={(e) => setNewEntry({ ...newEntry, amount: Number(e.target.value) })}
+                                      placeholder="0"
+                                      className="w-full text-xs font-medium border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-primary bg-white"
+                                      required
+                                      min="1"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex justify-end gap-1.5 pt-1">
+                                  <button
+                                    type="submit"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-sm"
+                                  >
+                                    Post Entry
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowAddEntry(false)}
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold px-3 py-1.5 rounded-lg"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </form>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

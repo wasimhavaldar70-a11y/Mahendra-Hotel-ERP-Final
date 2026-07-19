@@ -1240,6 +1240,333 @@ CREATE TABLE IF NOT EXISTS public.rate_limits (
 ALTER TABLE public.rate_limits ENABLE ROW LEVEL SECURITY;
 
 
+-- ========================================================
+-- 10. GUEST FOLIO LEDGER SYSTEM
+-- ========================================================
+
+-- Ledger entries table
+CREATE TABLE IF NOT EXISTS public.folio_ledger (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  hotel_id UUID REFERENCES public.hotels(id) ON DELETE CASCADE,
+  checkin_id UUID REFERENCES public.check_ins(id) ON DELETE CASCADE,
+  customer_id UUID REFERENCES public.customers(id) ON DELETE CASCADE,
+  room_id UUID REFERENCES public.rooms(id) ON DELETE SET NULL,
+  transaction_type VARCHAR(50) NOT NULL CHECK (transaction_type IN ('Debit', 'Credit')),
+  category VARCHAR(100) NOT NULL, -- 'Room Charge', 'Restaurant', 'Laundry', 'Extra Bed', 'Spa', 'Taxi', 'Airport Pickup', 'Discount', 'Tax', 'Payment', 'Refund', 'Adjustment', 'Other'
+  description TEXT NOT NULL,
+  debit NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+  credit NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+  tax NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+  created_by VARCHAR(255) NOT NULL DEFAULT 'System',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  reference_number VARCHAR(100),
+  status VARCHAR(50) NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Void', 'Adjusted'))
+);
+
+-- Enable RLS on folio ledger
+ALTER TABLE public.folio_ledger ENABLE ROW LEVEL SECURITY;
+
+-- Security policy for tenant isolation
+CREATE POLICY "Users can manage folio ledger of their hotel" ON public.folio_ledger
+  FOR ALL TO authenticated USING (hotel_id = get_user_hotel_id()) WITH CHECK (hotel_id = get_user_hotel_id());
+
+
+-- ========================================================
+-- LEDGER <-> PAYMENTS TRIGGERS & SYNC
+-- ========================================================
+
+-- Trigger to sync changes from folio ledger back to payments table (backward compatibility)
+CREATE OR REPLACE FUNCTION public.sync_ledger_to_payments()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_total_charges NUMERIC(10, 2);
+  v_total_payments NUMERIC(10, 2);
+  v_pending NUMERIC(10, 2);
+  v_payment_method VARCHAR(50);
+BEGIN
+  -- Sum active charges (debits) and payments (credits)
+  SELECT 
+    COALESCE(SUM(debit), 0.00),
+    COALESCE(SUM(credit), 0.00)
+  INTO v_total_charges, v_total_payments
+  FROM public.folio_ledger
+  WHERE checkin_id = COALESCE(NEW.checkin_id, OLD.checkin_id)
+    AND status = 'Active';
+
+  v_pending := v_total_charges - v_total_payments;
+
+  -- Grab most recent payment method
+  SELECT COALESCE(description, 'Cash') INTO v_payment_method
+  FROM public.folio_ledger
+  WHERE checkin_id = COALESCE(NEW.checkin_id, OLD.checkin_id)
+    AND category = 'Payment'
+    AND status = 'Active'
+  ORDER BY created_at DESC
+  LIMIT 1;
+
+  -- Ensure payment method string is clean
+  IF v_payment_method LIKE 'Advance Payment (%' THEN
+    v_payment_method := SUBSTRING(v_payment_method FROM 'Advance Payment \((.*)\)');
+  ELSIF v_payment_method LIKE 'Checkout Settlement (%' THEN
+    v_payment_method := SUBSTRING(v_payment_method FROM 'Checkout Settlement \((.*)\)');
+  END IF;
+
+  IF v_payment_method IS NULL OR v_payment_method = '' THEN
+    v_payment_method := 'Cash';
+  END IF;
+
+  -- Update or insert backward compatibility payment details
+  UPDATE public.payments
+  SET 
+    room_price = v_total_charges,
+    advance = v_total_payments,
+    pending = v_pending,
+    payment_method = COALESCE(v_payment_method, 'Cash')
+  WHERE checkin_id = COALESCE(NEW.checkin_id, OLD.checkin_id);
+
+  IF NOT FOUND THEN
+    INSERT INTO public.payments (checkin_id, room_price, advance, pending, payment_method)
+    VALUES (COALESCE(NEW.checkin_id, OLD.checkin_id), v_total_charges, v_total_payments, v_pending, COALESCE(v_payment_method, 'Cash'));
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER trigger_sync_ledger_to_payments
+AFTER INSERT OR UPDATE OR DELETE ON public.folio_ledger
+FOR EACH ROW EXECUTE FUNCTION public.sync_ledger_to_payments();
+
+
+-- Trigger to initialize ledger entries whenever a checkin insert populates public.payments
+CREATE OR REPLACE FUNCTION public.init_ledger_from_payment()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_hotel_id UUID;
+  v_customer_id UUID;
+  v_room_id UUID;
+BEGIN
+  SELECT hotel_id, primary_customer_id, room_id 
+  INTO v_hotel_id, v_customer_id, v_room_id
+  FROM public.check_ins
+  WHERE id = NEW.checkin_id;
+
+  -- Post Initial Room Rent Debit
+  INSERT INTO public.folio_ledger (hotel_id, checkin_id, customer_id, room_id, transaction_type, category, description, debit, credit, created_by)
+  VALUES (v_hotel_id, NEW.checkin_id, v_customer_id, v_room_id, 'Debit', 'Room Charge', 'Initial Room Rent', NEW.room_price, 0.00, 'System');
+
+  -- Post Advance Credit (if any)
+  IF NEW.advance > 0 THEN
+    INSERT INTO public.folio_ledger (hotel_id, checkin_id, customer_id, room_id, transaction_type, category, description, debit, credit, created_by)
+    VALUES (v_hotel_id, NEW.checkin_id, v_customer_id, v_room_id, 'Credit', 'Payment', 'Advance Payment (' || NEW.payment_method || ')', 0.00, NEW.advance, 'System');
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER trigger_init_ledger_from_payment
+AFTER INSERT ON public.payments
+FOR EACH ROW EXECUTE FUNCTION public.init_ledger_from_payment();
+
+
+-- ========================================================
+-- TRANSACTIONAL CHECKOUT PROCEDURES OVERRIDES
+-- ========================================================
+
+CREATE OR REPLACE FUNCTION checkout_stay_transactional(
+  p_hotel_id UUID,
+  p_checkin_id UUID,
+  p_final_payment_method VARCHAR(50)
+) RETURNS VOID AS $$
+DECLARE
+  v_room_id UUID;
+  v_customer_id UUID;
+  v_pending NUMERIC(10, 2);
+BEGIN
+  -- 1. Get room_id and customer_id
+  SELECT room_id, primary_customer_id INTO v_room_id, v_customer_id 
+  FROM public.check_ins
+  WHERE id = p_checkin_id AND hotel_id = p_hotel_id;
+
+  -- 2. Set Check-In status to Completed
+  UPDATE public.check_ins 
+  SET status = 'Completed', 
+      actual_checkout = timezone('utc'::text, now())
+  WHERE id = p_checkin_id AND hotel_id = p_hotel_id;
+
+  -- 3. Calculate remaining pending balance from payments table
+  SELECT pending INTO v_pending FROM public.payments
+  WHERE checkin_id = p_checkin_id;
+
+  -- 4. Post final settlement transaction to ledger if outstanding balance exists
+  IF v_pending IS NOT NULL AND v_pending > 0 THEN
+    INSERT INTO public.folio_ledger (hotel_id, checkin_id, customer_id, room_id, transaction_type, category, description, debit, credit, created_by)
+    VALUES (
+      p_hotel_id, 
+      p_checkin_id, 
+      v_customer_id, 
+      v_room_id, 
+      'Credit', 
+      'Payment', 
+      'Checkout Settlement (' || p_final_payment_method || ')', 
+      0.00, 
+      v_pending, 
+      'System'
+    );
+  END IF;
+
+  -- 5. Set Room status to Cleaning
+  IF v_room_id IS NOT NULL THEN
+    UPDATE public.rooms SET status = 'Cleaning' WHERE id = v_room_id;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ========================================================
+-- LEDGER REPORTING AND AUDIT AGGREGATIONS
+-- ========================================================
+
+CREATE OR REPLACE FUNCTION get_ledger_reports(
+  p_hotel_id UUID,
+  p_start_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+  p_end_date TIMESTAMP WITH TIME ZONE DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_room_revenue NUMERIC(10, 2);
+  v_restaurant_revenue NUMERIC(10, 2);
+  v_laundry_revenue NUMERIC(10, 2);
+  v_extra_services_revenue NUMERIC(10, 2);
+  v_taxes NUMERIC(10, 2);
+  v_discounts NUMERIC(10, 2);
+  v_outstanding_bills NUMERIC(10, 2);
+  v_daily_collection NUMERIC(10, 2);
+  v_refunds NUMERIC(10, 2);
+  v_category_breakdown JSONB;
+  v_recent_transactions JSONB;
+BEGIN
+  -- Room Revenue (Category 'Room Charge')
+  SELECT COALESCE(SUM(debit), 0.00) INTO v_room_revenue
+  FROM public.folio_ledger
+  WHERE hotel_id = p_hotel_id AND category = 'Room Charge' AND status = 'Active'
+    AND (p_start_date IS NULL OR created_at >= p_start_date)
+    AND (p_end_date IS NULL OR created_at <= p_end_date);
+
+  -- Restaurant Revenue (Category 'Restaurant')
+  SELECT COALESCE(SUM(debit), 0.00) INTO v_restaurant_revenue
+  FROM public.folio_ledger
+  WHERE hotel_id = p_hotel_id AND category = 'Restaurant' AND status = 'Active'
+    AND (p_start_date IS NULL OR created_at >= p_start_date)
+    AND (p_end_date IS NULL OR created_at <= p_end_date);
+
+  -- Laundry Revenue (Category 'Laundry')
+  SELECT COALESCE(SUM(debit), 0.00) INTO v_laundry_revenue
+  FROM public.folio_ledger
+  WHERE hotel_id = p_hotel_id AND category = 'Laundry' AND status = 'Active'
+    AND (p_start_date IS NULL OR created_at >= p_start_date)
+    AND (p_end_date IS NULL OR created_at <= p_end_date);
+
+  -- Extra Services Revenue
+  SELECT COALESCE(SUM(debit), 0.00) INTO v_extra_services_revenue
+  FROM public.folio_ledger
+  WHERE hotel_id = p_hotel_id AND category IN ('Extra Bed', 'Spa', 'Taxi', 'Airport Pickup', 'Conference Hall', 'Extra Services', 'Custom Charges') AND status = 'Active'
+    AND (p_start_date IS NULL OR created_at >= p_start_date)
+    AND (p_end_date IS NULL OR created_at <= p_end_date);
+
+  -- Taxes (Sum of tax)
+  SELECT COALESCE(SUM(tax), 0.00) INTO v_taxes
+  FROM public.folio_ledger
+  WHERE hotel_id = p_hotel_id AND status = 'Active'
+    AND (p_start_date IS NULL OR created_at >= p_start_date)
+    AND (p_end_date IS NULL OR created_at <= p_end_date);
+
+  -- Discounts (Sum of credit in Category 'Discount')
+  SELECT COALESCE(SUM(credit), 0.00) INTO v_discounts
+  FROM public.folio_ledger
+  WHERE hotel_id = p_hotel_id AND category = 'Discount' AND status = 'Active'
+    AND (p_start_date IS NULL OR created_at >= p_start_date)
+    AND (p_end_date IS NULL OR created_at <= p_end_date);
+
+  -- Refunds (Sum of debit in Category 'Refund')
+  SELECT COALESCE(SUM(debit), 0.00) INTO v_refunds
+  FROM public.folio_ledger
+  WHERE hotel_id = p_hotel_id AND category = 'Refund' AND status = 'Active'
+    AND (p_start_date IS NULL OR created_at >= p_start_date)
+    AND (p_end_date IS NULL OR created_at <= p_end_date);
+
+  -- Daily Collection (Sum of credit in Category 'Payment')
+  SELECT COALESCE(SUM(credit), 0.00) INTO v_daily_collection
+  FROM public.folio_ledger
+  WHERE hotel_id = p_hotel_id AND category = 'Payment' AND status = 'Active'
+    AND (p_start_date IS NULL OR created_at >= p_start_date)
+    AND (p_end_date IS NULL OR created_at <= p_end_date);
+
+  -- Outstanding Bills (Sum of pending from payments of active stays)
+  SELECT COALESCE(SUM(pending), 0.00) INTO v_outstanding_bills
+  FROM public.payments p
+  JOIN public.check_ins c ON p.checkin_id = c.id
+  WHERE c.hotel_id = p_hotel_id AND c.status = 'Active';
+
+  -- Category breakdown aggregation
+  SELECT jsonb_agg(cb) INTO v_category_breakdown
+  FROM (
+    SELECT 
+      category, 
+      SUM(debit)::numeric::float as total_debits, 
+      SUM(credit)::numeric::float as total_credits
+    FROM public.folio_ledger
+    WHERE hotel_id = p_hotel_id AND status = 'Active'
+      AND (p_start_date IS NULL OR created_at >= p_start_date)
+      AND (p_end_date IS NULL OR created_at <= p_end_date)
+    GROUP BY category
+  ) cb;
+
+  -- Recent ledger transactions for audit logging
+  SELECT jsonb_agg(rt) INTO v_recent_transactions
+  FROM (
+    SELECT 
+      l.id, 
+      l.created_at,
+      r.room_number,
+      c.full_name as guest_name,
+      l.category,
+      l.description,
+      l.debit::numeric::float as debit,
+      l.credit::numeric::float as credit,
+      l.created_by,
+      l.status
+    FROM public.folio_ledger l
+    LEFT JOIN public.rooms r ON l.room_id = r.id
+    LEFT JOIN public.customers c ON l.customer_id = c.id
+    WHERE l.hotel_id = p_hotel_id
+      AND (p_start_date IS NULL OR l.created_at >= p_start_date)
+      AND (p_end_date IS NULL OR l.created_at <= p_end_date)
+    ORDER BY l.created_at DESC
+    LIMIT 100
+  ) rt;
+
+  RETURN json_build_object(
+    'roomRevenue', v_room_revenue::numeric::float,
+    'restaurantRevenue', v_restaurant_revenue::numeric::float,
+    'laundryRevenue', v_laundry_revenue::numeric::float,
+    'extraServicesRevenue', v_extra_services_revenue::numeric::float,
+    'taxes', v_taxes::numeric::float,
+    'discounts', v_discounts::numeric::float,
+    'refunds', v_refunds::numeric::float,
+    'dailyCollection', v_daily_collection::numeric::float,
+    'outstandingBills', v_outstanding_bills::numeric::float,
+    'cashFlow', (v_daily_collection - v_refunds)::numeric::float,
+    'categoryBreakdown', COALESCE(v_category_breakdown, '[]'::jsonb),
+    'recentTransactions', COALESCE(v_recent_transactions, '[]'::jsonb)
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+
 
 
 

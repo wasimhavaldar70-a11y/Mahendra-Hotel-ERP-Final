@@ -17,7 +17,13 @@ import {
   DoorClosed, 
   Printer,
   History,
-  CalendarDays
+  CalendarDays,
+  ShieldAlert,
+  TrendingDown,
+  TrendingUp,
+  Receipt,
+  Activity,
+  FileText
 } from 'lucide-react';
 
 export default function ReportsPage() {
@@ -31,6 +37,9 @@ export default function ReportsPage() {
     pendingPayments: { guest: string; phone: string; room: string; amount: number }[];
     mostUsedRooms: { room: string; usageCount: number }[];
   } | null>(null);
+
+  const [ledgerReportsData, setLedgerReportsData] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'analytics' | 'ledger'>('analytics');
 
   const [exporting, setExporting] = useState<string | null>(null);
 
@@ -86,8 +95,12 @@ export default function ReportsPage() {
   const loadReports = async (hotelId: string, start?: string, end?: string) => {
     setLoading(true);
     try {
-      const data = await db.getReports(hotelId, start, end);
-      setReportsData(data);
+      const [standardData, ledgerData] = await Promise.all([
+        db.getReports(hotelId, start, end),
+        db.getLedgerReports(hotelId, start, end)
+      ]);
+      setReportsData(standardData);
+      setLedgerReportsData(ledgerData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -277,172 +290,402 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* Visual Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Daily Revenue Bar Chart (Custom SVG) */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                <DollarSign className="w-4 h-4 text-emerald-600" />
-                Daily Revenue Collected ({getPeriodLabel()})
-              </h3>
-              <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Tracks cash inflows from checks and advance bookings.</p>
+        {/* Tab Switcher */}
+        <div className="flex gap-2 border-b border-slate-200 pb-px">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all duration-200 ${
+              activeTab === 'analytics'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            Business Analytics
+          </button>
+          <button
+            onClick={() => setActiveTab('ledger')}
+            className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all duration-200 ${
+              activeTab === 'ledger'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            Guest Folio Ledger & Audit Trail
+          </button>
+        </div>
+
+        {activeTab === 'analytics' ? (
+          /* Visual Charts Row */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Daily Revenue Bar Chart (Custom SVG) */}
+            <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                  Daily Revenue Collected ({getPeriodLabel()})
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Tracks cash inflows from checks and advance bookings.</p>
+              </div>
+
+              <div className="relative pt-6">
+                {/* SVG Bar Chart */}
+                <div className="flex justify-between items-end h-48 w-full gap-4 px-2">
+                  {reportsData.dailyRevenue.length === 0 ? (
+                    <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 italic py-10">
+                      No daily revenue records found for this period.
+                    </div>
+                  ) : (
+                    reportsData.dailyRevenue.map((d, index) => {
+                      const percentHeight = (d.amount / maxRevenue) * 100;
+                      return (
+                        <div key={index} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                          <div className="relative w-full flex justify-center">
+                            {/* Tooltip */}
+                            <span className="absolute top-[-30px] bg-slate-800 text-[10px] text-white py-1 px-1.5 rounded font-black shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10 whitespace-nowrap">
+                              ₹{d.amount.toLocaleString()}
+                            </span>
+                            
+                            {/* Bar */}
+                            <div 
+                              className="w-8 sm:w-12 rounded-t bg-blue-500 group-hover:bg-blue-600 shadow-md shadow-blue-100 transition-all duration-300"
+                              style={{ height: `${Math.max(10, percentHeight * 1.2)}px` }}
+                            ></div>
+                          </div>
+                          <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase truncate max-w-[50px]">
+                            {d.date}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="relative pt-6">
-              {/* SVG Bar Chart */}
-              <div className="flex justify-between items-end h-48 w-full gap-4 px-2">
-                {reportsData.dailyRevenue.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-slate-400 italic py-10">
-                    No daily revenue records found for this period.
-                  </div>
+            {/* Occupancy Rate Speedometer Meter (Custom SVG) */}
+            <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <DoorClosed className="w-4 h-4 text-blue-600" />
+                  Live Room Occupancy Rate
+                </h3>
+                <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Real-time percentage of currently occupied rooms.</p>
+              </div>
+
+              <div className="flex flex-col items-center justify-center py-4">
+                {/* SVG Semi-Circle gauge */}
+                <svg className="w-40 h-24" viewBox="0 0 100 60">
+                  {/* Background Arc */}
+                  <path 
+                    d="M 10 50 A 40 40 0 0 1 90 50" 
+                    fill="none" 
+                    stroke="#F1F5F9" 
+                    strokeWidth="10" 
+                    strokeLinecap="round" 
+                  />
+                  {/* Gauge Arc */}
+                  <path 
+                    d="M 10 50 A 40 40 0 0 1 90 50" 
+                    fill="none" 
+                    stroke={reportsData.occupancyRate > 70 ? '#EF4444' : reportsData.occupancyRate > 35 ? '#3B82F6' : '#10B981'} 
+                    strokeWidth="10" 
+                    strokeLinecap="round" 
+                    strokeDasharray="125.6"
+                    strokeDashoffset={125.6 - (reportsData.occupancyRate / 100) * 125.6}
+                    className="transition-all duration-1000 ease-out"
+                  />
+                  {/* Text */}
+                  <text x="50" y="48" textAnchor="middle" className="text-[14px] font-black fill-slate-800">{reportsData.occupancyRate}%</text>
+                  <text x="50" y="58" textAnchor="middle" className="text-[5px] font-bold fill-slate-400 uppercase tracking-widest">Occupied</text>
+                </svg>
+              </div>
+
+              <div className="text-center pt-2 border-t border-slate-100">
+                <span className="text-[10px] text-slate-400 font-semibold">Total active stays monitored in PMS system.</span>
+              </div>
+            </div>
+
+            {/* Loyalty/Repeat Customers and Room occupancy frequency details */}
+            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Repeat Customers */}
+              <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-violet-600" />
+                    Repeat & Loyal Customers
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Identifies customers with more than 1 stay check-in.</p>
+                </div>
+                {reportsData.repeatCustomers.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400 italic">No repeat guests registered yet.</div>
                 ) : (
-                  reportsData.dailyRevenue.map((d, index) => {
-                    const percentHeight = (d.amount / maxRevenue) * 100;
-                    return (
-                      <div key={index} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div className="relative w-full flex justify-center">
-                          {/* Tooltip */}
-                          <span className="absolute top-[-30px] bg-slate-800 text-[10px] text-white py-1 px-1.5 rounded font-black shadow-md opacity-0 group-hover:opacity-100 transition-opacity z-10 whitespace-nowrap">
-                            ₹{d.amount.toLocaleString()}
-                          </span>
-                          
-                          {/* Bar */}
-                          <div 
-                            className="w-8 sm:w-12 rounded-t bg-blue-500 group-hover:bg-blue-600 shadow-md shadow-blue-100 transition-all duration-300"
-                            style={{ height: `${Math.max(10, percentHeight * 1.2)}px` }}
-                          ></div>
+                  <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                    {reportsData.repeatCustomers.map((c, index) => (
+                      <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800">{c.name}</h4>
+                          <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">{c.phone}</span>
                         </div>
-                        <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase truncate max-w-[50px]">
-                          {d.date}
+                        <span className="px-2 py-0.5 rounded bg-violet-50 border border-violet-100 text-violet-700 text-[10px] font-semibold">
+                          {c.visits} Visits
                         </span>
                       </div>
-                    );
-                  })
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Pending Balance Settlements */}
+              <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <History className="w-4 h-4 text-amber-600" />
+                    Pending Collections
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Active rooms check-ins with remaining outstanding bills.</p>
+                </div>
+                {reportsData.pendingPayments.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400 italic">No pending collections for active stays.</div>
+                ) : (
+                  <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                    {reportsData.pendingPayments.map((p, index) => (
+                      <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800">{p.guest}</h4>
+                          <span className="text-[9px] text-slate-400 font-medium mt-0.5 block">Room {p.room} • {p.phone}</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-red-50 border border-red-100 text-red-700 text-[10px] font-bold">
+                          ₹{p.amount.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Room Utilisation stats */}
+              <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Most Utilised Rooms
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Most frequented room configurations based on stays.</p>
+                </div>
+                {reportsData.mostUsedRooms.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-slate-400 italic">No room utilization data yet.</div>
+                ) : (
+                  <div className="space-y-3 pr-1">
+                    {reportsData.mostUsedRooms.slice(0, 5).map((r, index) => (
+                      <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800">Room {r.room}</h4>
+                          <span className="text-[9px] text-slate-400 font-medium uppercase tracking-wider block">Standard layout</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-semibold">
+                          {r.usageCount} Bookings
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
           </div>
+        ) : (
+          /* Ledger Layout */
+          <div className="space-y-6 animate-fade-in">
+            {/* Ledger KPI Cards Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Room Rent Revenue</span>
+                  <span className="text-xl font-extrabold text-slate-800 mt-1 block">
+                    ₹{Number(ledgerReportsData?.roomRevenue || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <DoorClosed className="w-5 h-5" />
+                </div>
+              </div>
 
-          {/* Occupancy Rate Speedometer Meter (Custom SVG) */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm flex flex-col justify-between space-y-4">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                <DoorClosed className="w-4 h-4 text-primary" />
-                Current Occupancy Rate
-              </h3>
-              <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Proportion of occupied rooms to total vacant rooms.</p>
-            </div>
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Restaurant POS</span>
+                  <span className="text-xl font-extrabold text-slate-800 mt-1 block">
+                    ₹{Number(ledgerReportsData?.restaurantRevenue || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Activity className="w-5 h-5" />
+                </div>
+              </div>
 
-            <div className="flex justify-center items-center py-4 relative">
-              <svg className="w-36 h-36 transform -rotate-90">
-                {/* Background Ring */}
-                <circle 
-                  cx="72" cy="72" r="58" 
-                  stroke="#F1F5F9" strokeWidth="12" fill="transparent" 
-                />
-                {/* Foreground Progress Ring */}
-                <circle 
-                  cx="72" cy="72" r="58" 
-                  stroke="#2563EB" strokeWidth="12" fill="transparent" 
-                  strokeDasharray={2 * Math.PI * 58}
-                  strokeDashoffset={2 * Math.PI * 58 * (1 - reportsData.occupancyRate / 100)}
-                  strokeLinecap="round"
-                  className="transition-all duration-1000 ease-out animate-pulse"
-                />
-              </svg>
-              <div className="absolute flex flex-col items-center">
-                <span className="text-3xl font-black text-slate-800">{reportsData.occupancyRate}%</span>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Occupied</span>
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Other Services (Laundry/Spa)</span>
+                  <span className="text-xl font-extrabold text-slate-800 mt-1 block">
+                    ₹{Number((ledgerReportsData?.laundryRevenue || 0) + (ledgerReportsData?.extraServicesRevenue || 0)).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Collected Cash Flow</span>
+                  <span className="text-xl font-extrabold text-green-700 mt-1 block">
+                    ₹{Number(ledgerReportsData?.cashFlow || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
               </div>
             </div>
 
-            <div className="text-center text-[11px] font-semibold text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              Good occupancy rates are above 65%.
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Taxes Collected</span>
+                  <span className="text-base font-bold text-slate-800 mt-1 block">
+                    ₹{Number(ledgerReportsData?.taxes || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                  <Receipt className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Discounts Issued</span>
+                  <span className="text-base font-bold text-red-600 mt-1 block">
+                    ₹{Number(ledgerReportsData?.discounts || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+                  <TrendingDown className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Refunds Paid</span>
+                  <span className="text-base font-bold text-slate-800 mt-1 block">
+                    ₹{Number(ledgerReportsData?.refunds || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Outstanding Ledger Balance</span>
+                  <span className="text-base font-bold text-red-600 mt-1 block">
+                    ₹{Number(ledgerReportsData?.outstandingBills || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+
+            {/* Category breakdown list & Audit log trail */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Category list */}
+              <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-slate-500" />
+                    Ledger Category Summary
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Summary of charges and collections grouped by category.</p>
+                </div>
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {ledgerReportsData?.categoryBreakdown && ledgerReportsData.categoryBreakdown.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-slate-400 italic">No category data for this period.</div>
+                  ) : (
+                    ledgerReportsData?.categoryBreakdown?.map((cat: any, idx: number) => (
+                      <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex flex-col gap-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">{cat.category}</span>
+                        </div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-slate-400 font-medium">Charges (Debits): <strong className="text-slate-700 font-bold">₹{cat.total_debits}</strong></span>
+                          <span className="text-slate-400 font-medium">Payments (Credits): <strong className="text-slate-700 font-bold">₹{cat.total_credits}</strong></span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Chronological Audit Log Trail table */}
+              <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <History className="w-4 h-4 text-slate-500" />
+                    Chronological Ledger Audit Log
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Chronological trail of all posted hotel transactions.</p>
+                </div>
+                <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-400 font-bold text-[10px] uppercase">
+                        <th className="pb-2">Date/Time</th>
+                        <th className="pb-2">Guest/Room</th>
+                        <th className="pb-2">Description</th>
+                        <th className="pb-2 text-right">Debit (+)</th>
+                        <th className="pb-2 text-right">Credit (-)</th>
+                        <th className="pb-2">User</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
+                      {ledgerReportsData?.recentTransactions && ledgerReportsData.recentTransactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-6 text-center text-slate-400 italic">No ledger audits found.</td>
+                        </tr>
+                      ) : (
+                        ledgerReportsData?.recentTransactions?.map((tx: any) => (
+                          <tr key={tx.id} className={tx.status === 'Void' ? 'line-through text-slate-400 bg-slate-50/20' : ''}>
+                            <td className="py-3 text-[10px] whitespace-nowrap">
+                              {new Date(tx.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                              <div className="text-[9px] text-slate-400 font-medium mt-0.5">
+                                {new Date(tx.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </td>
+                            <td className="py-3">
+                              <div className="font-bold text-slate-700">{tx.guest_name || 'N/A'}</div>
+                              <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Room {tx.room_number || 'N/A'}</div>
+                            </td>
+                            <td className="py-3">
+                              <div className="font-semibold text-slate-700">{tx.description}</div>
+                              <span className="bg-slate-100 text-slate-505 text-[9px] font-bold px-1 py-0.25 rounded uppercase tracking-wide mt-0.5 inline-block">{tx.category}</span>
+                            </td>
+                            <td className="py-3 text-right text-red-650 font-bold">
+                              {tx.debit > 0 ? `₹${tx.debit.toLocaleString('en-IN')}` : '-'}
+                            </td>
+                            <td className="py-3 text-right text-green-650 font-bold">
+                              {tx.credit > 0 ? `₹${tx.credit.toLocaleString('en-IN')}` : '-'}
+                            </td>
+                            <td className="py-3 text-[10px] font-bold text-slate-500 whitespace-nowrap">{tx.created_by}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Detailed reports columns */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Column 1: Repeat Customers */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
-              <History className="w-4.5 h-4.5 text-emerald-600" />
-              Repeat Customers
-            </h3>
-            
-            {reportsData.repeatCustomers.length === 0 ? (
-              <p className="text-xs text-slate-400 italic py-6 text-center">No repeat guests registered yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {reportsData.repeatCustomers.map((c, index) => (
-                  <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">{c.name}</h4>
-                      <span className="text-[10px] text-slate-400 font-semibold block">{c.phone}</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold">
-                      {c.visits} Visits
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Column 2: Outstanding Balances */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
-              <Users className="w-4.5 h-4.5 text-red-600" />
-              Pending Payments
-            </h3>
-            
-            {reportsData.pendingPayments.length === 0 ? (
-              <p className="text-xs text-slate-400 italic py-6 text-center">No pending collections. Excellent!</p>
-            ) : (
-              <div className="space-y-3">
-                {reportsData.pendingPayments.map((p, index) => (
-                  <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">{p.guest} (Room {p.room})</h4>
-                      <span className="text-[10px] text-slate-400 font-semibold block">{p.phone}</span>
-                    </div>
-                    <span className="text-red-600 text-xs font-bold">
-                      ₹{p.amount.toLocaleString('en-IN')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Column 3: Room Occupancy count */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-100 pb-2">
-              <CalendarDays className="w-4.5 h-4.5 text-blue-600" />
-              Most Used Rooms
-            </h3>
-            
-            {reportsData.mostUsedRooms.length === 0 ? (
-              <p className="text-xs text-slate-400 italic py-6 text-center">No bookings registered yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {reportsData.mostUsedRooms.slice(0, 5).map((r, index) => (
-                  <div key={index} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-800">Room {r.room}</h4>
-                      <span className="text-[9px] text-slate-400 font-medium uppercase tracking-wider block">Standard layout</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-semibold">
-                      {r.usageCount} Bookings
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Print Report Container (Hidden from screen, visible during print via global.css) */}
