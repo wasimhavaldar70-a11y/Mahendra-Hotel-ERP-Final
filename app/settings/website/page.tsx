@@ -377,7 +377,10 @@ export default function WebsiteSettingsPage() {
         twitter,
         faqs,
         gallery,
-        rooms: updatedConfigs
+        rooms: updatedConfigs,
+        hasPublishedWebsite: true,
+        hasConfiguredWebsite: true,
+        hasConfiguredRoomTypes: true
       };
 
       // 3. Update brand config json inside the hotels table

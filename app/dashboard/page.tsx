@@ -217,6 +217,136 @@ export default function DashboardPage() {
     );
   }
 
+  if (rooms.length === 0) {
+    const cms = currentHotel?.cms_data || {};
+    
+    const steps = [
+      {
+        id: 'profile',
+        title: 'Hotel Profile',
+        description: 'Your primary property details, email, contact info, and pricing metrics are active.',
+        completed: true,
+        actionLabel: 'View Profile',
+        actionPath: '/settings',
+      },
+      {
+        id: 'types',
+        title: 'Create Room Types',
+        description: 'Configure types (Deluxe, Suite, etc.), prices, standard capacities, and descriptions.',
+        completed: !!cms.hasConfiguredRoomTypes,
+        actionLabel: 'Configure Types',
+        actionPath: '/settings/website',
+      },
+      {
+        id: 'rooms',
+        title: 'Add Rooms',
+        description: 'Define your individual room numbers, floor locations, and assign them to categories.',
+        completed: false,
+        actionLabel: 'Add First Room',
+        actionPath: '/rooms',
+      },
+      {
+        id: 'config_web',
+        title: 'Configure Hotel Website',
+        description: 'Set your luxury taglines, about section info, owner statements, maps, and gallery assets.',
+        completed: !!cms.hasConfiguredWebsite,
+        actionLabel: 'Customize Website',
+        actionPath: '/settings/website',
+      },
+      {
+        id: 'publish_web',
+        title: 'Publish Hotel Website',
+        description: 'Push your customized hotel landing page live so guests can browse and make reservations.',
+        completed: !!cms.hasPublishedWebsite,
+        actionLabel: 'Publish Live',
+        actionPath: '/settings/website',
+      }
+    ];
+
+    return (
+      <DashboardLayout>
+        <div className="space-y-8 max-w-4xl mx-auto py-4">
+          {/* Welcome Header */}
+          <div className="bg-gradient-to-r from-primary/95 to-primary-hover text-white p-8 rounded-[24px] shadow-lg border border-primary/20 relative overflow-hidden">
+            <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 opacity-10 pointer-events-none">
+              <Building2 className="w-80 h-80" />
+            </div>
+            <div className="space-y-3 relative z-10">
+              <span className="bg-white/20 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border border-white/10">
+                Setup Workspace
+              </span>
+              <h1 className="text-3xl font-extrabold tracking-tight">Welcome to StayDesk ERP</h1>
+              <p className="text-white/80 text-sm max-w-xl font-medium leading-relaxed">
+                Your hotel has been created successfully. Complete the following setup steps to configure your property and activate your operational desk.
+              </p>
+            </div>
+          </div>
+
+          {/* Setup Checklist Progress */}
+          <div className="bg-white rounded-[24px] border border-slate-200/60 p-6 shadow-sm space-y-6">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">Workspace Activation Checklist</h2>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">Follow the steps below to initialize rooms and get ready for bookings.</p>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {steps.map((step, idx) => {
+                return (
+                  <div key={step.id} className="py-5 flex flex-col md:flex-row md:items-center justify-between gap-4 group transition-colors">
+                    <div className="flex items-start gap-4">
+                      {/* Status Circle */}
+                      <div className="mt-0.5 shrink-0">
+                        {step.completed ? (
+                          <div className="w-6 h-6 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-sm" title="Completed">
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 rounded-full border-2 border-slate-200 flex items-center justify-center text-slate-400 font-bold text-xs" title="Pending">
+                            {idx + 1}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className={`text-sm font-bold ${step.completed ? 'text-slate-700' : 'text-slate-800'}`}>
+                            {step.title}
+                          </h3>
+                          {step.completed && (
+                            <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold px-1.5 py-0.25 rounded-md">
+                              Ready
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 max-w-xl font-semibold leading-relaxed">
+                          {step.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <a
+                        href={step.actionPath}
+                        className={`text-xs font-bold px-4 py-2 rounded-xl transition-all inline-flex items-center gap-1.5 shadow-sm border ${
+                          step.completed
+                            ? 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                            : 'bg-primary hover:bg-primary-hover text-white border-primary/10 hover:shadow'
+                        }`}
+                      >
+                        {step.actionLabel}
+                        <span className="text-xs">→</span>
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
