@@ -1,0 +1,231 @@
+================================================================================
+STAYDESK CRM / HOTELFLOW CRM - CORE AUTH & QUERY SNIPPETS REFERENCES
+================================================================================
+
+This file contains the code and implementation details of the specific auth methods,
+table queries, database helper methods, and database RPCs you requested.
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS:
+1. signInWithPassword() & getSession() (Supabase auth client usage)
+2. users queries (Select, insert, updates, and role-checks on 'users' table)
+3. hotels queries (Select, insert, updates, and deletions on 'hotels' table)
+4. getRooms() (Rooms fetching implementation)
+5. getDashboardStats() (Dashboard stats RPC implementation)
+6. getPendingBookingRequests() (Pending booking requests query implementation)
+7. getActiveStaysForHotel() (N+1 optimized active check-ins list query)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+1. signInWithPassword() & getSession()
+================================================================================
+-- Implementation Location: lib/supabase/supabaseDb.ts (inside the login method) --
+
+// A. Sign in with Email and Password
+const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+  email: lowercaseEmail,
+  password: password
+});
+
+if (authError || !authData.user) {
+  console.log('Supabase Auth credentials check failed:', authError?.message);
+  return null;
+}
+
+// B. Retrieve Active Auth Session
+const session = (await supabase.auth.getSession()).data.session;
+const access_token = session?.access_token;
+const authUser = session?.user || null;
+
+
+================================================================================
+2. users table queries
+================================================================================
+
+-- A. Client-Side: Fetch User by Auth ID (lib/supabase/supabaseDb.ts) --
+let { data: user, error: userError } = await supabase
+  .from('users')
+  .select('*')
+  .eq('id', authUser.id)
+  .maybeSingle();
+
+-- B. Client-Side: Self-Healing Insertion for users missing in public.users (lib/supabase/supabaseDb.ts) --
+const { data: newUser, error: insertError } = await supabase
+  .from('users')
+  .insert({
+    id: authUser.id,
+    email: lowercaseEmail,
+    role: defaultRole,
+    hotel_id: matchingHotel ? matchingHotel.id : null
+  })
+  .select('*')
+  .maybeSingle();
+
+-- C. Client-Side: Update Email Casing Consistency (lib/supabase/supabaseDb.ts) --
+const { data: updatedUser } = await supabase
+  .from('users')
+  .update({ email: lowercaseEmail })
+  .eq('id', authUser.id)
+  .select('*')
+  .maybeSingle();
+
+-- D. Server-Side: Check Superadmin Permissions (app/api/provision-hotel/route.ts, app/api/delete-hotel/route.ts, app/api/reset-hotel-password/route.ts) --
+const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
+if (roleRes.rows.length === 0 || roleRes.rows[0].role !== 'superadmin') {
+  return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
+}
+
+-- E. Server-Side: Email Collision Validation (app/api/provision-hotel/route.ts) --
+const emailCheck = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+if (emailCheck.rows.length > 0) {
+  return NextResponse.json({ error: 'Email address is already in use' }, { status: 400 });
+}
+
+-- F. Server-Side: Create Public User Profile Map (app/api/provision-hotel/route.ts) --
+await pgClient.query(`
+  INSERT INTO public.users (id, email, role, hotel_id)
+  VALUES ($1, $2, 'hotel_owner', $3)
+  ON CONFLICT (id) DO UPDATE 
+  SET role = 'hotel_owner', hotel_id = $3;
+`, [authData.user.id, lowercaseEmail, hotel.id]);
+
+-- G. Server-Side: Fetch User ID from public.users mapping (app/api/reset-hotel-password/route.ts) --
+const userRes = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+if (userRes.rows.length === 0) {
+  return NextResponse.json({ error: 'No user account found for this email' }, { status: 404 });
+}
+const targetUserId = userRes.rows[0].id;
+
+
+================================================================================
+3. hotels table queries
+================================================================================
+
+-- A. Client-Side: Fetch All Hotels ordered by date (lib/supabase/supabaseDb.ts) --
+const { data, error } = await supabase
+  .from('hotels')
+  .select('*')
+  .order('created_at', { ascending: false });
+
+-- B. Client-Side: Fetch Hotel details by ID (lib/supabase/supabaseDb.ts) --
+const { data, error } = await supabase
+  .from('hotels')
+  .select('*')
+  .eq('id', hotelId)
+  .single();
+
+-- C. Client-Side: Update Hotel CMS configuration data (lib/supabase/supabaseDb.ts) --
+const { data, error } = await supabase
+  .from('hotels')
+  .update({ cms_data: cmsData })
+  .eq('id', hotelId)
+  .select()
+  .single();
+
+-- D. Client-Side: Update Hotel Subscription Status (lib/supabase/supabaseDb.ts) --
+const { data, error } = await supabase
+  .from('hotels')
+  .update({ subscription_status: status })
+  .eq('id', id)
+  .select()
+  .single();
+
+-- E. Server-Side: Insert New Hotel (app/api/provision-hotel/route.ts) --
+const insertHotelRes = await pgClient.query(`
+  INSERT INTO public.hotels (hotel_name, owner_name, email, phone, subscription_plan, subscription_status, cms_data)
+  VALUES ($1, $2, $3, $4, $5, 'Active', $6::jsonb)
+  RETURNING *;
+`, [hotel_name, owner_name, lowercaseEmail, phone, subscription_plan, JSON.stringify(defaultCmsData)]);
+const hotel = insertHotelRes.rows[0];
+
+-- F. Server-Side: Delete Hotel record and cascade operational rows (app/api/delete-hotel/route.ts) --
+await pgClient.query('DELETE FROM public.hotels WHERE id = $1;', [hotel_id]);
+
+
+================================================================================
+4. getRooms()
+================================================================================
+-- Implementation Location: lib/supabase/supabaseDb.ts --
+
+getRooms: async (hotelId: string): Promise<Room[]> => {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('*')
+    .eq('hotel_id', hotelId)
+    .is('deleted_at', null)
+    .order('room_number', { ascending: true });
+  
+  if (error || !data) return [];
+  const resolvedRooms = await Promise.all(
+    data.map(async r => ({
+      ...r,
+      image_url: r.image_url ? await resolveImageUrl(r.image_url) : ''
+    }))
+  );
+  return resolvedRooms;
+}
+
+
+================================================================================
+5. getDashboardStats()
+================================================================================
+-- Implementation Location: lib/supabase/supabaseDb.ts --
+
+getDashboardStats: async (hotelId: string): Promise<any> => {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc('get_dashboard_stats', {
+    p_hotel_id: hotelId
+  });
+  if (error) {
+    console.error('Failed to get dashboard stats:', error);
+    return null;
+  }
+  return data;
+}
+
+
+================================================================================
+6. getPendingBookingRequests()
+================================================================================
+-- Implementation Location: lib/supabase/supabaseDb.ts --
+
+getPendingBookingRequests: async (hotelId: string): Promise<any[]> => {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('booking_requests')
+    .select('*')
+    .eq('hotel_id', hotelId)
+    .eq('status', 'Pending')
+    .order('created_at', { ascending: false });
+  return error ? [] : data || [];
+}
+
+
+================================================================================
+7. getActiveStaysForHotel()
+================================================================================
+-- Implementation Location: lib/supabase/supabaseDb.ts --
+
+getActiveStaysForHotel: async (hotelId: string): Promise<ExtendedCheckIn[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('check_ins')
+    .select('*, primary_customer:customers(*), payment:payments(*)')
+    .eq('hotel_id', hotelId)
+    .eq('status', 'Active')
+    .is('deleted_at', null);
+
+  if (error) {
+    console.error('Error fetching active stays for hotel:', error.message);
+    return [];
+  }
+
+  return (data || []).map((stay: any) => ({
+    ...stay,
+    primary_customer: stay.primary_customer || undefined,
+    payment: Array.isArray(stay.payment) ? stay.payment[0] : (stay.payment || undefined)
+  })) as ExtendedCheckIn[];
+}

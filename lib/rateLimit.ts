@@ -22,22 +22,13 @@ export async function isRequestAllowed(
   const now = new Date();
   const resetTime = new Date(Date.now() + windowMs);
 
-  try {
-    const client = await pool.connect();
     try {
-      // 1. Ensure the rate limit logging table exists
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS public.rate_limits (
-          ip VARCHAR(45) PRIMARY KEY,
-          count INT NOT NULL DEFAULT 1,
-          reset_time TIMESTAMP WITH TIME ZONE NOT NULL
-        );
-      `);
-
-      // 2. Probabilistic cleanup of expired rate limits (10% chance per call)
-      if (Math.random() < 0.1) {
-        await client.query('DELETE FROM public.rate_limits WHERE reset_time < NOW();');
-      }
+      const client = await pool.connect();
+      try {
+        // 1. Probabilistic cleanup of expired rate limits (10% chance per call)
+        if (Math.random() < 0.1) {
+          await client.query('DELETE FROM public.rate_limits WHERE reset_time < NOW();');
+        }
 
       // 3. Atomically upsert rate limit counters
       const res = await client.query(`

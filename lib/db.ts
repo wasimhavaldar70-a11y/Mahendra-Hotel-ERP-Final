@@ -6,7 +6,7 @@
 // @ts-ignore
 import { Pool } from 'pg';
 
-const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const dbUrl = process.env.DATABASE_URL || process.env.DIRECT_URL;
 
 // Declare global cache variable to prevent creating new pools on hot-reloads
 declare global {

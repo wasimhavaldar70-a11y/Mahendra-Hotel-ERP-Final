@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import RoomGrid from '../../components/RoomGrid';
 import RoomDetailModal from '../../components/RoomDetailModal';
-import { db, getSessionUser, setSessionUser } from '../../lib/supabase/client';
+import { db, getSessionUser, setSessionUser, supabase } from '../../lib/supabase/client';
 import { Room, Hotel } from '../../types';
 import { 
   IndianRupee, 
@@ -52,12 +52,16 @@ export default function DashboardPage() {
 
   const loadDashboardData = async (hotelId: string) => {
     try {
-      // Load rooms
-      const roomsList = await db.getRooms(hotelId);
+      // Execute all independent database queries in parallel to eliminate waterfalls
+      const [roomsList, dashboardStats, requestsList, stays] = await Promise.all([
+        db.getRooms(hotelId),
+        db.getDashboardStats(hotelId),
+        db.getPendingBookingRequests(hotelId),
+        db.getActiveStaysForHotel(hotelId)
+      ]);
+
       setRooms(roomsList);
 
-      // Load stats from database RPC
-      const dashboardStats = await db.getDashboardStats(hotelId);
       if (dashboardStats) {
         setStats({
           todayRevenue: Number(dashboardStats.todayRevenue || 0),
@@ -70,12 +74,9 @@ export default function DashboardPage() {
         });
       }
 
-      // Load pending booking requests
-      const requestsList = await db.getPendingBookingRequests(hotelId);
       setPendingRequests(requestsList);
 
-      // Load active stays to pass to RoomGrid and prevent rendering waterfalls
-      const stays = await db.getActiveStaysForHotel(hotelId);
+      // Load active stays map to pass to RoomGrid
       const staysMap: Record<string, { guestName: string; phone: string; price: number }> = {};
       stays.forEach(stay => {
         if (stay.room_id) {
@@ -153,23 +154,47 @@ export default function DashboardPage() {
     setCurrentHotel(session.hotel);
     loadDashboardData(session.hotel.id);
     
-    // Real-time synchronization event listener (BroadcastChannel)
     let syncTimeout: NodeJS.Timeout | null = null;
-    const channel = new BroadcastChannel('hotelflow-sync');
-    channel.onmessage = (event) => {
+    const triggerSync = () => {
+      if (syncTimeout) clearTimeout(syncTimeout);
+      // Apply jittered debounce (300ms to 800ms) to stagger DB hits
+      const delay = 300 + Math.random() * 500;
+      syncTimeout = setTimeout(() => {
+        loadDashboardData(session.hotel.id);
+      }, delay);
+    };
+
+    // 1. Local BroadcastChannel subscription (for same-device cross-tab syncing)
+    const localChannel = new BroadcastChannel('hotelflow-sync');
+    localChannel.onmessage = (event) => {
       if (event.data && event.data.type === 'DB_UPDATE') {
-        if (syncTimeout) clearTimeout(syncTimeout);
-        // Apply jittered debounce (300ms to 800ms) to stagger DB hits across open tabs
-        const delay = 300 + Math.random() * 500;
-        syncTimeout = setTimeout(() => {
-          loadDashboardData(session.hotel.id);
-        }, delay);
+        triggerSync();
       }
     };
 
+    // 2. Supabase Realtime subscription (for cross-terminal sync)
+    let realtimeChannel: any = null;
+    if (supabase) {
+      realtimeChannel = supabase
+        .channel('dashboard-db-sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'check_ins' }, (payload: any) => {
+          if (payload.new && payload.new.hotel_id === session.hotel.id) triggerSync();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, (payload: any) => {
+          if (payload.new && payload.new.hotel_id === session.hotel.id) triggerSync();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'booking_requests' }, (payload: any) => {
+          if (payload.new && payload.new.hotel_id === session.hotel.id) triggerSync();
+        })
+        .subscribe();
+    }
+
     return () => {
       if (syncTimeout) clearTimeout(syncTimeout);
-      channel.close();
+      localChannel.close();
+      if (supabase && realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+      }
     };
   }, []);
 

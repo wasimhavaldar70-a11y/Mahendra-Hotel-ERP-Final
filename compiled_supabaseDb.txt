@@ -528,56 +528,6 @@ export const supabaseDb = {
     return error ? [] : data || [];
   },
 
-  getCustomerStatsBatch: async (hotelId: string): Promise<Record<string, { stayCount: number; lastVisit: string | null; pendingBalance: number }>> => {
-    if (!supabase) return {};
-
-    const { data, error } = await supabase
-      .from('check_ins')
-      .select('id, primary_customer_id, status, check_in, payments(pending)')
-      .eq('hotel_id', hotelId)
-      .is('deleted_at', null);
-
-    if (error || !data) {
-      console.error('Error fetching stays stats batch:', error);
-      return {};
-    }
-
-    const statsMap: Record<string, { stayCount: number; lastVisit: string | null; pendingBalance: number }> = {};
-
-    data.forEach((stay: any) => {
-      const custId = stay.primary_customer_id;
-      if (!custId) return;
-
-      if (!statsMap[custId]) {
-        statsMap[custId] = {
-          stayCount: 0,
-          lastVisit: null,
-          pendingBalance: 0
-        };
-      }
-
-      const stats = statsMap[custId];
-      stats.stayCount += 1;
-
-      // Calculate last visit (latest check_in where status is Completed)
-      if (stay.status === 'Completed') {
-        if (!stats.lastVisit || new Date(stay.check_in).getTime() > new Date(stats.lastVisit).getTime()) {
-          stats.lastVisit = stay.check_in;
-        }
-      }
-
-      // Calculate pending balance from active stays
-      if (stay.status === 'Active') {
-        const pay = Array.isArray(stay.payments) ? stay.payments[0] : stay.payments;
-        if (pay) {
-          stats.pendingBalance += Number(pay.pending || 0);
-        }
-      }
-    });
-
-    return statsMap;
-  },
-
   searchCustomers: async (hotelId: string, query: string): Promise<Array<{ customer: Customer; docs: CustomerDocument[]; stayCount: number; lastVisit: string | null; pendingBalance: number }>> => {
     if (!supabase) return [];
     const q = query.trim();

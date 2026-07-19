@@ -1227,5 +1227,19 @@ CREATE POLICY "Allow public read of hotel assets" ON storage.objects
   USING (bucket_id = 'hotel-assets');
 
 
+-- ========================================================
+-- API RATE LIMITS CACHE TABLE
+-- ========================================================
+CREATE TABLE IF NOT EXISTS public.rate_limits (
+  ip VARCHAR(45) PRIMARY KEY,
+  count INT NOT NULL DEFAULT 1,
+  reset_time TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+-- Enable RLS on rate limits table to protect audit boundaries
+ALTER TABLE public.rate_limits ENABLE ROW LEVEL SECURITY;
+
+
+
 
 

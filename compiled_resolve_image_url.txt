@@ -1,0 +1,45 @@
+================================================================================
+STAYDESK CRM / HOTELFLOW CRM - resolveImageUrl() HELPER IMPLEMENTATION
+================================================================================
+
+This file documents the `resolveImageUrl()` helper implementation located in 
+`lib/supabase/supabaseDb.ts` (lines 83-108).
+
+This method handles URL resolution for images. If the path is already a base64 Data 
+URI or external HTTP link, it is returned immediately. For custom storage paths, it
+automatically checks whether the asset is public (rooms/gallery/hero assets in 
+the public 'hotel-assets' bucket) or private (customer identity documents in 
+the private 'customer-documents' bucket) and returns public CDN links or signs
+authenticated URLs accordingly.
+
+--------------------------------------------------------------------------------
+1. CODE DEFINITION: resolveImageUrl(imagePath)
+--------------------------------------------------------------------------------
+
+// Helper: Get pre-signed URL or CDN link for storage path
+const resolveImageUrl = async (imagePath: string | null | undefined): Promise<string> => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
+  if (!supabase) return '';
+
+  const isPublicAsset = imagePath.includes('/rooms/') || imagePath.includes('/gallery/') || imagePath.includes('/hero/');
+  const bucketName = isPublicAsset ? 'hotel-assets' : 'customer-documents';
+
+  try {
+    if (isPublicAsset) {
+      const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
+      return pubData.publicUrl || '';
+    }
+
+    const { data, error } = await supabase.storage.from(bucketName).createSignedUrl(imagePath, 3600);
+    if (error || !data) {
+      // Fallback to publicUrl if signing fails
+      const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
+      return pubData.publicUrl || '';
+    }
+    return data.signedUrl || '';
+  } catch (e) {
+    const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
+    return pubData.publicUrl || '';
+  }
+};

@@ -1,0 +1,129 @@
+================================================================================
+STAYDESK CRM / HOTELFLOW CRM - DASHBOARD STATS: SQL RPC & REACT STATE HANDLER
+================================================================================
+
+This file documents the end-to-end telemetry and metric collection system:
+1. The PostgreSQL PL/pgSQL database function `get_dashboard_stats` that compiles
+   revenue, check-in, checkout, and room occupancy status metrics in a single query.
+2. The React frontend handler `loadDashboardData` that calls this RPC and synchronizes
+   the local Component states.
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS:
+1. SQL DEFINITION: get_dashboard_stats(p_hotel_id UUID)
+2. CLIENT DEFINITION: loadDashboardData(hotelId) (React State Loader)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+1. SQL DEFINITION: get_dashboard_stats(p_hotel_id UUID)
+================================================================================
+-- Location: supabase/database.sql (Lines 656-710) --
+
+CREATE OR REPLACE FUNCTION get_dashboard_stats(p_hotel_id UUID)
+RETURNS JSONB AS $$
+DECLARE
+  v_today_revenue NUMERIC(10,2);
+  v_checkins_count INT;
+  v_checkouts_count INT;
+  v_occupied INT;
+  v_available INT;
+  v_maintenance INT;
+  v_cleaning INT;
+BEGIN
+  -- 1. Today's Revenue (sum of advances paid today in Indian Standard Time)
+  SELECT COALESCE(SUM(p.advance), 0.00) INTO v_today_revenue
+  FROM public.payments p
+  JOIN public.check_ins c ON p.checkin_id = c.id
+  WHERE c.hotel_id = p_hotel_id 
+    AND p.created_at AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
+    AND c.deleted_at IS NULL;
+
+  -- 2. Check-ins Count Today
+  SELECT COUNT(*)::INT INTO v_checkins_count
+  FROM public.check_ins
+  WHERE hotel_id = p_hotel_id
+    AND check_in AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
+    AND deleted_at IS NULL;
+
+  -- 3. Checkouts Count Today (status completed and actual_checkout is today)
+  SELECT COUNT(*)::INT INTO v_checkouts_count
+  FROM public.check_ins
+  WHERE hotel_id = p_hotel_id
+    AND status = 'Completed'
+    AND actual_checkout AT TIME ZONE 'Asia/Kolkata'::text >= date_trunc('day', timezone('Asia/Kolkata'::text, now()))
+    AND actual_checkout AT TIME ZONE 'Asia/Kolkata'::text < date_trunc('day', timezone('Asia/Kolkata'::text, now())) + INTERVAL '1 day'
+    AND deleted_at IS NULL;
+
+  -- 4. Room Counts based on current operational status flags
+  SELECT COALESCE(COUNT(CASE WHEN status = 'Occupied' THEN 1 END)::INT, 0),
+         COALESCE(COUNT(CASE WHEN status = 'Ready' THEN 1 END)::INT, 0),
+         COALESCE(COUNT(CASE WHEN status = 'Maintenance' THEN 1 END)::INT, 0),
+         COALESCE(COUNT(CASE WHEN status = 'Cleaning' THEN 1 END)::INT, 0)
+  INTO v_occupied, v_available, v_maintenance, v_cleaning
+  FROM public.rooms
+  WHERE hotel_id = p_hotel_id AND deleted_at IS NULL;
+
+  RETURN json_build_object(
+    'todayRevenue', v_today_revenue,
+    'checkInsCount', v_checkins_count,
+    'checkOutsCount', v_checkouts_count,
+    'occupiedRooms', v_occupied,
+    'availableRooms', v_available,
+    'maintenanceRooms', v_maintenance,
+    'cleaningRooms', v_cleaning
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+
+
+================================================================================
+2. CLIENT DEFINITION: loadDashboardData(hotelId) (React State Loader)
+================================================================================
+-- Location: app/dashboard/page.tsx (called in useEffect) --
+
+const loadDashboardData = async (hotelId: string) => {
+  try {
+    // A. Fetch current rooms list
+    const roomsList = await db.getRooms(hotelId);
+    setRooms(roomsList);
+
+    // B. Fetch metrics from the Database RPC `get_dashboard_stats`
+    const dashboardStats = await db.getDashboardStats(hotelId);
+    if (dashboardStats) {
+      setStats({
+        todayRevenue: Number(dashboardStats.todayRevenue || 0),
+        checkInsCount: Number(dashboardStats.checkInsCount || 0),
+        checkOutsCount: Number(dashboardStats.checkOutsCount || 0),
+        occupiedRooms: Number(dashboardStats.occupiedRooms || 0),
+        availableRooms: Number(dashboardStats.availableRooms || 0),
+        maintenanceRooms: Number(dashboardStats.maintenanceRooms || 0),
+        cleaningRooms: Number(dashboardStats.cleaningRooms || 0)
+      });
+    }
+
+    // C. Fetch pending customer booking requests
+    const requestsList = await db.getPendingBookingRequests(hotelId);
+    setPendingRequests(requestsList);
+
+    // D. Fetch active stays to prevent rendering cascade network waterfalls
+    const stays = await db.getActiveStaysForHotel(hotelId);
+    const staysMap: Record<string, { guestName: string; phone: string; price: number }> = {};
+    stays.forEach(stay => {
+      if (stay.room_id) {
+        const roomObj = roomsList.find(r => r.id === stay.room_id);
+        staysMap[stay.room_id] = {
+          guestName: stay.primary_customer?.full_name || 'Guest',
+          phone: stay.primary_customer?.phone || '',
+          price: Number(stay.payment?.room_price || roomObj?.price || 0)
+        };
+      }
+    });
+    setActiveStays(staysMap);
+
+  } catch (err) {
+    console.error("Error loading dashboard data:", err);
+  } finally {
+    setLoading(false);
+  }
+};

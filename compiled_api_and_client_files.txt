@@ -1,0 +1,573 @@
+================================================================================
+STAYDESK CRM / HOTELFLOW CRM - SUPABASE CLIENT & API ROUTE FILES
+================================================================================
+
+This file compiles the requested Supabase client initializer and Next.js server-side 
+API route endpoints (health check, liveness check, readiness check, hotel provisioning, 
+hotel deletion, and owner password resets).
+
+--------------------------------------------------------------------------------
+TABLE OF CONTENTS:
+1. lib/supabase/supabaseClient.ts (Shared Supabase Client Initialization)
+2. app/api/delete-hotel/route.ts (Transactional Hotel & User Account Deletion API)
+3. app/api/health/route.ts (Deep System Health Checks - DB & Storage latency check)
+4. app/api/live/route.ts (Liveness Ping API)
+5. app/api/provision-hotel/route.ts (Onboarding Transactional Hotel & Admin Provisioning)
+6. app/api/ready/route.ts (Readiness Probe API)
+7. app/api/reset-hotel-password/route.ts (Superadmin Owner Password Reset API via GoTrue Admin)
+--------------------------------------------------------------------------------
+
+
+================================================================================
+1. FILE: lib/supabase/supabaseClient.ts
+================================================================================
+// ========================================================
+// StayDesk CRM / HotelFlow CRM Shared Supabase Client
+// Location: lib/supabase/supabaseClient.ts
+// ========================================================
+
+import { createBrowserClient } from '@supabase/ssr';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('[YOUR-') || supabaseAnonKey.includes('[YOUR-')) {
+  throw new Error(
+    'CRITICAL ERROR: Supabase environment credentials (NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY) are missing or not configured correctly.'
+  );
+}
+
+// Real connection is active
+export const isRealSupabase = true;
+
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
+
+
+================================================================================
+2. FILE: app/api/delete-hotel/route.ts
+================================================================================
+import { NextResponse } from 'next/server';
+// @ts-ignore
+import { PoolClient } from 'pg';
+import { pool } from '../../../lib/db';
+import { isRequestAllowed } from '../../../lib/rateLimit';
+import { getAuthenticatedUser } from '../../../lib/supabase/server';
+
+export async function POST(request: Request) {
+  // Apply rate limiter (5 requests per minute)
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
+  if (!await isRequestAllowed(clientIp, 5, 60000)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
+  let pgClient: PoolClient | null = null;
+  try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid session or token' }, { status: 401 });
+    }
+    const adminUserId = user.id;
+
+    const body = await request.json();
+    const { hotel_id } = body;
+
+    if (!hotel_id) {
+      return NextResponse.json({ error: 'Missing hotel_id' }, { status: 400 });
+    }
+
+    pgClient = await pool.connect();
+
+    if (adminUserId) {
+      const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
+      if (roleRes.rows.length === 0 || roleRes.rows[0].role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
+      }
+    }
+
+    // Start transaction
+    await pgClient.query('BEGIN;');
+
+    // 1. Get the email of the hotel owner to clean up auth.users
+    const hotelRes = await pgClient.query('SELECT email FROM public.hotels WHERE id = $1;', [hotel_id]);
+    
+    if (hotelRes.rows.length > 0) {
+      const email = hotelRes.rows[0].email;
+      
+      // 2. Delete the user from auth.users (cascades to public.users)
+      await pgClient.query('DELETE FROM auth.users WHERE email = $1;', [email]);
+    }
+
+    // 3. Delete the hotel from public.hotels (cascades to all operational tables)
+    await pgClient.query('DELETE FROM public.hotels WHERE id = $1;', [hotel_id]);
+
+    // Commit Transaction
+    await pgClient.query('COMMIT;');
+
+    return NextResponse.json({ success: true });
+
+  } catch (err: any) {
+    if (pgClient) {
+      try {
+        await pgClient.query('ROLLBACK;');
+      } catch (rollbackErr) {
+        console.error('Rollback failed:', rollbackErr);
+      }
+    }
+    console.error('Delete Hotel API Error:', err);
+    return NextResponse.json({ error: err.message || 'Failed to delete hotel' }, { status: 500 });
+  } finally {
+    if (pgClient) {
+      pgClient.release();
+    }
+  }
+}
+
+
+================================================================================
+3. FILE: app/api/health/route.ts
+================================================================================
+import { NextResponse } from 'next/server';
+import { pool } from '../../../lib/db';
+import '../../../lib/env';
+
+export async function GET() {
+  const startTime = Date.now();
+  const checks: Record<string, any> = {
+    env: 'OK'
+  };
+  let healthy = true;
+
+  // 1. Database Check
+  try {
+    const client = await pool.connect();
+    const startDb = Date.now();
+    await client.query('SELECT 1;');
+    checks.database_latency_ms = Date.now() - startDb;
+    client.release();
+    checks.database = 'HEALTHY';
+  } catch (err: any) {
+    checks.database = `UNHEALTHY: ${err.message}`;
+    healthy = false;
+  }
+
+  // 2. Storage Check
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const startStorage = Date.now();
+    const { error } = await supabase.storage.listBuckets();
+    if (error) throw error;
+    checks.storage_latency_ms = Date.now() - startStorage;
+    checks.storage = 'HEALTHY';
+  } catch (err: any) {
+    checks.storage = `UNHEALTHY: ${err.message}`;
+    healthy = false;
+  }
+
+  // 3. System Metrics
+  const memoryUsage = process.memoryUsage ? process.memoryUsage() : null;
+  const systemMetrics = {
+    uptime_seconds: process.uptime ? process.uptime() : 0,
+    memory: memoryUsage ? {
+      rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
+      heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
+      heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+    } : 'unavailable'
+  };
+
+  const responsePayload = {
+    status: healthy ? 'HEALTHY' : 'UNHEALTHY',
+    timestamp: new Date().toISOString(),
+    total_latency_ms: Date.now() - startTime,
+    checks,
+    system: systemMetrics
+  };
+
+  if (!healthy) {
+    return NextResponse.json(responsePayload, { status: 500 });
+  }
+
+  return NextResponse.json(responsePayload);
+}
+
+
+================================================================================
+4. FILE: app/api/live/route.ts
+================================================================================
+import { NextResponse } from 'next/server';
+
+export async function GET() {
+  return NextResponse.json({
+    status: 'UP',
+    timestamp: new Date().toISOString()
+  });
+}
+
+
+================================================================================
+5. FILE: app/api/provision-hotel/route.ts
+================================================================================
+import { NextResponse } from 'next/server';
+// @ts-ignore
+import { PoolClient } from 'pg';
+import { pool } from '../../../lib/db';
+import { isRequestAllowed } from '../../../lib/rateLimit';
+import { getAuthenticatedUser } from '../../../lib/supabase/server';
+import { logger } from '../../../lib/logger';
+
+export async function POST(request: Request) {
+  // Apply rate limiter (10 requests per minute)
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
+  if (!await isRequestAllowed(clientIp, 10, 60000)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
+  let pgClient: PoolClient | null = null;
+  let hotelNameForLog = 'unknown';
+  try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid session or token' }, { status: 401 });
+    }
+    const adminUserId = user.id;
+
+    const body = await request.json();
+    const { hotel_name, owner_name, phone, email, subscription_plan, password, address, google_maps_url } = body;
+    hotelNameForLog = hotel_name || 'unknown';
+
+    if (!hotel_name || !owner_name || !email || !phone || !password) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    pgClient = await pool.connect();
+
+    if (adminUserId) {
+      const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
+      if (roleRes.rows.length === 0 || roleRes.rows[0].role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
+      }
+    }
+
+    const lowercaseEmail = email.toLowerCase().trim();
+
+    // 1. Email validation step (prevent silent deletes of other hotel users)
+    const emailCheck = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+    if (emailCheck.rows.length > 0) {
+      return NextResponse.json({ error: 'Email address is already in use' }, { status: 400 });
+    }
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey || serviceRoleKey.includes('[YOUR-')) {
+      return NextResponse.json({ error: 'Configuration Error: SUPABASE_SERVICE_ROLE_KEY is not configured on the server.' }, { status: 500 });
+    }
+
+    logger.info('Provision', `Initiating transactional customer onboarding for hotel: ${hotel_name}`, {
+      metadata: { hotel_name, owner_name, email, phone, subscription_plan }
+    });
+
+    let hotel: any = null;
+
+    // A. Create Hotel record first to generate hotel.id
+    await pgClient.query('BEGIN;');
+
+    const defaultCmsData = {
+      tagline: 'Experience Absolute Luxury',
+      aboutTitle: `About ${hotel_name}`,
+      aboutText: 'We provide premier hospitality services and premium rooms configured for business and leisure travellers.',
+      aboutOwnerMessage: `Welcome to ${hotel_name}. We ensure clean rooms and high quality guest satisfaction.`,
+      addressVal: address ? String(address).trim() : 'Calangute, Goa, India',
+      whatsappVal: phone,
+      googleMapsUrl: google_maps_url ? String(google_maps_url).trim() : 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3844.2014022416045!2d73.75338167590861!3d15.524584285078712!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bbfc1d560c5c363%3A0xc07cfb19cd7579bb!2sCalangute%20Beach!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin',
+      instagram: 'https://instagram.com',
+      facebook: 'https://facebook.com',
+      twitter: 'https://twitter.com',
+      faqs: [
+        { question: 'What are the check-in and check-out timings?', answer: 'Our standard check-in time is 2:00 PM and check-out time is 11:00 AM.' },
+        { question: 'Do you offer airport transfers?', answer: 'Yes, we provide private airport transfers at a nominal fee. Coordinate with reception.' },
+        { question: 'Is breakfast included?', answer: 'A buffet breakfast is complimentary with all stays from 7:30 AM to 10:30 AM.' }
+      ],
+      gallery: [
+        'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80'
+      ],
+      rooms: {
+        'Deluxe Room': {
+          price: 2500,
+          description: 'A spacious room featuring a queen-size bed, high-speed Wi-Fi, and a beautiful pool view.',
+          image: 'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+          images: [
+            'https://images.unsplash.com/photo-1611891487122-2075b962442f?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?auto=format&fit=crop&w=800&q=80'
+          ],
+          amenities: ['Free WiFi', 'Air Conditioning', 'Room Service', 'Pool View']
+        },
+        'Super Deluxe Room': {
+          price: 3500,
+          description: 'Indulge in extra space and luxury, with a king-size bed, private balcony, and spectacular ocean views.',
+          image: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+          images: [
+            'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=800&q=80'
+          ],
+          amenities: ['Free WiFi', 'Air Conditioning', 'Minibar', 'Balcony', 'Ocean View']
+        }
+      },
+      invoice_settings: {
+        prefix: 'INV-',
+        nextNumber: 1001,
+        terms: 'Thank you for choosing StayDesk!'
+      },
+      tax_settings: [
+        { name: 'GST 12%', rate: 0.12, active: true },
+        { name: 'GST 18%', rate: 0.18, active: true }
+      ],
+      email_templates: {
+        welcome: 'Welcome to StayDesk ERP! Your account has been provisioned successfully.',
+        checkout: 'Thank you for your stay. Please find your invoice attached.'
+      }
+    };
+    
+    const insertHotelRes = await pgClient.query(`
+      INSERT INTO public.hotels (hotel_name, owner_name, email, phone, subscription_plan, subscription_status, cms_data)
+      VALUES ($1, $2, $3, $4, $5, 'Active', $6::jsonb)
+      RETURNING *;
+    `, [hotel_name, owner_name, lowercaseEmail, phone, subscription_plan, JSON.stringify(defaultCmsData)]);
+    
+    hotel = insertHotelRes.rows[0];
+
+    // B. Provision account via official Supabase admin client
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAdmin = createClient(supabaseUrl!, serviceRoleKey!);
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: lowercaseEmail,
+      password: password,
+      email_confirm: true,
+      app_metadata: {
+        role: 'hotel_owner',
+        hotel_id: hotel.id
+      }
+    });
+
+    if (authError || !authData.user) {
+      throw new Error(authError?.message || 'Failed to create user account via Supabase Admin API');
+    }
+
+    // Ensure standard storage buckets exist on the storage backend using admin privileges
+    try {
+      const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
+      if (listError) throw listError;
+
+      if (!buckets?.some((b: any) => b.id === 'customer-documents')) {
+        const { error: bucketError } = await supabaseAdmin.storage.createBucket('customer-documents', {
+          public: false,
+          fileSizeLimit: 5242880 // 5MB
+        });
+        if (bucketError) throw bucketError;
+      }
+      if (!buckets?.some((b: any) => b.id === 'hotel-assets')) {
+        const { error: bucketError } = await supabaseAdmin.storage.createBucket('hotel-assets', {
+          public: true,
+          fileSizeLimit: 5242880 // 5MB
+        });
+        if (bucketError) throw bucketError;
+      }
+    } catch (err: any) {
+      logger.warn('Provision', 'Non-blocking storage bucket initialization check failed: ' + (err.message || err));
+    }
+
+    // C. Ensure matching role and reference mapping in public schemas
+    await pgClient.query(`
+      INSERT INTO public.users (id, email, role, hotel_id)
+      VALUES ($1, $2, 'hotel_owner', $3)
+      ON CONFLICT (id) DO UPDATE 
+      SET role = 'hotel_owner', hotel_id = $3;
+    `, [authData.user.id, lowercaseEmail, hotel.id]);
+
+    // D. Explicitly update auth.users metadata to ensure JWT claims are populated
+    await pgClient.query(`
+      UPDATE auth.users 
+      SET raw_app_meta_data = jsonb_set(
+        jsonb_set(
+          coalesce(raw_app_meta_data, '{}'::jsonb),
+          '{hotel_id}',
+          to_jsonb($1::uuid)
+        ),
+        '{role}',
+        '"hotel_owner"'::jsonb
+      )
+      WHERE id = $2::uuid;
+    `, [hotel.id, authData.user.id]);
+
+    // E. Provision Initial Default Rooms inside the transaction
+    await pgClient.query(`
+      INSERT INTO public.rooms (hotel_id, room_number, room_type, price, floor, capacity, status)
+      VALUES 
+        ($1, '101', 'Deluxe Room', 2500, 'Ground Floor', 2, 'Ready'),
+        ($1, '102', 'Deluxe Room', 2500, 'Ground Floor', 2, 'Ready'),
+        ($1, '201', 'Super Deluxe Room', 3500, 'First Floor', 3, 'Ready');
+    `, [hotel.id]);
+
+    await pgClient.query('COMMIT;');
+
+    logger.info('Provision', `Successfully onboarded hotel: ${hotel_name} with user: ${lowercaseEmail}`, {
+      userId: authData.user.id,
+      hotelId: hotel.id,
+      role: 'hotel_owner'
+    });
+
+    return NextResponse.json({ success: true, hotel });
+
+  } catch (err: any) {
+    if (pgClient) {
+      try {
+        await pgClient.query('ROLLBACK;');
+      } catch (rollbackErr) {
+        logger.error('Provision', 'Rollback failed during provisioning failure', rollbackErr as Error);
+      }
+    }
+    logger.error('Provision', `Hotel onboarding provisioning failed for: ${hotelNameForLog}`, err);
+    return NextResponse.json({ error: err.message || 'Failed to provision hotel account' }, { status: 500 });
+  } finally {
+    if (pgClient) {
+      pgClient.release();
+    }
+  }
+}
+
+
+================================================================================
+6. FILE: app/api/ready/route.ts
+================================================================================
+import { NextResponse } from 'next/server';
+import { pool } from '../../../lib/db';
+import '../../../lib/env';
+
+export async function GET() {
+  const checks: Record<string, any> = {
+    env: 'OK'
+  };
+  let ready = true;
+
+  // 1. Database Liveness check
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT 1;');
+    client.release();
+    checks.database = 'OK';
+  } catch (err: any) {
+    checks.database = `ERROR: ${err.message}`;
+    ready = false;
+  }
+
+  // 2. Storage Client check
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { error } = await supabase.storage.listBuckets();
+    if (error) throw error;
+    checks.storage = 'OK';
+  } catch (err: any) {
+    checks.storage = `ERROR: ${err.message}`;
+    ready = false;
+  }
+
+  if (!ready) {
+    return NextResponse.json({ status: 'DOWN', checks, timestamp: new Date().toISOString() }, { status: 503 });
+  }
+
+  return NextResponse.json({ status: 'READY', checks, timestamp: new Date().toISOString() });
+}
+
+
+================================================================================
+7. FILE: app/api/reset-hotel-password/route.ts
+================================================================================
+import { NextResponse } from 'next/server';
+// @ts-ignore
+import { PoolClient } from 'pg';
+import { pool } from '../../../lib/db';
+import { isRequestAllowed } from '../../../lib/rateLimit';
+import { getAuthenticatedUser } from '../../../lib/supabase/server';
+
+export async function POST(request: Request) {
+  // Apply rate limiter (10 requests per minute)
+  const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
+  if (!await isRequestAllowed(clientIp, 10, 60000)) {
+    return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+  }
+
+  let pgClient: PoolClient | null = null;
+  try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid session or token' }, { status: 401 });
+    }
+    const adminUserId = user.id;
+
+    const body = await request.json();
+    const { email, password } = body;
+
+    if (!email || !password) {
+      return NextResponse.json({ error: 'Missing email or password' }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 });
+    }
+
+    pgClient = await pool.connect();
+
+    if (adminUserId) {
+      const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
+      if (roleRes.rows.length === 0 || roleRes.rows[0].role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
+      }
+    }
+
+    // Resolve User ID by email from public.users mapping table
+    const lowercaseEmail = email.toLowerCase().trim();
+    const userRes = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+    
+    if (userRes.rows.length === 0) {
+      return NextResponse.json({ error: 'No user account found for this email' }, { status: 404 });
+    }
+    const targetUserId = userRes.rows[0].id;
+
+    // Securely update password using GoTrue Admin Client
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey || serviceRoleKey.includes('[YOUR-')) {
+      return NextResponse.json({ error: 'Configuration Error: SUPABASE_SERVICE_ROLE_KEY is not configured on the server.' }, { status: 500 });
+    }
+
+    const { createClient } = require('@supabase/supabase-js');
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAdmin = createClient(supabaseUrl!, serviceRoleKey!);
+
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+      password: password
+    });
+
+    if (authError) {
+      return NextResponse.json({ error: authError.message || 'Failed to update user account password via GoTrue Admin API' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+
+  } catch (err: any) {
+    console.error('Reset Password API Error:', err);
+    return NextResponse.json({ error: err.message || 'Failed to reset password' }, { status: 500 });
+  } finally {
+    if (pgClient) {
+      pgClient.release();
+    }
+  }
+}

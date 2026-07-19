@@ -76,10 +76,12 @@ export default function BookingsPage() {
 
   const loadData = async (hotelId: string) => {
     try {
-      const roomsList = await db.getRooms(hotelId);
+      // Execute room and booking listings in parallel to speed up load time
+      const [roomsList, bookingsList] = await Promise.all([
+        db.getRooms(hotelId),
+        db.getBookings(hotelId)
+      ]);
       setRooms(roomsList);
-      
-      const bookingsList = await db.getBookings(hotelId);
       setBookings(bookingsList);
     } catch (err) {
       console.error('Error loading bookings data:', err);

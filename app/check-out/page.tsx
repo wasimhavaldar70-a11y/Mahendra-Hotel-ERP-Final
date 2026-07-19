@@ -24,19 +24,21 @@ export default function CheckOutPage() {
 
   const loadOccupiedRooms = async (hotelId: string) => {
     try {
-      const list = await db.getRooms(hotelId);
-      const occupied = list.filter(r => r.status === 'Occupied');
+      // Fetch rooms and active stays in parallel to avoid N+1 query loops
+      const [roomsList, staysList] = await Promise.all([
+        db.getRooms(hotelId),
+        db.getActiveStaysForHotel(hotelId)
+      ]);
+
+      const occupied = roomsList.filter(r => r.status === 'Occupied');
       setOccupiedRooms(occupied);
 
       const staysMap: Record<string, any> = {};
-      await Promise.all(
-        occupied.map(async (room) => {
-          const stay = await db.getActiveStayForRoom(hotelId, room.id);
-          if (stay) {
-            staysMap[room.id] = stay;
-          }
-        })
-      );
+      staysList.forEach((stay) => {
+        if (stay.room_id) {
+          staysMap[stay.room_id] = stay;
+        }
+      });
       setRoomStays(staysMap);
     } catch (err) {
       console.error(err);

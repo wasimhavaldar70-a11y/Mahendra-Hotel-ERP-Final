@@ -40,43 +40,62 @@ export default function CustomersPage() {
   const [customerHistory, setCustomerHistory] = useState<any[]>([]);
   const [customerStays, setCustomerStays] = useState<any[]>([]);
 
-  const fetchGuestDetails = async (customerId: string) => {
+  const fetchGuestDetails = async (customerId: string, phone: string) => {
     if (!currentHotel) return;
     try {
-      const [historyList, staysList] = await Promise.all([
+      // Lazily fetch stays, history, and documents (via getCustomerByPhoneOrAadhar) in parallel on request
+      const [historyList, staysList, detail] = await Promise.all([
         db.getCustomerHistory(currentHotel.id, customerId),
-        db.getCustomerStays(currentHotel.id, customerId)
+        db.getCustomerStays(currentHotel.id, customerId),
+        db.getCustomerByPhoneOrAadhar(currentHotel.id, phone)
       ]);
       setCustomerHistory(historyList);
       setCustomerStays(staysList);
+
+      if (detail) {
+        setViewGuest(prev => {
+          if (prev && prev.customer.id === customerId) {
+            return {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                docs: detail.docs
+              }
+            };
+          }
+          return prev;
+        });
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching guest details lazily:', err);
     }
   };
 
   const loadCustomers = async (hotelId: string) => {
     try {
-      const list = await db.getCustomers(hotelId);
+      // Query customers and stays stats in parallel using batch helpers to avoid N+1 queries
+      const [list, statsBatch] = await Promise.all([
+        db.getCustomers(hotelId),
+        db.getCustomerStatsBatch(hotelId)
+      ]);
+
       setCustomers(list);
 
-      // Load stats for each guest
-      const statsMap: typeof guestStats = {};
-      await Promise.all(
-        list.map(async (cust) => {
-          const detail = await db.getCustomerByPhoneOrAadhar(hotelId, cust.phone);
-          if (detail) {
-            statsMap[cust.id] = {
-              stayCount: detail.stayCount,
-              lastVisit: detail.lastVisit,
-              pendingBalance: detail.pendingBalance,
-              docs: detail.docs
-            };
-          }
-        })
-      );
+      // Build stats map with lazy documents injection placeholder
+      const statsMap: Record<string, { stayCount: number; lastVisit: string | null; pendingBalance: number; docs: CustomerDocument[] }> = {};
+      list.forEach((cust) => {
+        const batchInfo = statsBatch[cust.id];
+        statsMap[cust.id] = {
+          stayCount: batchInfo?.stayCount || 0,
+          lastVisit: batchInfo?.lastVisit || null,
+          pendingBalance: batchInfo?.pendingBalance || 0,
+          docs: [] // Lazily populated when detailed view/edit modal is requested
+        };
+      });
+
       setGuestStats(statsMap);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading customers directory:', err);
     } finally {
       setLoading(false);
     }
@@ -443,7 +462,7 @@ export default function CustomersPage() {
                         onClick={() => {
                           setIsEditing(false);
                           setViewGuest({ customer: cust, stats });
-                          fetchGuestDetails(cust.id);
+                          fetchGuestDetails(cust.id, cust.phone);
                         }}
                         className="hover:bg-slate-50/50 transition-colors cursor-pointer"
                       >
@@ -473,7 +492,7 @@ export default function CustomersPage() {
                             onClick={() => {
                               setIsEditing(false);
                               setViewGuest({ customer: cust, stats });
-                              fetchGuestDetails(cust.id);
+                              fetchGuestDetails(cust.id, cust.phone);
                             }}
                             className="p-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
                             title="View Details"
@@ -484,7 +503,7 @@ export default function CustomersPage() {
                             onClick={() => {
                               setIsEditing(true);
                               setViewGuest({ customer: cust, stats });
-                              fetchGuestDetails(cust.id);
+                              fetchGuestDetails(cust.id, cust.phone);
                             }}
                             className="p-2 bg-blue-50 border border-blue-100 hover:bg-blue-100 rounded-lg text-primary transition-colors"
                             title="Edit Profile"

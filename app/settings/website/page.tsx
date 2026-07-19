@@ -274,11 +274,24 @@ export default function WebsiteSettingsPage() {
               oldImages[2] || defaultImagesList[2] || ''
             ];
 
+            // Initialize or append room IDs for this room category to avoid collision
+            const currentIds = initialConfigs[r.room_type]?.ids || [];
+            if (r.id) currentIds.push(r.id);
+
+            // Prefer database or CMS saved price and image if already configured
+            const currentPrice = initialConfigs[r.room_type]?.price || r.price || oldRoomCMS.price || defaults.price;
+            const currentImage = initialConfigs[r.room_type]?.image || r.image_url || oldRoomCMS.image || finalImages[0] || '';
+
             initialConfigs[r.room_type] = {
-              id: r.id,
-              price: r.price || oldRoomCMS.price || defaults.price,
-              image: finalImages[0],
-              images: finalImages,
+              ids: currentIds,
+              id: r.id, // Maintain backward compatibility for single ID references
+              price: currentPrice,
+              image: currentImage,
+              images: [
+                currentImage,
+                oldImages[1] || defaultImagesList[1] || '',
+                oldImages[2] || defaultImagesList[2] || ''
+              ],
               description: oldRoomCMS.description || defaults.description,
               amenities: oldRoomCMS.amenities || defaults.amenities
             };
@@ -310,31 +323,38 @@ export default function WebsiteSettingsPage() {
       
       for (const type of roomTypes) {
         const config = roomConfigs[type];
-        if (config.id) {
+        // Retrieve all room IDs associated with this type to update them all
+        // @ts-ignore
+        const roomIds = config.ids || (config.id ? [config.id] : []);
+        
+        if (roomIds.length > 0) {
           const currentImages = config.images || [config.image || '', '', ''];
-          const cleanImages = [];
+          const cleanImages: string[] = [];
           for (let i = 0; i < currentImages.length; i++) {
             let img = currentImages[i];
             if (img && img.startsWith('data:')) {
               // @ts-ignore
-              img = await db.uploadPublicAsset(currentHotel.id, `rooms/${config.id}`, img);
+              img = await db.uploadPublicAsset(currentHotel.id, `rooms/${roomIds[0]}`, img);
             }
             cleanImages.push(img || '');
           }
 
-          const updatedRoom = await db.updateRoomDetails(currentHotel.id, config.id, {
-            price: Number(config.price),
-            image_url: cleanImages[0]
-          });
+          // Update all database room records matching this category type
+          await Promise.all(
+            roomIds.map(async (roomId: string) => {
+              await db.updateRoomDetails(currentHotel.id, roomId, {
+                price: Number(config.price),
+                image_url: cleanImages[0]
+              });
+            })
+          );
           
-          if (updatedRoom) {
-            updatedConfigs[type] = {
-              ...config,
-              price: updatedRoom.price,
-              image: updatedRoom.image_url || '',
-              images: cleanImages
-            };
-          }
+          updatedConfigs[type] = {
+            ...config,
+            price: Number(config.price),
+            image: cleanImages[0] || '',
+            images: cleanImages
+          };
         }
       }
 
