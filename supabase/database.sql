@@ -177,14 +177,21 @@ CREATE OR REPLACE FUNCTION get_user_hotel_id()
 RETURNS UUID AS $$
 DECLARE
   v_hotel_id UUID;
+  v_raw_id TEXT;
 BEGIN
-  BEGIN
-    v_hotel_id := NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'hotel_id', '')::uuid;
-  EXCEPTION WHEN OTHERS THEN
-    v_hotel_id := NULL;
-  END;
+  -- Extract hotel_id claim from JWT app_metadata or user_metadata safely
+  v_raw_id := COALESCE(
+    auth.jwt() -> 'app_metadata' ->> 'hotel_id',
+    auth.jwt() -> 'user_metadata' ->> 'hotel_id'
+  );
+  
+  -- Only cast to UUID if it matches a valid UUID regex format to avoid PL/pgSQL exception subtransactions
+  IF v_raw_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    v_hotel_id := v_raw_id::uuid;
+  END IF;
 
-  IF v_hotel_id IS NULL THEN
+  -- Query users table only as a last resort if user is authenticated but claim is missing
+  IF v_hotel_id IS NULL AND auth.uid() IS NOT NULL THEN
     SELECT hotel_id INTO v_hotel_id FROM public.users WHERE id = auth.uid();
   END IF;
 
@@ -198,13 +205,14 @@ RETURNS VARCHAR AS $$
 DECLARE
   v_role VARCHAR;
 BEGIN
-  BEGIN
-    v_role := NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'role', '');
-  EXCEPTION WHEN OTHERS THEN
-    v_role := NULL;
-  END;
+  -- Extract role claim from JWT app_metadata or user_metadata safely
+  v_role := COALESCE(
+    auth.jwt() -> 'app_metadata' ->> 'role',
+    auth.jwt() -> 'user_metadata' ->> 'role'
+  );
 
-  IF v_role IS NULL THEN
+  -- Query users table only as a last resort if user is authenticated but claim is missing
+  IF v_role IS NULL AND auth.uid() IS NOT NULL THEN
     SELECT role INTO v_role FROM public.users WHERE id = auth.uid();
   END IF;
 
