@@ -96,6 +96,7 @@ export interface CheckIn {
   created_at: string;
   purpose_of_stay?: string;
   arrival_from?: string;
+  proceeding_to?: string;
   residential_address?: string;
   address_proof_type?: string;
   document_number?: string;

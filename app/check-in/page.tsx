@@ -100,6 +100,7 @@ function CheckInFormContent() {
   const [checkOutTime, setCheckOutTime] = useState('11:00');
   const [purposeOfStay, setPurposeOfStay] = useState('Tourism');
   const [arrivalFrom, setArrivalFrom] = useState('');
+  const [proceedingTo, setProceedingTo] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [extraCharges, setExtraCharges] = useState<number | string>('');
   const [discount, setDiscount] = useState<number | string>('');
@@ -473,6 +474,7 @@ function CheckInFormContent() {
           number_of_guests: guests.length,
           purpose_of_stay: purposeOfStay,
           arrival_from: arrivalFrom,
+          proceeding_to: proceedingTo,
           residential_address: finalCustomer.address,
           address_proof_type: tempDocData?.type || selectedCustomerDocs?.[0]?.document_type || 'Aadhar',
           document_number: tempDocData?.number || selectedCustomerDocs?.[0]?.document_number || '',
@@ -1056,6 +1058,19 @@ function CheckInFormContent() {
                 onChange={(e) => setArrivalFrom(e.target.value)}
                 className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="e.g. Pune, Kolhapur, Delhi"
+              />
+            </div>
+
+            {/* Address to which proceeding */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Address to which proceeding *</label>
+              <input
+                type="text"
+                required
+                value={proceedingTo}
+                onChange={(e) => setProceedingTo(e.target.value)}
+                className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Mumbai, Goa, Office Address"
               />
             </div>
 

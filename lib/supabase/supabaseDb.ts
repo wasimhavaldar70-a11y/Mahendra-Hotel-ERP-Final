@@ -1089,6 +1089,7 @@ export const supabaseDb = {
       number_of_guests: number;
       purpose_of_stay?: string;
       arrival_from?: string;
+      proceeding_to?: string;
       residential_address?: string;
       address_proof_type?: string;
       document_number?: string;
@@ -1132,6 +1133,7 @@ export const supabaseDb = {
       p_guests: guestsList,
       p_purpose_of_stay: checkInData.purpose_of_stay,
       p_arrival_from: checkInData.arrival_from,
+      p_proceeding_to: checkInData.proceeding_to,
       p_residential_address: checkInData.residential_address,
       p_address_proof_type: checkInData.address_proof_type,
       p_document_number: checkInData.document_number,
@@ -1225,6 +1227,7 @@ export const supabaseDb = {
       extra_charges?: number;
       tax_amount?: number;
       grand_total?: number;
+      proceeding_to?: string;
     }
   ): Promise<CheckIn | null> => {
     if (!supabase) return null;
@@ -1238,7 +1241,8 @@ export const supabaseDb = {
       p_discount: checkoutDetails?.discount,
       p_extra_charges: checkoutDetails?.extra_charges,
       p_tax_amount: checkoutDetails?.tax_amount,
-      p_grand_total: checkoutDetails?.grand_total
+      p_grand_total: checkoutDetails?.grand_total,
+      p_proceeding_to: checkoutDetails?.proceeding_to
     });
 
     if (error) {

@@ -513,6 +513,7 @@ CREATE OR REPLACE FUNCTION check_in_guests_transactional(
   p_guests JSONB,
   p_purpose_of_stay VARCHAR(100) DEFAULT NULL,
   p_arrival_from VARCHAR(255) DEFAULT NULL,
+  p_proceeding_to VARCHAR(255) DEFAULT NULL,
   p_residential_address TEXT DEFAULT NULL,
   p_address_proof_type VARCHAR(100) DEFAULT NULL,
   p_document_number VARCHAR(100) DEFAULT NULL,
@@ -536,13 +537,13 @@ BEGIN
   INSERT INTO public.check_ins (
     hotel_id, room_id, primary_customer_id, number_of_guests, 
     check_in, expected_checkout, status,
-    purpose_of_stay, arrival_from, residential_address, address_proof_type, document_number, vehicle_number,
+    purpose_of_stay, arrival_from, proceeding_to, residential_address, address_proof_type, document_number, vehicle_number,
     check_in_date, check_in_time, total_nights, room_rate, room_charges, subtotal, discount, extra_charges, tax_amount, grand_total
   )
   VALUES (
     p_hotel_id, p_room_id, p_primary_customer_id, p_number_of_guests, 
     timezone('utc'::text, now()), p_expected_checkout, 'Active',
-    p_purpose_of_stay, p_arrival_from, p_residential_address, p_address_proof_type, p_document_number, p_vehicle_number,
+    p_purpose_of_stay, p_arrival_from, p_proceeding_to, p_residential_address, p_address_proof_type, p_document_number, p_vehicle_number,
     COALESCE(p_check_in_date, timezone('utc'::text, now())::date), COALESCE(p_check_in_time, timezone('utc'::text, now())::time), 
     p_total_nights, p_room_rate, p_room_charges, p_subtotal, p_discount, p_extra_charges, p_tax_amount, p_grand_total
   )
@@ -973,6 +974,7 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS nationality VARCHAR(100) DEFAULT 
 -- 1.1 Extend check_ins table with stay and detailed billing information
 ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS purpose_of_stay VARCHAR(100);
 ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS arrival_from VARCHAR(255);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS proceeding_to VARCHAR(255);
 ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS residential_address TEXT;
 ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS address_proof_type VARCHAR(100);
 ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS document_number VARCHAR(100);
@@ -1441,7 +1443,8 @@ CREATE OR REPLACE FUNCTION checkout_stay_transactional(
   p_discount NUMERIC(10,2) DEFAULT NULL,
   p_extra_charges NUMERIC(10,2) DEFAULT NULL,
   p_tax_amount NUMERIC(10,2) DEFAULT NULL,
-  p_grand_total NUMERIC(10,2) DEFAULT NULL
+  p_grand_total NUMERIC(10,2) DEFAULT NULL,
+  p_proceeding_to VARCHAR(255) DEFAULT NULL
 ) RETURNS VOID AS $$
 DECLARE
   v_room_id UUID;
@@ -1462,7 +1465,8 @@ BEGIN
       discount = COALESCE(p_discount, discount),
       extra_charges = COALESCE(p_extra_charges, extra_charges),
       tax_amount = COALESCE(p_tax_amount, tax_amount),
-      grand_total = COALESCE(p_grand_total, grand_total)
+      grand_total = COALESCE(p_grand_total, grand_total),
+      proceeding_to = COALESCE(p_proceeding_to, proceeding_to)
   WHERE id = p_checkin_id AND hotel_id = p_hotel_id;
 
   -- 3. Calculate remaining pending balance from payments table

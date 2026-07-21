@@ -321,6 +321,9 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                 <span style={{ fontWeight: '500' }}>Arrival From:</span>
                 <span style={{ fontWeight: '700', color: '#0f172a' }}>{stayData.arrival_from || 'N/A'}</span>
                 
+                <span style={{ fontWeight: '500' }}>Proceeding To:</span>
+                <span style={{ fontWeight: '700', color: '#0f172a' }}>{stayData.proceeding_to || 'N/A'}</span>
+                
                 {stayData.vehicle_number && (
                   <>
                     <span style={{ fontWeight: '500' }}>Vehicle Number:</span>
@@ -516,6 +519,17 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
                           {formatDate(stayData.expected_checkout)}
                         </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-150 grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Arrival From</span>
+                        <span className="font-bold text-slate-700">{stayData.arrival_from || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Proceeding To</span>
+                        <span className="font-bold text-slate-700">{stayData.proceeding_to || 'N/A'}</span>
                       </div>
                     </div>
 
