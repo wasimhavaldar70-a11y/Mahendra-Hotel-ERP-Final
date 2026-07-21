@@ -33,7 +33,7 @@ interface RoomDetailModalProps {
   room: Room;
   hotelId: string;
   onClose: () => void;
-  onStatusChanged: () => void;
+  onStatusChanged: (updatedRoom?: Room) => void;
 }
 
 export default function RoomDetailModal({ room, hotelId, onClose, onStatusChanged }: RoomDetailModalProps) {
@@ -161,9 +161,10 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
   const changeRoomStatus = async (newStatus: RoomStatus) => {
     try {
-      await db.updateRoomStatus(hotelId, room.id, newStatus);
-      onStatusChanged();
+      const updated = { ...room, status: newStatus };
+      onStatusChanged(updated);
       onClose();
+      await db.updateRoomStatus(hotelId, room.id, newStatus);
     } catch (err) {
       console.error(err);
     }
@@ -186,10 +187,10 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
   const handleCheckoutSubmit = async () => {
     if (!stayData) return;
     try {
-      await db.checkOut(hotelId, stayData.id, paymentMethod);
-      setCheckingOut(false);
-      onStatusChanged();
+      const updated = { ...room, status: 'Dirty' as RoomStatus };
+      onStatusChanged(updated);
       onClose();
+      await db.checkOut(hotelId, stayData.id, paymentMethod);
     } catch (err) {
       console.error(err);
     }

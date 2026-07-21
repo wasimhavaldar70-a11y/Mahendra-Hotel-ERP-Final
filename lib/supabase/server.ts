@@ -34,6 +34,18 @@ export async function createClient() {
   );
 }
 
+let cachedRawClient: any = null;
+function getCachedRawClient() {
+  if (!cachedRawClient) {
+    const { createClient: createRawClient } = require('@supabase/supabase-js');
+    cachedRawClient = createRawClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  return cachedRawClient;
+}
+
 export async function getAuthenticatedUser(request: Request) {
   // 1. Check Authorization Bearer header first
   const authHeader = request.headers.get('Authorization');
@@ -41,11 +53,7 @@ export async function getAuthenticatedUser(request: Request) {
 
   if (token) {
     try {
-      const { createClient: createRawClient } = require('@supabase/supabase-js');
-      const tempClient = createRawClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const tempClient = getCachedRawClient();
       const { data: { user }, error } = await tempClient.auth.getUser(token);
       if (!error && user) {
         return user;

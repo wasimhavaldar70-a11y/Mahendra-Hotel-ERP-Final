@@ -6,9 +6,11 @@
 // ========================================================
 
 import React, { useState } from 'react';
-import { User, Phone, MapPin, ShieldAlert, Upload, Check } from 'lucide-react';
+import { User, Phone, MapPin, ShieldAlert, Upload, Check, Loader2 } from 'lucide-react';
 import { Customer } from '../types';
 import { STATE_CITIES } from '../lib/constants/statesCities';
+import { supabase, getSessionUser } from '../lib/supabase/client';
+import { optimizeImage } from '../lib/imageOptimizer';
 
 interface CustomerFormProps {
   initialData?: Partial<Customer>;
@@ -40,16 +42,100 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
     return !!(val && (!st || !STATE_CITIES[st]?.includes(val)));
   });
 
+  // Client-Side Generated Customer ID (to allow background uploading using a permanent UUID)
+  const [customerId] = useState(() => initialData?.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2)));
+
   // Documents
   const [docType, setDocType] = useState<'Aadhar' | 'Driving License' | 'Passport' | 'Voter ID'>(initialDoc?.type || 'Aadhar');
   const [docNumber, setDocNumber] = useState(initialDoc?.number || '');
+
+  // Form submit paths (hold path strings like "hotel_id/customer_id/front-...webp")
   const [frontImage, setFrontImage] = useState<string>(initialDoc?.front || '');
   const [backImage, setBackImage] = useState<string>(initialDoc?.back || '');
+
+  // Base64 previews for client display
+  const [frontPreview, setFrontPreview] = useState<string>(initialDoc?.front || '');
+  const [backPreview, setBackPreview] = useState<string>(initialDoc?.back || '');
+
+  // Background Upload states
+  const [frontUploading, setFrontUploading] = useState(false);
+  const [frontProgress, setFrontProgress] = useState(0);
+  const [frontSuccess, setFrontSuccess] = useState(false);
+  const [frontError, setFrontError] = useState('');
+
+  const [backUploading, setBackUploading] = useState(false);
+  const [backProgress, setBackProgress] = useState(0);
+  const [backSuccess, setBackSuccess] = useState(false);
+  const [backError, setBackError] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
+  const [frontBlob, setFrontBlob] = useState<Blob | null>(null);
+  const [backBlob, setBackBlob] = useState<Blob | null>(null);
+
+  const startBackgroundUpload = async (side: 'front' | 'back', blob: Blob, targetFileName: string) => {
+    const setUploading = side === 'front' ? setFrontUploading : setBackUploading;
+    const setProgress = side === 'front' ? setFrontProgress : setBackProgress;
+    const setSuccess = side === 'front' ? setFrontSuccess : setBackSuccess;
+    const setErrorState = side === 'front' ? setFrontError : setBackError;
+    const setImagePath = side === 'front' ? setFrontImage : setBackImage;
+
+    setUploading(true);
+    setProgress(10);
+    setSuccess(false);
+    setErrorState('');
+
+    // Smooth UI progress simulation (e.g. step up from 10 to 90 every 120ms)
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        return prev + 10;
+      });
+    }, 120);
+
+    const bucketName = 'customer-documents';
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        if (!supabase) throw new Error('Supabase client not initialized');
+
+        const { data, error } = await supabase.storage
+          .from(bucketName)
+          .upload(targetFileName, blob, {
+            contentType: 'image/webp',
+            upsert: true
+          });
+
+        if (error) throw error;
+
+        // Success!
+        clearInterval(progressInterval);
+        setProgress(100);
+        setSuccess(true);
+        setUploading(false);
+        setImagePath(targetFileName); // Assign storage path to image form field
+        return;
+      } catch (err: any) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          clearInterval(progressInterval);
+          setUploading(false);
+          setErrorState(err?.message || 'Upload failed');
+          return;
+        }
+        // Exponential backoff wait (0.5s, 1.0s, 2.0s)
+        await new Promise(res => setTimeout(res, Math.pow(2, attempts) * 500));
+      }
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
     const file = e.target.files?.[0];
     if (file) {
       // Validate file type
@@ -57,31 +143,34 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
         setErrors(prev => ({ ...prev, [side + 'Image']: 'Only image files are allowed' }));
         return;
       }
-      // Validate file size (max 5MB to prevent database bloat)
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, [side + 'Image']: 'Image size must be less than 5MB' }));
-        return;
-      }
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
+      setErrors(prev => {
+        const copy = { ...prev };
+        delete copy[side + 'Image'];
+        return copy;
+      });
+
+      try {
+        // 1. Run client-side optimization immediately
+        const optimized = await optimizeImage(file, 'document');
+
+        // 2. Update preview state with base64 Data URL so user sees it instantly
         if (side === 'front') {
-          setFrontImage(reader.result as string);
-          setErrors(prev => {
-            const copy = { ...prev };
-            delete copy.frontImage;
-            return copy;
-          });
+          setFrontBlob(optimized.blob);
+          setFrontPreview(optimized.dataUrl);
         } else {
-          setBackImage(reader.result as string);
-          setErrors(prev => {
-            const copy = { ...prev };
-            delete copy.backImage;
-            return copy;
-          });
+          setBackBlob(optimized.blob);
+          setBackPreview(optimized.dataUrl);
         }
-      };
-      reader.readAsDataURL(file);
+
+        // 3. Initiate background upload in non-blocking fashion
+        const hotelId = getSessionUser()?.hotel?.id || 'default';
+        const targetFileName = `${hotelId}/${customerId}/${side}-${Date.now()}.webp`;
+        startBackgroundUpload(side, optimized.blob, targetFileName);
+
+      } catch (err: any) {
+        setErrors(prev => ({ ...prev, [side + 'Image']: err.message || 'Image optimization failed' }));
+      }
     }
   };
 
@@ -90,6 +179,12 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
     setDocNumber('');
     setFrontImage('');
     setBackImage('');
+    setFrontPreview('');
+    setBackPreview('');
+    setFrontSuccess(false);
+    setBackSuccess(false);
+    setFrontProgress(0);
+    setBackProgress(0);
     setErrors(prev => {
       const copy = { ...prev };
       delete copy.docNumber;
@@ -674,14 +769,16 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ID Card Front Side *</span>
             <label className={`flex flex-col items-center justify-center h-36 rounded-xl border border-dashed bg-slate-50/50 hover:bg-slate-50 cursor-pointer overflow-hidden transition-all relative ${
-              errors.frontImage ? 'border-red-500 animate-pulse' : 'border-slate-200'
+              errors.frontImage || frontError ? 'border-red-500 animate-pulse' : 'border-slate-200'
             }`}>
-              {frontImage ? (
+              {frontPreview ? (
                 <>
-                  <img src={frontImage} alt="ID Front" className="object-cover w-full h-full" />
-                  <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full">
-                    <Check className="w-3.5 h-3.5" />
-                  </div>
+                  <img src={frontPreview} alt="ID Front" className="object-cover w-full h-full" />
+                  {frontSuccess && (
+                    <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full shadow z-20">
+                      <Check className="w-3.5 h-3.5" />
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex flex-col items-center text-center p-4">
@@ -690,11 +787,48 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   <span className="text-[9px] text-slate-400 mt-0.5">Click to choose image file</span>
                 </div>
               )}
+
+              {/* Uploading progress overlay */}
+              {frontUploading && (
+                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 z-10">
+                  <Loader2 className="w-5 h-5 animate-spin mb-1.5 text-primary" />
+                  <span className="text-[10px] font-bold tracking-wider">Optimizing & Uploading...</span>
+                  <div className="w-full bg-slate-800 rounded-full h-1 mt-2 max-w-[120px] overflow-hidden">
+                    <div className="bg-primary h-full transition-all duration-150" style={{ width: `${frontProgress}%` }}></div>
+                  </div>
+                  <span className="text-[9px] text-slate-350 mt-1 font-bold">{frontProgress}%</span>
+                </div>
+              )}
+
+              {/* Upload Error overlay */}
+              {frontError && (
+                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-white p-3 text-center z-10" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-[10px] font-bold">Upload Failed</span>
+                  <span className="text-[9px] mt-1 opacity-90 max-w-[150px] truncate">{frontError}</span>
+                  <button 
+                    type="button" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (frontBlob) {
+                        const hotelId = getSessionUser()?.hotel?.id || 'default';
+                        const targetFileName = `${hotelId}/${customerId}/front-${Date.now()}.webp`;
+                        startBackgroundUpload('front', frontBlob, targetFileName);
+                      }
+                    }}
+                    className="mt-2 text-[9px] font-bold bg-white text-red-600 px-3 py-1 rounded-lg shadow-sm active:scale-95 transition-all"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
               <input
                 type="file"
                 accept="image/*"
                 onChange={(e) => handleImageUpload(e, 'front')}
                 className="hidden"
+                disabled={frontUploading}
               />
             </label>
             {errors.frontImage && (
@@ -705,14 +839,16 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ID Card Back Side *</span>
             <label className={`flex flex-col items-center justify-center h-36 rounded-xl border border-dashed bg-slate-50/50 hover:bg-slate-50 cursor-pointer overflow-hidden transition-all relative ${
-              errors.backImage ? 'border-red-500 animate-pulse' : 'border-slate-200'
+              errors.backImage || backError ? 'border-red-500 animate-pulse' : 'border-slate-200'
             }`}>
-              {backImage ? (
+              {backPreview ? (
                 <>
-                  <img src={backImage} alt="ID Back" className="object-cover w-full h-full" />
-                  <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full">
-                    <Check className="w-3.5 h-3.5" />
-                  </div>
+                  <img src={backPreview} alt="ID Back" className="object-cover w-full h-full" />
+                  {backSuccess && (
+                    <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full shadow z-20">
+                      <Check className="w-3.5 h-3.5" />
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex flex-col items-center text-center p-4">
@@ -721,11 +857,48 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   <span className="text-[9px] text-slate-400 mt-0.5">Click to choose image file</span>
                 </div>
               )}
+
+              {/* Uploading progress overlay */}
+              {backUploading && (
+                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 z-10">
+                  <Loader2 className="w-5 h-5 animate-spin mb-1.5 text-primary" />
+                  <span className="text-[10px] font-bold tracking-wider">Optimizing & Uploading...</span>
+                  <div className="w-full bg-slate-800 rounded-full h-1 mt-2 max-w-[120px] overflow-hidden">
+                    <div className="bg-primary h-full transition-all duration-150" style={{ width: `${backProgress}%` }}></div>
+                  </div>
+                  <span className="text-[9px] text-slate-350 mt-1 font-bold">{backProgress}%</span>
+                </div>
+              )}
+
+              {/* Upload Error overlay */}
+              {backError && (
+                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-white p-3 text-center z-10" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-[10px] font-bold">Upload Failed</span>
+                  <span className="text-[9px] mt-1 opacity-90 max-w-[150px] truncate">{backError}</span>
+                  <button 
+                    type="button" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (backBlob) {
+                        const hotelId = getSessionUser()?.hotel?.id || 'default';
+                        const targetFileName = `${hotelId}/${customerId}/back-${Date.now()}.webp`;
+                        startBackgroundUpload('back', backBlob, targetFileName);
+                      }
+                    }}
+                    className="mt-2 text-[9px] font-bold bg-white text-red-600 px-3 py-1 rounded-lg shadow-sm active:scale-95 transition-all"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
               <input
                 type="file"
                 accept="image/*"
                 onChange={(e) => handleImageUpload(e, 'back')}
                 className="hidden"
+                disabled={backUploading}
               />
             </label>
             {errors.backImage && (
@@ -748,10 +921,19 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
         )}
         <button
           type="submit"
-          disabled={loading}
-          className="bg-primary hover:bg-primary-hover text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-55"
+          disabled={loading || frontUploading || backUploading}
+          className="bg-primary hover:bg-primary-hover text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-55 flex items-center gap-1.5"
         >
-          {loading ? 'Saving Guest...' : 'Save Guest Details'}
+          {(frontUploading || backUploading) ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Uploading Documents...
+            </>
+          ) : loading ? (
+            'Saving Guest...'
+          ) : (
+            'Save Guest Details'
+          )}
         </button>
       </div>
     </form>

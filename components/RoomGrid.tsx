@@ -5,7 +5,7 @@
 // Location: components/RoomGrid.tsx
 // ========================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Room } from '../types';
 import { db } from '../lib/supabase/client';
 import { Sparkles, Wrench, CheckCircle, Flame, User } from 'lucide-react';
@@ -17,27 +17,29 @@ interface RoomGridProps {
   onRoomClick: (room: Room) => void;
 }
 
-export default function RoomGrid({ rooms, hotelId, activeStays, onRoomClick }: RoomGridProps) {
+function RoomGrid({ rooms, hotelId, activeStays, onRoomClick }: RoomGridProps) {
 
-  // Group rooms by floor
-  const floors = rooms.reduce((acc, room) => {
-    const floor = room.floor || 'Ground Floor';
-    if (!acc[floor]) {
-      acc[floor] = [];
-    }
-    acc[floor].push(room);
-    return acc;
-  }, {} as Record<string, Room[]>);
+  // Group rooms by floor and sort them, memoized to prevent recalculation on every render
+  const { floors, sortedFloors } = useMemo(() => {
+    const floorGroups = rooms.reduce((acc, room) => {
+      const floor = room.floor || 'Ground Floor';
+      if (!acc[floor]) {
+        acc[floor] = [];
+      }
+      acc[floor].push(room);
+      return acc;
+    }, {} as Record<string, Room[]>);
 
-  // Sort floors in descending order so Ground Floor is at the bottom, or ascending?
-  // Let's sort Ground, First, Second, Third.
-  const floorOrder = ['Ground Floor', 'First Floor', 'Second Floor', 'Third Floor', 'Fourth Floor'];
-  const sortedFloors = Object.keys(floors).sort((a, b) => {
-    const indexA = floorOrder.indexOf(a);
-    const indexB = floorOrder.indexOf(b);
-    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-    return a.localeCompare(b);
-  });
+    const floorOrder = ['Ground Floor', 'First Floor', 'Second Floor', 'Third Floor', 'Fourth Floor'];
+    const sorted = Object.keys(floorGroups).sort((a, b) => {
+      const indexA = floorOrder.indexOf(a);
+      const indexB = floorOrder.indexOf(b);
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+      return a.localeCompare(b);
+    });
+
+    return { floors: floorGroups, sortedFloors: sorted };
+  }, [rooms]);
 
   const getCardStyles = (status: Room['status']) => {
     switch (status) {
@@ -146,3 +148,5 @@ export default function RoomGrid({ rooms, hotelId, activeStays, onRoomClick }: R
     </div>
   );
 }
+
+export default React.memo(RoomGrid);

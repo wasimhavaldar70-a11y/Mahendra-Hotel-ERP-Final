@@ -1566,6 +1566,26 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
+-- ========================================================
+-- PERFORMANCE INDEXING AND SEARCH OPTIMIZATION
+-- ========================================================
+
+-- Enable trigram extension for fuzzy pattern matches
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Index date ranges and categories for reports & analytics
+CREATE INDEX IF NOT EXISTS idx_folio_ledger_created_at ON public.folio_ledger(created_at);
+CREATE INDEX IF NOT EXISTS idx_folio_ledger_category ON public.folio_ledger(category);
+
+-- Index check-in fields for general date filter / status updates
+CREATE INDEX IF NOT EXISTS idx_check_ins_check_in ON public.check_ins(check_in);
+CREATE INDEX IF NOT EXISTS idx_check_ins_status ON public.check_ins(status);
+
+-- Trigram index support for faster text searching
+CREATE INDEX IF NOT EXISTS idx_customers_full_name_trgm ON public.customers USING gin (full_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_customers_phone_trgm ON public.customers USING gin (phone gin_trgm_ops);
+
+
 
 
 

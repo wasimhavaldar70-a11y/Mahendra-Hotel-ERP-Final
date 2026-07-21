@@ -27,20 +27,78 @@ const dataURItoBlob = (dataURI: string) => {
   return new Blob([ab], { type: mimeString });
 };
 
+// Helper: Compress Base64 image to WebP with target dimension limits client-side
+const compressBase64ToWebP = async (
+  base64Data: string,
+  type: 'document' | 'room' | 'logo' | 'hero' | 'gallery'
+): Promise<{ blob: Blob; ext: string }> => {
+  if (typeof window === 'undefined') {
+    return { blob: dataURItoBlob(base64Data), ext: 'png' };
+  }
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let maxWidth = 1600;
+      let quality = 0.8;
+      
+      if (type === 'room' || type === 'hero' || type === 'gallery') {
+        maxWidth = 1920;
+        quality = 0.85;
+      } else if (type === 'logo') {
+        maxWidth = 512;
+        quality = 0.8;
+      }
+
+      let width = img.width;
+      let height = img.height;
+
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get canvas 2D context'));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Canvas image compression failed'));
+            return;
+          }
+          resolve({ blob, ext: 'webp' });
+        },
+        'image/webp',
+        quality
+      );
+    };
+    img.onerror = () => reject(new Error('Failed to load image resource'));
+    img.src = base64Data;
+  });
+};
+
 // Helper: Upload file to Supabase Storage and return path
 const uploadImageToStorage = async (hotelId: string, customerId: string, side: 'front' | 'back', base64Data: string | undefined): Promise<string> => {
   if (!supabase || !base64Data) return '';
   if (!base64Data.startsWith('data:')) return base64Data; // Already URL/path
 
   try {
-    const blob = dataURItoBlob(base64Data);
-    const fileExt = blob.type.split('/')[1] || 'png';
-    const filePath = `${hotelId}/${customerId}/${side}-${Date.now()}.${fileExt}`;
+    const { blob } = await compressBase64ToWebP(base64Data, 'document');
+    const filePath = `${hotelId}/${customerId}/${side}-${Date.now()}.webp`;
 
     const { error: uploadError } = await supabase.storage
       .from('customer-documents')
       .upload(filePath, blob, {
-        contentType: blob.type,
+        contentType: 'image/webp',
         upsert: true
       });
 
@@ -58,14 +116,13 @@ const uploadRoomImageToStorage = async (hotelId: string, roomId: string, base64D
   if (!base64Data.startsWith('data:')) return base64Data;
 
   try {
-    const blob = dataURItoBlob(base64Data);
-    const fileExt = blob.type.split('/')[1] || 'png';
-    const filePath = `${hotelId}/rooms/${roomId}/${Date.now()}.${fileExt}`;
+    const { blob } = await compressBase64ToWebP(base64Data, 'room');
+    const filePath = `${hotelId}/rooms/${roomId}/${Date.now()}.webp`;
 
     const { error: uploadError } = await supabase.storage
       .from('hotel-assets')
       .upload(filePath, blob, {
-        contentType: blob.type,
+        contentType: 'image/webp',
         upsert: true
       });
 
@@ -85,7 +142,7 @@ const resolveImageUrl = async (imagePath: string | null | undefined): Promise<st
   if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
   if (!supabase) return '';
 
-  const isPublicAsset = imagePath.includes('/rooms/') || imagePath.includes('/gallery/') || imagePath.includes('/hero/');
+  const isPublicAsset = imagePath.includes('/rooms/') || imagePath.includes('/gallery/') || imagePath.includes('/hero/') || imagePath.includes('hotel-assets');
   const bucketName = isPublicAsset ? 'hotel-assets' : 'customer-documents';
 
   try {
@@ -235,14 +292,14 @@ export const supabaseDb = {
         if (createError) throw createError;
       }
 
-      const blob = dataURItoBlob(base64Data);
-      const fileExt = blob.type.split('/')[1] || 'png';
-      const filePath = `${hotelId}/${folder}/${Date.now()}.${fileExt}`;
+      const type = folder === 'logo' ? 'logo' : (folder === 'hero' ? 'hero' : 'gallery');
+      const { blob } = await compressBase64ToWebP(base64Data, type);
+      const filePath = `${hotelId}/${folder}/${Date.now()}.webp`;
 
       const { error: uploadError } = await supabase.storage
         .from('hotel-assets')
         .upload(filePath, blob, {
-          contentType: blob.type,
+          contentType: 'image/webp',
           upsert: true
         });
 
@@ -470,7 +527,7 @@ export const supabaseDb = {
     };
   },
 
-  updateRoomDetails: async (hotelId: string, roomId: string, details: { price?: number; image_url?: string; room_type?: string }): Promise<Room | null> => {
+  updateRoomDetails: async (hotelId: string, roomId: string, details: { price?: number; image_url?: string; room_type?: string; room_number?: string; floor?: string; capacity?: number }): Promise<Room | null> => {
     let imagePath = details.image_url;
     if (details.image_url && details.image_url.startsWith('data:')) {
       imagePath = await uploadRoomImageToStorage(hotelId, roomId, details.image_url);
@@ -482,7 +539,10 @@ export const supabaseDb = {
       .update({
         ...(details.price !== undefined && { price: details.price }),
         ...(imagePath !== undefined && { image_url: imagePath }),
-        ...(details.room_type !== undefined && { room_type: details.room_type })
+        ...(details.room_type !== undefined && { room_type: details.room_type }),
+        ...(details.room_number !== undefined && { room_number: details.room_number }),
+        ...(details.floor !== undefined && { floor: details.floor }),
+        ...(details.capacity !== undefined && { capacity: details.capacity })
       })
       .eq('id', roomId)
       .eq('hotel_id', hotelId)
@@ -596,8 +656,8 @@ export const supabaseDb = {
 
     if (error || !data) return [];
 
-    const results = await Promise.all(data.map(async (c: any) => {
-      const docs = await resolveDocs(c.customer_documents);
+    const results = data.map((c: any) => {
+      const docs = c.customer_documents || [];
       const stays = c.check_ins || [];
       const stayCount = stays.length;
 
@@ -640,7 +700,7 @@ export const supabaseDb = {
         lastVisit,
         pendingBalance
       };
-    }));
+    });
 
     return results;
   },

@@ -198,7 +198,10 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const handleRoomStatusChanged = () => {
+  const handleRoomStatusChanged = (updatedRoom?: Room) => {
+    if (updatedRoom) {
+      setRooms(prev => prev.map(r => r.id === updatedRoom.id ? updatedRoom : r));
+    }
     if (currentHotel) {
       loadDashboardData(currentHotel.id);
     }
