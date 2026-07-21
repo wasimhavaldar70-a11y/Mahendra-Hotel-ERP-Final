@@ -87,6 +87,9 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
   const [checkoutExtraCharges, setCheckoutExtraCharges] = useState<number | string>('');
   const [checkoutApplyTax, setCheckoutApplyTax] = useState(false);
   const [checkoutRoomRate, setCheckoutRoomRate] = useState<number | string>('');
+  const [checkoutPurposeOfStay, setCheckoutPurposeOfStay] = useState('Tourism');
+  const [checkoutArrivalFrom, setCheckoutArrivalFrom] = useState('');
+  const [checkoutProceedingTo, setCheckoutProceedingTo] = useState('');
 
   // Dynamic Hotel Info state
   const [currentHotel, setCurrentHotel] = useState<any>(null);
@@ -147,6 +150,9 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         setCheckoutExtraCharges(data.extra_charges || 0);
         setCheckoutApplyTax(Number(data.tax_amount || 0) > 0);
         setCheckoutRoomRate(data.room_rate || room.price || 0);
+        setCheckoutPurposeOfStay(data.purpose_of_stay || 'Tourism');
+        setCheckoutArrivalFrom(data.arrival_from || '');
+        setCheckoutProceedingTo(data.proceeding_to || '');
 
         // Load folio ledger entries
         const entries = await db.getLedgerEntries(data.id);
@@ -264,7 +270,10 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         room_rate: rateVal,
         room_charges: roomChargesVal,
         subtotal: subtotalVal,
-        total_nights: durationVal.nights
+        total_nights: durationVal.nights,
+        purpose_of_stay: checkoutPurposeOfStay,
+        arrival_from: checkoutArrivalFrom,
+        proceeding_to: checkoutProceedingTo
       });
       onStatusChanged(updated);
     } catch (err) {
@@ -409,44 +418,49 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
             </table>
           </div>
 
-          {/* Totals Summary Box aligned Right */}
+          {/* BILL BREAKDOWN Totals Summary Box aligned Right */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '50px' }}>
-            <div style={{ width: '320px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <div style={{ width: '340px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', color: '#0f172a', borderBottom: '1px solid #cbd5e1', paddingBottom: '6px' }}>
+                BILL BREAKDOWN
+              </h4>
               <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                <span>Room Charges ({stayData.total_nights || 1} Night(s) × ₹{Number(stayData.room_rate || room.price).toLocaleString('en-IN')}):</span>
-                <span style={{ fontWeight: '600' }}>₹{Number(stayData.room_charges || (stayData.total_nights || 1) * (stayData.room_rate || room.price)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                <span>Room Rate (Per Night)</span>
+                <span style={{ fontWeight: '600' }}>₹{Number(stayData.room_rate || room.price || 0).toLocaleString('en-IN')}</span>
               </div>
-              {Number(stayData.extra_charges) > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                  <span>Extra Charges:</span>
-                  <span style={{ fontWeight: '600' }}>₹{Number(stayData.extra_charges).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              {Number(stayData.discount) > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#ef4444' }}>
-                  <span>Discount:</span>
-                  <span style={{ fontWeight: '600' }}>-₹{Number(stayData.discount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              {Number(stayData.tax_amount) > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                  <span>GST Tax (12%):</span>
-                  <span style={{ fontWeight: '600' }}>₹{Number(stayData.tax_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '8px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
-                <span>Grand Total:</span>
-                <span style={{ fontWeight: '700' }}>₹{Number(stayData.grand_total || stayData.payment?.room_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                <span>Total Nights</span>
+                <span style={{ fontWeight: '600' }}>{stayData.total_nights || 1}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#10b981' }}>
-                <span>Payments (Credits):</span>
-                <span style={{ fontWeight: '600' }}>-₹{Number(stayData.payment?.advance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#0f172a', fontWeight: '700' }}>
+                <span>Room Charges</span>
+                <span>₹{Number(stayData.room_charges || (stayData.total_nights || 1) * (stayData.room_rate || room.price)).toLocaleString('en-IN')}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0 0 0', fontSize: '15px', fontWeight: '800', color: '#0f172a', borderTop: '2px solid #e2e8f0', paddingTop: '12px' }}>
-                <span>Outstanding Balance:</span>
-                <span style={{ color: Number(stayData.payment?.pending || 0) > 0 ? '#ef4444' : '#1e3a8a' }}>
-                  ₹{Number(stayData.payment?.pending || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                <span>Extra Charges</span>
+                <span style={{ fontWeight: '600' }}>₹{Number(stayData.extra_charges || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                <span>Discount</span>
+                <span style={{ fontWeight: '600' }}>₹{Number(stayData.discount || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                <span>Tax (if enabled)</span>
+                <span style={{ fontWeight: '600' }}>₹{Number(stayData.tax_amount || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ height: '1px', backgroundColor: '#cbd5e1', margin: '8px 0' }}></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
+                <span>Grand Total</span>
+                <span>₹{Number(stayData.grand_total || stayData.payment?.room_price || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0 0 0', fontSize: '12px', color: '#166534', fontWeight: '700', borderTop: '1px solid #e2e8f0', paddingTop: '6px' }}>
+                <span>Advance Paid</span>
+                <span>- ₹{Number(stayData.payment?.advance || 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0 0 0', fontSize: '14px', fontWeight: '800', color: '#0f172a', borderTop: '2px solid #e2e8f0', paddingTop: '8px' }}>
+                <span>Balance to Settle</span>
+                <span style={{ color: Number(stayData.payment?.pending || 0) > 0 ? '#b91c1c' : '#0f172a' }}>
+                  ₹{Number(stayData.payment?.pending || 0).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -872,6 +886,40 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                         </div>
                       </div>
 
+                      {/* Purpose of Stay, Arrival From & Proceeding To */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Purpose of Stay *</label>
+                          <input 
+                            type="text"
+                            value={checkoutPurposeOfStay}
+                            onChange={(e) => setCheckoutPurposeOfStay(e.target.value)}
+                            className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                            placeholder="Tourism / Business"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Arrival From *</label>
+                          <input 
+                            type="text"
+                            value={checkoutArrivalFrom}
+                            onChange={(e) => setCheckoutArrivalFrom(e.target.value)}
+                            className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                            placeholder="City / Origin"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Address to which proceeding *</label>
+                          <input 
+                            type="text"
+                            value={checkoutProceedingTo}
+                            onChange={(e) => setCheckoutProceedingTo(e.target.value)}
+                            className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                            placeholder="Next Destination"
+                          />
+                        </div>
+                      </div>
+
                       {/* Nightly Room Rate */}
                       <div>
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Room Rate (₹ / Night) *</label>
@@ -937,45 +985,45 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                         const pendingVal = Math.max(0, grandTotalVal - advancePaidVal);
 
                         return (
-                          <div className="p-3 bg-white border border-slate-200 rounded-lg text-xs space-y-1.5">
-                            <div className="flex justify-between text-slate-500 font-semibold">
-                              <span>Stay Duration:</span>
-                              <span>{durationVal.nights} Night{durationVal.nights > 1 ? 's' : ''} ({durationVal.days} Day{durationVal.days > 1 ? 's' : ''})</span>
+                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                            <div className="text-xs font-black text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5 mb-2">
+                              BILL BREAKDOWN
                             </div>
-                            <div className="flex justify-between text-slate-500 font-semibold">
-                              <span>Room Charges ({durationVal.nights} Night{durationVal.nights > 1 ? 's' : ''} × ₹{rateVal.toLocaleString('en-IN')}):</span>
+                            <div className="flex justify-between text-slate-600 font-semibold">
+                              <span>Room Rate (Per Night)</span>
+                              <span>₹{rateVal.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600 font-semibold">
+                              <span>Total Nights</span>
+                              <span>{durationVal.nights}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-800 font-bold">
+                              <span>Room Charges</span>
                               <span>₹{roomChargesVal.toLocaleString('en-IN')}</span>
                             </div>
-                            {Number(checkoutExtraCharges) > 0 && (
-                              <div className="flex justify-between text-slate-500 font-semibold">
-                                <span>Extra Charges:</span>
-                                <span>+ ₹{Number(checkoutExtraCharges).toLocaleString('en-IN')}</span>
-                              </div>
-                            )}
-                            {Number(checkoutDiscount) > 0 && (
-                              <div className="flex justify-between text-red-500 font-semibold">
-                                <span>Discount:</span>
-                                <span>- ₹{Number(checkoutDiscount).toLocaleString('en-IN')}</span>
-                              </div>
-                            )}
-                            {taxVal > 0 && (
-                              <div className="flex justify-between text-slate-500 font-semibold">
-                                <span>GST Tax (12%):</span>
-                                <span>+ ₹{taxVal.toLocaleString('en-IN')}</span>
-                              </div>
-                            )}
-                            <div className="h-[1px] bg-slate-100 my-0.5"></div>
-                            <div className="flex justify-between font-bold text-slate-800 text-[13px]">
-                              <span>Grand Total:</span>
+                            <div className="flex justify-between text-slate-600 font-semibold">
+                              <span>Extra Charges</span>
+                              <span>₹{Number(checkoutExtraCharges || 0).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600 font-semibold">
+                              <span>Discount</span>
+                              <span>₹{Number(checkoutDiscount || 0).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600 font-semibold">
+                              <span>Tax (if enabled)</span>
+                              <span>₹{taxVal.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="h-[1px] bg-slate-300 my-1.5"></div>
+                            <div className="flex justify-between font-black text-slate-900 text-sm">
+                              <span>Grand Total</span>
                               <span>₹{grandTotalVal.toLocaleString('en-IN')}</span>
                             </div>
-                            <div className="flex justify-between text-emerald-600 font-semibold">
-                              <span>Advance Paid:</span>
+                            <div className="flex justify-between text-emerald-700 font-bold pt-1.5 border-t border-slate-200">
+                              <span>Advance Paid</span>
                               <span>- ₹{advancePaidVal.toLocaleString('en-IN')}</span>
                             </div>
-                            <div className="h-[1px] bg-slate-100 my-0.5"></div>
-                            <div className="flex justify-between font-extrabold text-[13px]">
-                              <span>Balance to Settle:</span>
+                            <div className="flex justify-between font-black text-sm pt-1">
+                              <span>Balance to Settle</span>
                               <span className={pendingVal > 0 ? 'text-red-650' : 'text-slate-800'}>
                                 ₹{pendingVal.toLocaleString('en-IN')}
                               </span>

@@ -177,7 +177,29 @@ const resolveDocs = async (docs: any[] | null | undefined) => {
   return resolved;
 };
 
+const addCustomerHistoryEntry = async (
+  customerId: string, 
+  fieldName: string, 
+  oldValue: string | null, 
+  newValue: string | null, 
+  changedBy: string = 'System'
+) => {
+  if (!supabase || !customerId) return;
+  try {
+    await supabase.from('customer_history').insert({
+      customer_id: customerId,
+      field_name: fieldName,
+      old_value: oldValue || null,
+      new_value: newValue || null,
+      changed_by: changedBy
+    });
+  } catch (e) {
+    console.error('Error adding customer history entry:', e);
+  }
+};
+
 export const supabaseDb = {
+  addCustomerHistoryEntry,
   // Authentication
   login: async (email: string, password?: string): Promise<{ user: User; hotel: Hotel | null; access_token?: string } | null> => {
     if (!supabase) return null;
@@ -1227,6 +1249,8 @@ export const supabaseDb = {
       extra_charges?: number;
       tax_amount?: number;
       grand_total?: number;
+      purpose_of_stay?: string;
+      arrival_from?: string;
       proceeding_to?: string;
       room_rate?: number;
       room_charges?: number;
@@ -1258,6 +1282,18 @@ export const supabaseDb = {
       throw new Error('Checkout transaction failed: ' + error.message);
     }
 
+    // Update purpose_of_stay, arrival_from, proceeding_to if updated at checkout
+    if (checkoutDetails?.purpose_of_stay || checkoutDetails?.arrival_from || checkoutDetails?.proceeding_to) {
+      await supabase
+        .from('check_ins')
+        .update({
+          ...(checkoutDetails.purpose_of_stay ? { purpose_of_stay: checkoutDetails.purpose_of_stay } : {}),
+          ...(checkoutDetails.arrival_from ? { arrival_from: checkoutDetails.arrival_from } : {}),
+          ...(checkoutDetails.proceeding_to ? { proceeding_to: checkoutDetails.proceeding_to } : {})
+        })
+        .eq('id', checkInId);
+    }
+
     // Fetch the updated check-in to return
     const { data: checkIn, error: fetchError } = await supabase
       .from('check_ins')
@@ -1268,6 +1304,19 @@ export const supabaseDb = {
 
     if (fetchError || !checkIn) {
       throw new Error(fetchError?.message || 'Failed to retrieve updated stay after checkout');
+    }
+
+    // Log history entries for customer profile
+    if (checkIn && checkIn.primary_customer_id) {
+      if (checkoutDetails?.purpose_of_stay && checkoutDetails.purpose_of_stay !== checkIn.purpose_of_stay) {
+        await addCustomerHistoryEntry(checkIn.primary_customer_id, 'purpose_of_stay', checkIn.purpose_of_stay || null, checkoutDetails.purpose_of_stay, 'Checkout Settlement');
+      }
+      if (checkoutDetails?.arrival_from && checkoutDetails.arrival_from !== checkIn.arrival_from) {
+        await addCustomerHistoryEntry(checkIn.primary_customer_id, 'arrival_from', checkIn.arrival_from || null, checkoutDetails.arrival_from, 'Checkout Settlement');
+      }
+      if (checkoutDetails?.proceeding_to && checkoutDetails.proceeding_to !== checkIn.proceeding_to) {
+        await addCustomerHistoryEntry(checkIn.primary_customer_id, 'proceeding_to', checkIn.proceeding_to || null, checkoutDetails.proceeding_to, 'Checkout Settlement');
+      }
     }
 
     broadcastDbUpdate('checkins');
