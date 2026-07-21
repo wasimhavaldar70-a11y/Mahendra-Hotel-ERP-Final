@@ -21,7 +21,9 @@ import {
   PauseCircle,
   UserCog,
   Trash2,
-  Key
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function SuperAdminPage() {
@@ -38,6 +40,8 @@ export default function SuperAdminPage() {
   const [address, setAddress] = useState('');
   const [error, setError] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Password Reset states
@@ -414,25 +418,39 @@ export default function SuperAdminPage() {
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Owner Login Password *</label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (errors.password) {
-                        setErrors(prev => {
-                          const copy = { ...prev };
-                          delete copy.password;
-                          return copy;
-                        });
-                      }
-                    }}
-                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
-                      errors.password ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
-                    }`}
-                    placeholder="Set owner password (min 6 chars)"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (errors.password) {
+                          setErrors(prev => {
+                            const copy = { ...prev };
+                            delete copy.password;
+                            return copy;
+                          });
+                        }
+                      }}
+                      className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 pr-10 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                        errors.password ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                      }`}
+                      placeholder="Set owner password (min 6 chars)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-none"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                   {errors.password && (
                     <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.password}</span>
                   )}
@@ -501,17 +519,31 @@ export default function SuperAdminPage() {
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">New Password *</label>
-                  <input
-                    type="password"
-                    required
-                    value={newPassword}
-                    onChange={(e) => {
-                      setNewPassword(e.target.value);
-                      if (resetError) setResetError('');
-                    }}
-                    className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
-                    placeholder="Enter new password (min 6 chars)"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showResetPassword ? 'text' : 'password'}
+                      required
+                      value={newPassword}
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        if (resetError) setResetError('');
+                      }}
+                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 pr-10 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                      placeholder="Enter new password (min 6 chars)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowResetPassword(!showResetPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-none"
+                      aria-label={showResetPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showResetPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex gap-2 pt-2">
