@@ -15,6 +15,15 @@
   --card: #ffffff;
   --radius-card: 16px;
   --sidebar: #083B36;
+
+  /* Mobile safe area defaults */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+
+  /* Bottom navigation height (used by main content padding) */
+  --bottom-nav-height: 64px;
 }
 
 @theme inline {
@@ -33,12 +42,631 @@
   --font-serif: 'Playfair Display', Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
+/* ============================================================
+   BASE
+   ============================================================ */
+
+html {
+  /* Prevent content from jumping when modal opens / scrollbar disappears */
+  scrollbar-gutter: stable;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
-  min-height: 100vh;
+  min-height: 100dvh;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior-y: contain;
 }
+
+/* ============================================================
+   MOBILE UX FOUNDATION — Touch & Responsive
+   ============================================================ */
+
+/* 1. Remove ugly blue tap highlight on all mobile browsers */
+*,
+*::before,
+*::after {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 2. Remove 300ms tap delay on all interactive elements */
+button,
+a,
+[role="button"],
+select,
+label,
+input[type="checkbox"],
+input[type="radio"],
+summary {
+  touch-action: manipulation;
+}
+
+/* 3. Instant touch feedback on all buttons and clickable elements */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+a[href] {
+  cursor: pointer;
+  transition: transform 80ms ease, opacity 80ms ease, box-shadow 120ms ease, background-color 80ms ease;
+}
+
+button:not(:disabled):active,
+[role="button"]:not(:disabled):active {
+  transform: scale(0.96);
+  opacity: 0.82;
+}
+
+/* 4. Minimum 44px touch targets for all interactive elements on touch devices */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  select,
+  a {
+    min-height: 44px;
+  }
+
+  /* Compact icon-only utility buttons inside modals/headers can opt out */
+  button.touch-compact,
+  [data-compact] {
+    min-height: unset;
+  }
+}
+
+/* 5. Prevent iOS auto-zoom on input focus (requires 16px minimum) */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 6. Momentum scrolling for all scrollable containers */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-y-scroll,
+.overflow-x-scroll,
+.scroll-x-touch,
+[style*="overflow"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-x-touch {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scroll-x-touch::-webkit-scrollbar {
+  display: none;
+}
+
+/* 7. Safe area padding for notch and home indicator devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* 8. Body scroll lock utility (toggled via JS when modals/drawers are open) */
+body.scroll-locked {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  top: 0;
+  left: 0;
+}
+
+/* ============================================================
+   RIPPLE EFFECT — Material-style touch feedback
+   ============================================================ */
+
+@keyframes ripple-expand {
+  0% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+/* Ripple container — add position:relative if not present */
+.ripple-host {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-effect {
+  position: absolute;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.18;
+  pointer-events: none;
+  animation: ripple-expand 500ms ease-out forwards;
+  transform-origin: center;
+  z-index: 0;
+}
+
+/* ============================================================
+   LOADING BUTTON
+   ============================================================ */
+
+@keyframes spin-fast {
+  to { transform: rotate(360deg); }
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin-fast 600ms linear infinite;
+  flex-shrink: 0;
+}
+
+/* Loading button — in-progress visual state */
+.btn-loading {
+  opacity: 0.75;
+  cursor: not-allowed !important;
+  pointer-events: none;
+  transform: none !important;
+}
+
+/* ============================================================
+   SMOOTH DRAWER & MODAL ANIMATIONS
+   ============================================================ */
+
+@keyframes slideUpDrawer {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes slideDownDrawer {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes zoomInModal {
+  from { transform: scale(0.93); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes fadeInUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slideUpDrawer 260ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.animate-slide-down {
+  animation: slideDownDrawer 240ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.animate-fade-overlay {
+  animation: fadeInOverlay 180ms ease-out forwards;
+}
+.animate-slide-left {
+  animation: slideInLeft 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.animate-slide-right {
+  animation: slideInRight 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+.animate-zoom-in {
+  animation: zoomInModal 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.animate-fade-up {
+  animation: fadeInUp 200ms ease-out forwards;
+}
+
+/* ============================================================
+   ACCESSIBLE FOCUS — keyboard only, not touch
+   ============================================================ */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ============================================================
+   DISABLED STATES
+   ============================================================ */
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ============================================================
+   STICKY ACTION FOOTER — mobile forms
+   ============================================================ */
+
+@media (max-width: 640px) {
+  .sticky-action-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    background: white;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.07);
+  }
+}
+
+/* ============================================================
+   BOTTOM NAVIGATION BAR
+   ============================================================ */
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 45;
+  display: flex;
+  align-items: stretch;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.06), 0 -1px 0 rgba(0,0,0,0.04);
+  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 44px;
+  padding: 6px 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 80ms ease, color 80ms ease, transform 80ms ease;
+  text-decoration: none;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: none;
+  background: transparent;
+  position: relative;
+}
+
+.bottom-nav-item:active {
+  transform: scale(0.93);
+  background-color: #f8fafc;
+}
+
+.bottom-nav-item.active {
+  color: var(--primary);
+}
+
+.bottom-nav-item.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 0 0 4px 4px;
+}
+
+/* When bottom nav is shown, add padding to main content */
+@media (max-width: 767px) {
+  .has-bottom-nav main {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 8px);
+  }
+}
+
+/* ============================================================
+   MOBILE TABLE → CARD CONVERSION
+   ============================================================ */
+
+/* On mobile, hide table and show card list; on desktop, vice versa */
+.mobile-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px 16px;
+  transition: box-shadow 80ms ease, transform 80ms ease, border-color 80ms ease;
+  cursor: pointer;
+  touch-action: manipulation;
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border-color: #cbd5e1;
+}
+
+/* Table wrapper that hides on mobile */
+@media (max-width: 767px) {
+  .desktop-table-wrapper {
+    display: none !important;
+  }
+  .mobile-cards-wrapper {
+    display: block;
+  }
+}
+
+@media (min-width: 768px) {
+  .desktop-table-wrapper {
+    display: block;
+  }
+  .mobile-cards-wrapper {
+    display: none !important;
+  }
+}
+
+/* Sticky table headers */
+.sticky-th {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+}
+
+/* ============================================================
+   FORM FIELD ENHANCEMENTS
+   ============================================================ */
+
+/* Larger tap area for form labels */
+label {
+  display: block;
+  cursor: pointer;
+}
+
+/* Input focus ring using primary color */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(15, 93, 82, 0.12);
+}
+
+/* Mobile-friendly date/time inputs */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Larger checkbox and radio touch targets */
+@media (pointer: coarse) {
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    cursor: pointer;
+  }
+}
+
+/* ============================================================
+   MOBILE MODAL / BOTTOM SHEET
+   ============================================================ */
+
+/* Full-screen modal on mobile, centered dialog on desktop */
+.modal-responsive {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .modal-responsive {
+    align-items: center;
+    padding: 16px;
+  }
+}
+
+.modal-sheet {
+  background: white;
+  width: 100%;
+  max-height: 96dvh;
+  border-radius: 24px 24px 0 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUpDrawer 260ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@media (min-width: 640px) {
+  .modal-sheet {
+    border-radius: 20px;
+    max-width: 580px;
+    max-height: 90dvh;
+    animation: zoomInModal 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+.modal-sheet-lg {
+  max-width: 760px;
+}
+
+/* Drag handle indicator */
+.modal-drag-handle {
+  width: 36px;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  margin: 10px auto 0;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   HORIZONTAL SCROLL UTILITIES (touch-friendly)
+   ============================================================ */
+
+.scroll-x-touch {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-snap-type: x mandatory;
+}
+
+.scroll-x-touch::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-x-touch > * {
+  scroll-snap-align: start;
+}
+
+/* ============================================================
+   TOUCH CARD — pressable card wrapper
+   ============================================================ */
+
+.touch-card {
+  transition: transform 80ms ease, box-shadow 80ms ease, border-color 120ms ease;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.touch-card:active {
+  transform: scale(0.97);
+}
+
+/* ============================================================
+   PERFORMANCE — will-change hints for animated elements
+   ============================================================ */
+
+.will-change-transform {
+  will-change: transform;
+}
+
+.animate-slide-up,
+.animate-slide-left,
+.animate-zoom-in,
+.animate-fade-overlay {
+  will-change: transform, opacity;
+}
+
+/* ============================================================
+   FILTER PILLS (horizontal scroll on mobile)
+   ============================================================ */
+
+.filter-pills {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+  flex-wrap: nowrap;
+}
+
+.filter-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 7px 14px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1.5px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  cursor: pointer;
+  touch-action: manipulation;
+  min-height: 36px;
+  transition: background-color 80ms ease, border-color 80ms ease, color 80ms ease, transform 80ms ease;
+  flex-shrink: 0;
+}
+
+.filter-pill:active {
+  transform: scale(0.95);
+}
+
+.filter-pill.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+/* ============================================================
+   SCROLL PERFORMANCE
+   ============================================================ */
+
+/* Improve scroll on long lists */
+.virtual-list-item {
+  contain: layout style;
+}
+
+/* Smooth scrolling everywhere */
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   NUMBER INPUTS — remove spinners
+   ============================================================ */
 
 /* Chrome, Safari, Edge, Opera */
 input::-webkit-outer-spin-button,
@@ -52,7 +680,10 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
-/* Thermal receipt and report print styles */
+/* ============================================================
+   PRINT STYLES (Preserved)
+   ============================================================ */
+
 @media print {
   body * {
     visibility: hidden;

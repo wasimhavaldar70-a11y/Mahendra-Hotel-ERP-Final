@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import RoomGrid from '../../components/RoomGrid';
 import RoomDetailModal from '../../components/RoomDetailModal';
+import LoadingButton from '../../components/ui/LoadingButton';
 import { db, getSessionUser, setSessionUser, supabase } from '../../lib/supabase/client';
 import { Room, Hotel } from '../../types';
 import { 
@@ -60,7 +61,8 @@ export default function DashboardPage() {
         db.getActiveStaysForHotel(hotelId)
       ]);
 
-      setRooms(roomsList);
+      const safeRoomsList = Array.isArray(roomsList) ? roomsList : [];
+      setRooms(safeRoomsList);
 
       if (dashboardStats) {
         setStats({
@@ -74,13 +76,13 @@ export default function DashboardPage() {
         });
       }
 
-      setPendingRequests(requestsList);
+      setPendingRequests(Array.isArray(requestsList) ? requestsList : []);
 
       // Load active stays map to pass to RoomGrid
       const staysMap: Record<string, { guestName: string; phone: string; price: number }> = {};
-      stays.forEach(stay => {
-        if (stay.room_id) {
-          const roomObj = roomsList.find(r => r.id === stay.room_id);
+      (stays || []).forEach(stay => {
+        if (stay && stay.room_id) {
+          const roomObj = safeRoomsList.find(r => r && r.id === stay.room_id);
           staysMap[stay.room_id] = {
             guestName: stay.primary_customer?.full_name || 'Guest',
             phone: stay.primary_customer?.phone || '',
@@ -354,7 +356,7 @@ export default function DashboardPage() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Large Stats Cards Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           {/* Revenue */}
           <div className="col-span-2 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
             <div className="space-y-1">
@@ -411,26 +413,26 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Room Status Categories Mini Bar */}
-        <div className="flex flex-wrap gap-4 items-center bg-white py-3 px-5 rounded-2xl border border-slate-100 shadow-sm text-xs font-semibold text-slate-500">
-          <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Quick Legend:</span>
+        {/* Room Status Categories Mini Bar — scrollable on mobile */}
+        <div className="scroll-x-touch flex gap-4 items-center bg-white py-3 px-5 rounded-2xl border border-slate-100 shadow-sm text-xs font-semibold text-slate-500">
+          <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold shrink-0">Quick Legend:</span>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="w-2.5 h-2.5 rounded-full bg-green-600 block"></span>
             <span>Ready ({stats.availableRooms})</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="w-2.5 h-2.5 rounded-full bg-red-600 block"></span>
             <span>Occupied ({stats.occupiedRooms})</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="w-2.5 h-2.5 rounded-full bg-slate-500 block"></span>
             <span>Maintenance ({stats.maintenanceRooms})</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500 block"></span>
             <span>Cleaning ({stats.cleaningRooms})</span>
           </div>
@@ -460,11 +462,10 @@ export default function DashboardPage() {
                   key={req.id} 
                   onClick={() => {
                     setSelectedRequest(req);
-                    // Pre-select first matching available room if any
                     const matching = rooms.find(r => r.room_type === req.room_type && r.status === 'Ready');
                     setSelectedRoomId(matching ? matching.id : '');
                   }}
-                  className="bg-slate-50/40 hover:bg-slate-50 p-4 rounded-2xl border border-slate-200/65 cursor-pointer hover:border-[#0F5D52]/40 hover:shadow-sm transition-all duration-150 group flex flex-col justify-between"
+                  className="bg-slate-50/40 hover:bg-slate-50 active:scale-[0.97] active:opacity-85 p-4 rounded-2xl border border-slate-200/65 cursor-pointer hover:border-[#0F5D52]/40 hover:shadow-sm transition-all duration-100 group flex flex-col justify-between min-h-[44px]"
                 >
                   <div className="space-y-2">
                     <div className="flex justify-between items-start">
@@ -640,30 +641,33 @@ export default function DashboardPage() {
             </div>
 
             {/* Approval/Rejection Actions Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-3">
-              <button
+            <div className="sticky bottom-0 bg-white p-4 border-t border-slate-100 flex gap-3 z-10">
+              <LoadingButton
                 type="button"
-                disabled={submitting}
+                loading={submitting}
+                loadingText="Rejecting..."
                 onClick={handleRejectRequest}
                 className="flex-1 bg-white hover:bg-red-50 border border-slate-200 text-slate-700 hover:text-red-600 hover:border-red-200 text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <X className="w-4 h-4" />
-                Reject Request
-              </button>
+                Reject
+              </LoadingButton>
 
-              <button
+              <LoadingButton
                 type="button"
-                disabled={submitting || !selectedRoomId}
+                loading={submitting}
+                loadingText="Approving..."
+                disabled={!selectedRoomId}
                 onClick={handleApproveRequest}
                 className={`flex-1 text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md ${
-                  selectedRoomId && !submitting
+                  selectedRoomId
                     ? 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
                     : 'bg-slate-300 cursor-not-allowed shadow-none'
                 }`}
               >
                 <Check className="w-4 h-4" />
-                Approve & Allocate
-              </button>
+                Approve &amp; Allocate
+              </LoadingButton>
             </div>
           </div>
         </div>

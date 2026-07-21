@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { db } from '../lib/supabase/client';
 import { Room, ExtendedCheckIn, RoomStatus, FolioLedger } from '../types';
+import LoadingButton from './ui/LoadingButton';
 
 interface RoomDetailModalProps {
   room: Room;
@@ -89,6 +90,9 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
   // Dynamic Hotel Info state
   const [currentHotel, setCurrentHotel] = useState<any>(null);
+
+  // Action loading state (extend stay / checkout)
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Ledger states
   const [ledgerEntries, setLedgerEntries] = useState<FolioLedger[]>([]);
@@ -218,6 +222,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
   const handleExtendStay = async () => {
     if (!stayData) return;
+    setActionLoading(true);
     try {
       const checkoutTime = currentHotel?.cms_data?.checkoutTime || '12:00:00';
       const parsedDate = new Date(newCheckoutDate + 'T' + checkoutTime);
@@ -227,6 +232,8 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
       onStatusChanged();
     } catch (err) {
       console.error(err);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -243,7 +250,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
       const taxVal = checkoutApplyTax ? Math.round((subtotalVal - discountVal) * (12 / 100)) : 0;
       const grandTotalVal = Math.max(0, subtotalVal - discountVal + taxVal);
 
-      const updated = { ...room, status: 'Dirty' as RoomStatus };
+      const updated = { ...room, status: 'Cleaning' as RoomStatus };
       onStatusChanged(updated);
       onClose();
       
@@ -259,6 +266,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         subtotal: subtotalVal,
         total_nights: durationVal.nights
       });
+      onStatusChanged(updated);
     } catch (err) {
       console.error(err);
     }
@@ -817,12 +825,15 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button
+                        <LoadingButton
+                          type="button"
+                          loading={actionLoading}
+                          loadingText="Extending..."
                           onClick={handleExtendStay}
-                          className="flex-1 bg-primary text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-primary-hover shadow-md transition-colors"
+                          className="flex-1 bg-primary text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-primary-hover shadow-md transition-colors min-h-[44px]"
                         >
                           Confirm Extension
-                        </button>
+                        </LoadingButton>
                         <button
                           onClick={() => setExtending(false)}
                           className="bg-slate-100 text-slate-600 text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-slate-200 transition-colors"
@@ -994,15 +1005,18 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                       </div>
 
                       <div className="flex gap-2 pt-2">
-                        <button
+                        <LoadingButton
+                          type="button"
+                          loading={actionLoading}
+                          loadingText="Processing..."
                           onClick={handleCheckoutSubmit}
-                          className="flex-1 bg-emerald-600 text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-emerald-750 shadow-md transition-colors"
+                          className="flex-1 bg-emerald-600 text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-emerald-700 shadow-md transition-colors min-h-[44px]"
                         >
-                          Confirm & Checkout
-                        </button>
+                          Confirm &amp; Checkout
+                        </LoadingButton>
                         <button
                           onClick={() => setCheckingOut(false)}
-                          className="bg-slate-100 text-slate-600 text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-slate-200 transition-colors"
+                          className="bg-slate-100 text-slate-600 text-xs font-semibold px-4 py-2.5 rounded-lg hover:bg-slate-200 transition-colors min-h-[44px]"
                         >
                           Cancel
                         </button>

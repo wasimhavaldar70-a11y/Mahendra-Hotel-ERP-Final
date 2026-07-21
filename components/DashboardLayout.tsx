@@ -5,7 +5,7 @@
 // Location: components/DashboardLayout.tsx
 // ========================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
@@ -24,7 +24,8 @@ import {
   DoorClosed,
   Calendar,
   Globe,
-  ChevronLeft
+  ChevronLeft,
+  MoreHorizontal
 } from 'lucide-react';
 import { getSessionUser, setSessionUser, supabase, isRealSupabase, db } from '../lib/supabase/client';
 import { User, Hotel } from '../types';
@@ -36,8 +37,25 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpenRaw] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Swipe-to-close sidebar
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  // Body scroll lock when mobile sidebar is open
+  const setSidebarOpen = (open: boolean) => {
+    setSidebarOpenRaw(open);
+    if (typeof document !== 'undefined') {
+      if (open) {
+        document.body.classList.add('scroll-locked');
+      } else {
+        document.body.classList.remove('scroll-locked');
+      }
+    }
+  };
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentHotel, setCurrentHotel] = useState<Hotel | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,6 +143,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     router.push('/login');
   };
 
+  // ── Swipe-to-close sidebar on mobile ──────────────────────
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = touchStartX.current - e.changedTouches[0].clientX;
+    const dy = Math.abs(touchStartY.current - e.changedTouches[0].clientY);
+    // Close if swipe left > 50px and mostly horizontal
+    if (dx > 50 && dy < 80) {
+      setSidebarOpen(false);
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, []);
+
   if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#F8FAFC]">
@@ -158,9 +194,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ...(!isReceptionist ? [{ name: 'Settings', path: '/settings', icon: Settings }] : []),
       ];
 
+  // Bottom nav shows top 4 items + "More" for the rest (non-superadmin)
+  const bottomNavItems = isSuperAdmin
+    ? [{ name: 'Hotels', path: '/super-admin', icon: Building2 }]
+    : [
+        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'Check In', path: '/check-in', icon: ClipboardSignature },
+        { name: 'Check Out', path: '/check-out', icon: DoorClosed },
+        { name: 'Rooms', path: '/rooms', icon: BedDouble },
+      ];
+
+  const handleBottomNavTap = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(8);
+    }
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      {/* Sidebar - Desktop */}
+    <div className="flex h-screen overflow-hidden bg-slate-50 has-bottom-nav">
+      {/* ── Sidebar - Desktop ──────────────────────────────── */}
       <aside className={`hidden md:flex md:flex-col bg-[#083B36] flex-shrink-0 border-r border-[#0D443E]/30 shadow-none transition-all duration-300 ${
         isCollapsed ? 'md:w-20' : 'md:w-64'
       }`}>
@@ -257,10 +309,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       </aside>
 
-      {/* Sidebar - Mobile drawer */}
+      {/* ── Sidebar - Mobile drawer ───────────────────────── */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden bg-slate-950/40 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-[260px] flex flex-col bg-[#083B36] border-r border-[#0D443E]/30 h-full shadow-2xl animate-in slide-in-from-left duration-200">
+        <div 
+          className="fixed inset-0 z-50 flex md:hidden bg-slate-950/40 backdrop-blur-sm animate-fade-overlay" 
+          onClick={() => setSidebarOpen(false)}
+        >
+          <div 
+            className="relative w-full max-w-[280px] flex flex-col bg-[#083B36] border-r border-[#0D443E]/30 h-full shadow-2xl animate-slide-left safe-bottom" 
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             <div className="flex items-center justify-between px-6 py-5 border-b border-[#0D443E]/30 bg-[#083B36]">
               <div className="flex items-center gap-3">
                 <img 
@@ -272,7 +332,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
               <button 
                 onClick={() => setSidebarOpen(false)}
-                className="p-1 rounded-lg text-emerald-400 hover:bg-[#0F5D52]/50 hover:text-white"
+                className="p-2.5 rounded-lg text-emerald-400 hover:bg-[#0F5D52]/50 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
+                aria-label="Close navigation"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -291,7 +352,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => setSidebarOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-emerald-100/80 hover:text-white hover:bg-[#0D443E]/40 transition-all duration-150"
+                      className="flex items-center gap-3 px-4 py-3.5 rounded-lg text-sm font-medium text-emerald-100/80 hover:text-white hover:bg-[#0D443E]/40 transition-all duration-150"
                     >
                       <Icon className="w-4 h-4 text-emerald-400" />
                       {item.name}
@@ -303,8 +364,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <Link
                     key={item.path}
                     href={item.path}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      handleBottomNavTap();
+                    }}
+                    className={`flex items-center justify-between px-4 py-3.5 rounded-lg text-sm font-medium transition-all duration-150 active:scale-[0.97] ${
                       isActive 
                         ? 'bg-primary text-white font-semibold shadow-md shadow-[#083B36]/20' 
                         : 'text-emerald-100/80 hover:text-white hover:bg-[#0D443E]/40'
@@ -327,7 +391,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="p-4 border-t border-[#0D443E]/30 bg-[#083B36]">
               <button
                 onClick={handleLogout}
-                className="flex w-full items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-emerald-100/80 hover:bg-[#0D443E]/40 hover:text-white transition-all duration-150"
+                className="flex w-full items-center gap-3 px-4 py-3.5 rounded-lg text-sm font-medium text-emerald-100/80 hover:bg-[#0D443E]/40 hover:text-white transition-all duration-150"
               >
                 <LogOut className="w-4 h-4 text-emerald-400" />
                 Sign Out
@@ -337,14 +401,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
       )}
 
-      {/* Main Content Area */}
+      {/* ── Main Content Area ─────────────────────────────── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 bg-white/90 backdrop-blur-md border-b border-slate-100 h-[70px] sticky top-0 z-40 shadow-sm">
-          <div className="flex items-center gap-3">
+        <header className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-white/90 backdrop-blur-md border-b border-slate-100 h-[60px] sm:h-[70px] sticky top-0 z-40 shadow-sm safe-top">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Hamburger — only shown on mobile when needed for full menu access */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-2 -ml-2 rounded-xl text-slate-500 hover:bg-slate-50 md:hidden"
+              className="p-2.5 -ml-1 rounded-xl text-slate-500 hover:bg-slate-50 md:hidden min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-[0.93] active:bg-slate-100 transition-all duration-75"
+              aria-label="Open navigation menu"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -361,7 +427,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600">
                   <Building2 className="w-4.5 h-4.5" />
                 </div>
-                <span className="font-bold text-slate-800 text-sm leading-tight truncate max-w-[200px] sm:max-w-none">
+                <span className="font-bold text-slate-800 text-sm leading-tight truncate max-w-[120px] sm:max-w-[200px] md:max-w-none">
                   {currentHotel?.hotel_name}
                 </span>
                 <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-[#0F5D52]/10 text-primary border border-[#0F5D52]/20">
@@ -386,10 +452,60 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/30 pb-10">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-slate-50/30 pb-10 safe-bottom">
           {children}
         </main>
       </div>
+
+      {/* ── Mobile Bottom Navigation Bar ─────────────────── */}
+      {!isSuperAdmin && (
+        <nav className="bottom-nav md:hidden" aria-label="Bottom navigation">
+          {bottomNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.path;
+            const hasBadge = item.name === 'Dashboard' && pendingCount > 0;
+
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                onClick={handleBottomNavTap}
+                className={`bottom-nav-item ${isActive ? 'active' : ''}`}
+                aria-label={item.name}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <span className="relative">
+                  <Icon className={`w-5 h-5 transition-transform duration-75 ${isActive ? 'scale-110' : ''}`} />
+                  {hasBadge && (
+                    <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-red-500 ring-1 ring-white" />
+                  )}
+                </span>
+                <span className={`text-[10px] font-semibold leading-none ${isActive ? 'font-bold' : ''}`}>
+                  {item.name === 'Check In' ? 'Check In' : item.name === 'Check Out' ? 'Check Out' : item.name}
+                </span>
+              </Link>
+            );
+          })}
+
+          {/* More button — opens sidebar drawer for remaining items */}
+          <button
+            type="button"
+            onClick={() => {
+              setSidebarOpen(true);
+              handleBottomNavTap();
+            }}
+            className={`bottom-nav-item ${
+              !bottomNavItems.some(i => i.path === pathname) && pathname !== '/dashboard' 
+                ? 'active' 
+                : ''
+            }`}
+            aria-label="More navigation options"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+            <span className="text-[10px] font-semibold leading-none">More</span>
+          </button>
+        </nav>
+      )}
     </div>
   );
 }

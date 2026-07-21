@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
+import LoadingButton from '../../components/ui/LoadingButton';
 import { db, getSessionUser } from '../../lib/supabase/client';
 import { Room, RoomStatus } from '../../types';
 import { 
@@ -16,9 +17,11 @@ import {
   Wrench, 
   Sparkles, 
   CheckCircle,
-  Filter,
   X,
-  Pencil
+  Pencil,
+  Users,
+  IndianRupee,
+  Layers
 } from 'lucide-react';
 
 export default function RoomsPage() {
@@ -28,7 +31,6 @@ export default function RoomsPage() {
   const [userRole, setUserRole] = useState<string>('receptionist');
   
   // Filter states
-  const [floorFilter, setFloorFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
 
   // Add Room form state
@@ -40,6 +42,7 @@ export default function RoomsPage() {
   const [capacity, setCapacity] = useState(2);
   const [error, setError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [addingRoom, setAddingRoom] = useState(false);
 
   // Edit Room form state
   const [showEditForm, setShowEditForm] = useState(false);
@@ -51,6 +54,10 @@ export default function RoomsPage() {
   const [editCapacity, setEditCapacity] = useState(2);
   const [editError, setEditError] = useState('');
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [editingRoom_loading, setEditingRoomLoading] = useState(false);
+
+  // Toggle status loading state per room
+  const [togglingRoom, setTogglingRoom] = useState<string | null>(null);
 
   const loadRooms = async (hotelId: string) => {
     try {
@@ -75,7 +82,6 @@ export default function RoomsPage() {
       channel.onmessage = (event) => {
         if (event.data && event.data.type === 'DB_UPDATE') {
           if (syncTimeout) clearTimeout(syncTimeout);
-          // Apply jittered debounce (300ms to 800ms) to stagger DB hits across open tabs
           const delay = 300 + Math.random() * 500;
           syncTimeout = setTimeout(() => {
             loadRooms(session.hotel.id);
@@ -124,6 +130,7 @@ export default function RoomsPage() {
       return;
     }
 
+    setAddingRoom(true);
     try {
       await db.addRoom(currentHotel.id, {
         room_number: cleanRoomNum,
@@ -133,7 +140,6 @@ export default function RoomsPage() {
         capacity: Number(capacity)
       });
       
-      // Reset form
       setRoomNumber('');
       setPrice('');
       setCapacity(2);
@@ -143,6 +149,8 @@ export default function RoomsPage() {
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Failed to add room.');
+    } finally {
+      setAddingRoom(false);
     }
   };
 
@@ -192,6 +200,7 @@ export default function RoomsPage() {
       return;
     }
 
+    setEditingRoomLoading(true);
     try {
       await db.updateRoomDetails(currentHotel.id, editingRoom.id, {
         room_number: cleanRoomNum,
@@ -208,6 +217,8 @@ export default function RoomsPage() {
     } catch (err) {
       console.error(err);
       setEditError(err instanceof Error ? err.message : 'Failed to update room.');
+    } finally {
+      setEditingRoomLoading(false);
     }
   };
 
@@ -225,18 +236,20 @@ export default function RoomsPage() {
   };
 
   const handleToggleStatus = async (roomId: string, currentStatus: RoomStatus) => {
-    // Cycle status: Ready -> Cleaning -> Maintenance -> Ready (skip Occupied manually)
     let nextStatus: RoomStatus = 'Ready';
     if (currentStatus === 'Ready') nextStatus = 'Cleaning';
     else if (currentStatus === 'Cleaning') nextStatus = 'Maintenance';
     else if (currentStatus === 'Maintenance') nextStatus = 'Ready';
-    else return; // Don't toggle occupied rooms from here
+    else return;
 
+    setTogglingRoom(roomId);
     try {
       await db.updateRoomStatus(currentHotel.id, roomId, nextStatus);
       loadRooms(currentHotel.id);
     } catch (err) {
       console.error(err);
+    } finally {
+      setTogglingRoom(null);
     }
   };
 
@@ -245,9 +258,8 @@ export default function RoomsPage() {
 
   // Filtered rooms list
   const filteredRooms = rooms.filter(room => {
-    const floorMatch = floorFilter === 'All' || room.floor === floorFilter;
     const statusMatch = statusFilter === 'All' || room.status === statusFilter;
-    return floorMatch && statusMatch;
+    return statusMatch;
   });
 
   const getStatusBadge = (status: RoomStatus) => {
@@ -263,11 +275,22 @@ export default function RoomsPage() {
     }
   };
 
+  const getStatusDot = (status: RoomStatus) => {
+    switch (status) {
+      case 'Ready': return 'bg-green-500';
+      case 'Occupied': return 'bg-red-500';
+      case 'Maintenance': return 'bg-slate-400';
+      case 'Cleaning': return 'bg-amber-500';
+    }
+  };
+
+  const modalInputClass = "w-full text-sm font-medium text-slate-700 bg-slate-50/60 border border-slate-200 rounded-xl px-3.5 py-3 focus:bg-white focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors placeholder:text-slate-400";
+
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
               <BedDouble className="w-5 h-5 text-primary" />
@@ -278,155 +301,153 @@ export default function RoomsPage() {
 
           {userRole !== 'receptionist' && (
             <button
+              id="add-room-btn"
               onClick={() => setShowAddForm(true)}
-              className="bg-primary hover:bg-primary-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
+              className="bg-primary hover:bg-primary-hover active:scale-[0.95] active:opacity-85 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 min-h-[44px] shrink-0"
             >
               <Plus className="w-4 h-4" />
-              Add New Room
+              <span className="hidden sm:inline">Add Room</span>
+              <span className="sm:hidden">Add</span>
             </button>
           )}
         </div>
 
-        {/* Add Room Modal Drawer */}
+        {/* Filter Pills */}
+        <div className="filter-pills">
+          {['All', 'Ready', 'Occupied', 'Cleaning', 'Maintenance'].map(s => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`filter-pill ${statusFilter === s ? 'active' : ''}`}
+            >
+              {s !== 'All' && <span className={`w-2 h-2 rounded-full ${
+                s === 'Ready' ? 'bg-green-500' :
+                s === 'Occupied' ? 'bg-red-500' :
+                s === 'Cleaning' ? 'bg-amber-500' : 'bg-slate-400'
+              } ${statusFilter === s ? 'bg-white' : ''}`} />}
+              {s} {s !== 'All' && `(${rooms.filter(r => r.status === s).length})`}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Add Room Modal ──────────────────────────────── */}
         {showAddForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+          <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm animate-fade-overlay modal-responsive">
+            <div className="modal-sheet shadow-2xl border border-slate-100">
+              <div className="modal-drag-handle sm:hidden" />
+              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
                 <h3 className="text-sm font-bold text-slate-800">Add New Hotel Room</h3>
-                <button onClick={() => setShowAddForm(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
-                  <X className="w-4 h-4" />
+                <button 
+                  onClick={() => setShowAddForm(false)} 
+                  className="p-2.5 rounded-xl text-slate-400 hover:bg-slate-100 active:scale-[0.93] min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  aria-label="Close"
+                >
+                  <X className="w-4.5 h-4.5" />
                 </button>
               </div>
 
-              <form onSubmit={handleAddRoom} className="p-6 space-y-4">
-                {error && (
-                  <div className="p-3 bg-red-50 text-xs font-semibold text-red-600 rounded-xl border border-red-100">
-                    {error}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Number *</label>
-                  <input
-                    type="text"
-                    required
-                    value={roomNumber}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10);
-                      setRoomNumber(val);
-                      if (errors.roomNumber) {
-                        setErrors(prev => {
-                          const copy = { ...prev };
-                          delete copy.roomNumber;
-                          return copy;
-                        });
-                      }
-                    }}
-                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
-                      errors.roomNumber ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
-                    }`}
-                    placeholder="e.g. 101"
-                  />
-                  {errors.roomNumber && (
-                    <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.roomNumber}</span>
+              <form onSubmit={handleAddRoom} className="flex-1 overflow-y-auto">
+                <div className="p-6 space-y-4">
+                  {error && (
+                    <div className="p-3 bg-red-50 text-xs font-semibold text-red-600 rounded-xl border border-red-100">
+                      {error}
+                    </div>
                   )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Type</label>
-                    <select
-                      value={roomType}
-                      onChange={(e) => setRoomType(e.target.value)}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
-                    >
-                      <option value="Deluxe Room">Deluxe Room</option>
-                      <option value="Super Deluxe Room">Super Deluxe Room</option>
-                      <option value="Family Suite">Family Suite</option>
-                      <option value="Executive Suite">Executive Suite</option>
-                    </select>
-                  </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Floor</label>
-                    <select
-                      value={floor}
-                      onChange={(e) => setFloor(e.target.value)}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
-                    >
-                      <option value="Ground Floor">Ground Floor</option>
-                      <option value="First Floor">First Floor</option>
-                      <option value="Second Floor">Second Floor</option>
-                      <option value="Third Floor">Third Floor</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Base Price per Night (₹) *</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Number *</label>
                     <input
-                      type="number"
+                      id="add-room-number"
+                      type="text"
                       required
-                      value={price}
+                      autoFocus
+                      inputMode="text"
+                      autoCapitalize="characters"
+                      value={roomNumber}
                       onChange={(e) => {
-                        setPrice(e.target.value);
-                        if (errors.price) {
-                          setErrors(prev => {
-                            const copy = { ...prev };
-                            delete copy.price;
-                            return copy;
-                          });
-                        }
+                        const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10);
+                        setRoomNumber(val);
+                        if (errors.roomNumber) setErrors(prev => { const c = {...prev}; delete c.roomNumber; return c; });
                       }}
-                      className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
-                        errors.price ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
-                      }`}
-                      placeholder="e.g. 1800"
+                      className={`${modalInputClass} ${errors.roomNumber ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : ''}`}
+                      placeholder="e.g. 101"
                     />
-                    {errors.price && (
-                      <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.price}</span>
-                    )}
+                    {errors.roomNumber && <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.roomNumber}</span>}
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Capacity (Persons) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={capacity}
-                      onChange={(e) => {
-                        setCapacity(Number(e.target.value));
-                        if (errors.capacity) {
-                          setErrors(prev => {
-                            const copy = { ...prev };
-                            delete copy.capacity;
-                            return copy;
-                          });
-                        }
-                      }}
-                      className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
-                        errors.capacity ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
-                      }`}
-                      min="1"
-                    />
-                    {errors.capacity && (
-                      <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.capacity}</span>
-                    )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Type</label>
+                      <select value={roomType} onChange={(e) => setRoomType(e.target.value)} className={modalInputClass}>
+                        <option value="Deluxe Room">Deluxe Room</option>
+                        <option value="Super Deluxe Room">Super Deluxe Room</option>
+                        <option value="Family Suite">Family Suite</option>
+                        <option value="Executive Suite">Executive Suite</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Floor</label>
+                      <select value={floor} onChange={(e) => setFloor(e.target.value)} className={modalInputClass}>
+                        <option value="Ground Floor">Ground Floor</option>
+                        <option value="First Floor">First Floor</option>
+                        <option value="Second Floor">Second Floor</option>
+                        <option value="Third Floor">Third Floor</option>
+                        <option value="Fourth Floor">Fourth Floor</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Price per Night (₹) *</label>
+                      <input
+                        type="number"
+                        required
+                        inputMode="decimal"
+                        value={price}
+                        onChange={(e) => {
+                          setPrice(e.target.value);
+                          if (errors.price) setErrors(prev => { const c = {...prev}; delete c.price; return c; });
+                        }}
+                        className={`${modalInputClass} ${errors.price ? 'border-red-400' : ''}`}
+                        placeholder="e.g. 1800"
+                      />
+                      {errors.price && <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.price}</span>}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Capacity *</label>
+                      <input
+                        type="number"
+                        required
+                        inputMode="numeric"
+                        value={capacity}
+                        onChange={(e) => {
+                          setCapacity(Number(e.target.value));
+                          if (errors.capacity) setErrors(prev => { const c = {...prev}; delete c.capacity; return c; });
+                        }}
+                        className={`${modalInputClass} ${errors.capacity ? 'border-red-400' : ''}`}
+                        min="1"
+                        max="20"
+                      />
+                      {errors.capacity && <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.capacity}</span>}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2">
-                  <button
+                {/* Sticky footer */}
+                <div className="sticky-action-footer sm:static sm:px-6 sm:py-5 sm:border-t sm:border-slate-100 sm:bg-slate-50/30 flex gap-3">
+                  <LoadingButton
                     type="submit"
-                    className="flex-1 bg-primary text-white text-xs font-bold py-3 rounded-xl hover:bg-primary-hover shadow-md hover:shadow-lg transition-all"
+                    loading={addingRoom}
+                    loadingText="Saving..."
+                    className="flex-1 bg-primary text-white text-sm font-bold py-3 rounded-xl hover:bg-primary-hover shadow-md hover:shadow-lg transition-all"
                   >
-                    Save Room configuration
-                  </button>
+                    Save Room
+                  </LoadingButton>
                   <button
                     type="button"
                     onClick={() => setShowAddForm(false)}
-                    className="bg-slate-100 text-slate-600 text-xs font-bold px-4 py-3 rounded-xl hover:bg-slate-200"
+                    className="bg-slate-100 text-slate-600 text-sm font-bold px-5 py-3 rounded-xl hover:bg-slate-200 active:scale-[0.96] transition-all"
                   >
                     Cancel
                   </button>
@@ -436,146 +457,120 @@ export default function RoomsPage() {
           </div>
         )}
 
-        {/* Edit Room Modal Drawer */}
+        {/* ── Edit Room Modal ─────────────────────────────── */}
         {showEditForm && editingRoom && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden">
-              <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-800">Edit Hotel Room Details</h3>
-                <button onClick={() => setShowEditForm(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
-                  <X className="w-4 h-4" />
+          <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm animate-fade-overlay modal-responsive">
+            <div className="modal-sheet shadow-2xl border border-slate-100">
+              <div className="modal-drag-handle sm:hidden" />
+              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+                <h3 className="text-sm font-bold text-slate-800">Edit Room — {editingRoom.room_number}</h3>
+                <button 
+                  onClick={() => setShowEditForm(false)} 
+                  className="p-2.5 rounded-xl text-slate-400 hover:bg-slate-100 active:scale-[0.93] min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  aria-label="Close"
+                >
+                  <X className="w-4.5 h-4.5" />
                 </button>
               </div>
 
-              <form onSubmit={handleEditRoom} className="p-6 space-y-4">
-                {editError && (
-                  <div className="p-3 bg-red-50 text-xs font-semibold text-red-600 rounded-xl border border-red-100">
-                    {editError}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Number *</label>
-                  <input
-                    type="text"
-                    required
-                    value={editRoomNumber}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10);
-                      setEditRoomNumber(val);
-                      if (editErrors.roomNumber) {
-                        setEditErrors(prev => {
-                          const copy = { ...prev };
-                          delete copy.roomNumber;
-                          return copy;
-                        });
-                      }
-                    }}
-                    className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
-                      editErrors.roomNumber ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
-                    }`}
-                    placeholder="e.g. 101"
-                  />
-                  {editErrors.roomNumber && (
-                    <span className="text-[10px] font-bold text-red-500 mt-1 block">{editErrors.roomNumber}</span>
+              <form onSubmit={handleEditRoom} className="flex-1 overflow-y-auto">
+                <div className="p-6 space-y-4">
+                  {editError && (
+                    <div className="p-3 bg-red-50 text-xs font-semibold text-red-600 rounded-xl border border-red-100">{editError}</div>
                   )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Type</label>
-                    <select
-                      value={editRoomType}
-                      onChange={(e) => setEditRoomType(e.target.value)}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
-                    >
-                      <option value="Deluxe Room">Deluxe Room</option>
-                      <option value="Super Deluxe Room">Super Deluxe Room</option>
-                      <option value="Family Suite">Family Suite</option>
-                      <option value="Executive Suite">Executive Suite</option>
-                    </select>
-                  </div>
 
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Floor</label>
-                    <select
-                      value={editFloor}
-                      onChange={(e) => setEditFloor(e.target.value)}
-                      className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none"
-                    >
-                      <option value="Ground Floor">Ground Floor</option>
-                      <option value="First Floor">First Floor</option>
-                      <option value="Second Floor">Second Floor</option>
-                      <option value="Third Floor">Third Floor</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Base Price per Night (₹) *</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Number *</label>
                     <input
-                      type="number"
+                      type="text"
                       required
-                      value={editPrice}
+                      autoFocus
+                      inputMode="text"
+                      autoCapitalize="characters"
+                      value={editRoomNumber}
                       onChange={(e) => {
-                        setEditPrice(e.target.value);
-                        if (editErrors.price) {
-                          setEditErrors(prev => {
-                            const copy = { ...prev };
-                            delete copy.price;
-                            return copy;
-                          });
-                        }
+                        const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10);
+                        setEditRoomNumber(val);
+                        if (editErrors.roomNumber) setEditErrors(prev => { const c = {...prev}; delete c.roomNumber; return c; });
                       }}
-                      className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
-                        editErrors.price ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
-                      }`}
-                      placeholder="e.g. 1800"
+                      className={`${modalInputClass} ${editErrors.roomNumber ? 'border-red-400' : ''}`}
+                      placeholder="e.g. 101"
                     />
-                    {editErrors.price && (
-                      <span className="text-[10px] font-bold text-red-500 mt-1 block">{editErrors.price}</span>
-                    )}
+                    {editErrors.roomNumber && <span className="text-[10px] font-bold text-red-500 mt-1 block">{editErrors.roomNumber}</span>}
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Capacity (Persons) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={editCapacity}
-                      onChange={(e) => {
-                        setEditCapacity(Number(e.target.value));
-                        if (editErrors.capacity) {
-                          setEditErrors(prev => {
-                            const copy = { ...prev };
-                            delete copy.capacity;
-                            return copy;
-                          });
-                        }
-                      }}
-                      className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
-                        editErrors.capacity ? 'border-red-500 focus:ring-red-500' : 'border-[#E2E8F0]/80'
-                      }`}
-                      min="1"
-                    />
-                    {editErrors.capacity && (
-                      <span className="text-[10px] font-bold text-red-500 mt-1 block">{editErrors.capacity}</span>
-                    )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Type</label>
+                      <select value={editRoomType} onChange={(e) => setEditRoomType(e.target.value)} className={modalInputClass}>
+                        <option value="Deluxe Room">Deluxe Room</option>
+                        <option value="Super Deluxe Room">Super Deluxe Room</option>
+                        <option value="Family Suite">Family Suite</option>
+                        <option value="Executive Suite">Executive Suite</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Floor</label>
+                      <select value={editFloor} onChange={(e) => setEditFloor(e.target.value)} className={modalInputClass}>
+                        <option value="Ground Floor">Ground Floor</option>
+                        <option value="First Floor">First Floor</option>
+                        <option value="Second Floor">Second Floor</option>
+                        <option value="Third Floor">Third Floor</option>
+                        <option value="Fourth Floor">Fourth Floor</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Price per Night (₹) *</label>
+                      <input
+                        type="number"
+                        required
+                        inputMode="decimal"
+                        value={editPrice}
+                        onChange={(e) => {
+                          setEditPrice(e.target.value);
+                          if (editErrors.price) setEditErrors(prev => { const c = {...prev}; delete c.price; return c; });
+                        }}
+                        className={`${modalInputClass} ${editErrors.price ? 'border-red-400' : ''}`}
+                        placeholder="e.g. 1800"
+                      />
+                      {editErrors.price && <span className="text-[10px] font-bold text-red-500 mt-1 block">{editErrors.price}</span>}
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Capacity *</label>
+                      <input
+                        type="number"
+                        required
+                        inputMode="numeric"
+                        value={editCapacity}
+                        onChange={(e) => {
+                          setEditCapacity(Number(e.target.value));
+                          if (editErrors.capacity) setEditErrors(prev => { const c = {...prev}; delete c.capacity; return c; });
+                        }}
+                        className={`${modalInputClass} ${editErrors.capacity ? 'border-red-400' : ''}`}
+                        min="1"
+                        max="20"
+                      />
+                      {editErrors.capacity && <span className="text-[10px] font-bold text-red-500 mt-1 block">{editErrors.capacity}</span>}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2">
-                  <button
+                <div className="sticky-action-footer sm:static sm:px-6 sm:py-5 sm:border-t sm:border-slate-100 sm:bg-slate-50/30 flex gap-3">
+                  <LoadingButton
                     type="submit"
-                    className="flex-1 bg-primary text-white text-xs font-bold py-3 rounded-xl hover:bg-primary-hover shadow-md hover:shadow-lg transition-all"
+                    loading={editingRoom_loading}
+                    loadingText="Saving..."
+                    className="flex-1 bg-primary text-white text-sm font-bold py-3 rounded-xl hover:bg-primary-hover shadow-md transition-all"
                   >
                     Save Changes
-                  </button>
+                  </LoadingButton>
                   <button
                     type="button"
                     onClick={() => setShowEditForm(false)}
-                    className="bg-slate-100 text-slate-600 text-xs font-bold px-4 py-3 rounded-xl hover:bg-slate-200"
+                    className="bg-slate-100 text-slate-600 text-sm font-bold px-5 py-3 rounded-xl hover:bg-slate-200 active:scale-[0.96] transition-all"
                   >
                     Cancel
                   </button>
@@ -585,122 +580,175 @@ export default function RoomsPage() {
           </div>
         )}
 
-        {/* Filter Bar */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-wrap gap-4 items-center">
-          <span className="text-slate-400 font-semibold text-[10px] uppercase tracking-wider flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5" />
-            Filters:
-          </span>
+        {/* ── Content ─────────────────────────────────────── */}
+        {loading ? (
+          <div className="flex justify-center items-center py-24">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-9 w-9 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent" />
+              <span className="text-sm font-medium text-slate-400">Loading rooms...</span>
+            </div>
+          </div>
+        ) : filteredRooms.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm text-center py-20 px-6 space-y-3">
+            <div className="flex justify-center">
+              <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200/60 flex items-center justify-center">
+                <BedDouble className="w-7 h-7 text-slate-300" />
+              </div>
+            </div>
+            <p className="font-bold text-slate-500 text-sm">No rooms found</p>
+            <p className="text-xs text-slate-400 font-medium">
+              {rooms.length === 0 ? 'Add your first room to get started.' : 'Try adjusting the filters.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* ── Mobile Cards (< md) ────────────────────── */}
+            <div className="mobile-cards-wrapper space-y-3">
+              {filteredRooms.map((room) => (
+                <div key={room.id} className="mobile-card shadow-sm">
+                  {/* Header row */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-extrabold text-slate-800">{room.room_number}</span>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(room.status)}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${getStatusDot(room.status)}`} />
+                        {room.status}
+                      </span>
+                    </div>
+                    {userRole !== 'receptionist' && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditModal(room)}
+                          className="p-2.5 bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all active:scale-[0.93] min-w-[40px] min-h-[40px] flex items-center justify-center"
+                          aria-label={`Edit room ${room.room_number}`}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRoom(room.id, room.room_number)}
+                          className="p-2.5 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-xl transition-all active:scale-[0.93] min-w-[40px] min-h-[40px] flex items-center justify-center"
+                          aria-label={`Delete room ${room.room_number}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
-          {/* Floor selection */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-semibold">Floor:</span>
-            <select
-              value={floorFilter}
-              onChange={(e) => setFloorFilter(e.target.value)}
-              className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="All">All Floors</option>
-              {floors.map(fl => (
-                <option key={fl} value={fl}>{fl}</option>
+                  {/* Info grid */}
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-xs text-slate-500 font-medium truncate">{room.floor || '—'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <BedDouble className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-xs text-slate-500 font-medium truncate">{room.room_type}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-xs text-slate-500 font-medium">{room.capacity} Persons</span>
+                    </div>
+                  </div>
+
+                  {/* Price + toggle */}
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-1">
+                      <IndianRupee className="w-3.5 h-3.5 text-slate-600" />
+                      <span className="text-sm font-bold text-slate-800">
+                        {Number(room.price).toLocaleString('en-IN')}<span className="text-xs font-medium text-slate-400">/night</span>
+                      </span>
+                    </div>
+                    {room.status === 'Occupied' ? (
+                      <span className="text-[10px] text-slate-400 font-semibold italic">In Use</span>
+                    ) : (
+                      <LoadingButton
+                        type="button"
+                        loading={togglingRoom === room.id}
+                        loadingText=""
+                        onClick={() => handleToggleStatus(room.id, room.status)}
+                        className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-semibold px-3 py-2 rounded-lg text-xs min-h-[40px]"
+                      >
+                        Cycle Status
+                      </LoadingButton>
+                    )}
+                  </div>
+                </div>
               ))}
-            </select>
-          </div>
-
-          {/* Status selection */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-semibold">Status:</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="All">All Statuses</option>
-              <option value="Ready">Ready</option>
-              <option value="Occupied">Occupied</option>
-              <option value="Cleaning">Cleaning</option>
-              <option value="Maintenance">Maintenance</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Rooms Table List */}
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="flex justify-center items-center py-20">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
             </div>
-          ) : filteredRooms.length === 0 ? (
-            <div className="text-center py-20 text-slate-400 font-bold text-sm">
-              No matching rooms found. Add some rooms or clear filters!
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-200/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    <th className="px-6 py-4">Room Number</th>
-                    <th className="px-6 py-4">Floor</th>
-                    <th className="px-6 py-4">Room Type</th>
-                    <th className="px-6 py-4">Capacity</th>
-                    <th className="px-6 py-4">Price per Night</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Quick Toggle Status</th>
-                    {userRole !== 'receptionist' && <th className="px-6 py-4 text-right">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
-                  {filteredRooms.map((room) => (
-                    <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-slate-900">{room.room_number}</td>
-                      <td className="px-6 py-4 text-slate-600">{room.floor}</td>
-                      <td className="px-6 py-4 text-slate-700">{room.room_type}</td>
-                      <td className="px-6 py-4 text-slate-600">{room.capacity} Persons</td>
-                      <td className="px-6 py-4 font-bold text-slate-900">₹{Number(room.price).toLocaleString('en-IN')}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadge(room.status)}`}>
-                          {room.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {room.status === 'Occupied' ? (
-                          <span className="text-[10px] text-slate-400 font-semibold italic">In Use (Checkout to toggle)</span>
-                        ) : (
-                          <button
-                            onClick={() => handleToggleStatus(room.id, room.status)}
-                            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-semibold px-2.5 py-1.5 rounded-lg transition-colors text-[11px]"
-                          >
-                            Cycle Status
-                          </button>
-                        )}
-                      </td>
-                      {userRole !== 'receptionist' && (
-                        <td className="px-6 py-4">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => openEditModal(room)}
-                              className="p-1.5 bg-slate-100 hover:bg-blue-50 text-slate-500 hover:text-blue-600 rounded-lg transition-all"
-                              title="Edit Room"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteRoom(room.id, room.room_number)}
-                              className="p-1.5 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-lg transition-all"
-                              title="Delete Room"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      )}
+
+            {/* ── Desktop Table (≥ md) ───────────────────── */}
+            <div className="desktop-table-wrapper bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/50 border-b border-slate-200/60 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      <th className="px-6 py-4">Room Number</th>
+                      <th className="px-6 py-4">Floor</th>
+                      <th className="px-6 py-4">Room Type</th>
+                      <th className="px-6 py-4">Capacity</th>
+                      <th className="px-6 py-4">Price per Night</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Quick Toggle</th>
+                      {userRole !== 'receptionist' && <th className="px-6 py-4 text-right">Actions</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
+                    {filteredRooms.map((room) => (
+                      <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4 font-semibold text-slate-900">{room.room_number}</td>
+                        <td className="px-6 py-4 text-slate-600">{room.floor}</td>
+                        <td className="px-6 py-4 text-slate-700">{room.room_type}</td>
+                        <td className="px-6 py-4 text-slate-600">{room.capacity} Persons</td>
+                        <td className="px-6 py-4 font-bold text-slate-900">₹{Number(room.price).toLocaleString('en-IN')}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadge(room.status)}`}>
+                            {room.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {room.status === 'Occupied' ? (
+                            <span className="text-[10px] text-slate-400 font-semibold italic">In Use (Checkout to toggle)</span>
+                          ) : (
+                            <LoadingButton
+                              type="button"
+                              loading={togglingRoom === room.id}
+                              loadingText=""
+                              onClick={() => handleToggleStatus(room.id, room.status)}
+                              className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-semibold px-2.5 py-1.5 rounded-lg transition-colors text-[11px]"
+                            >
+                              Cycle Status
+                            </LoadingButton>
+                          )}
+                        </td>
+                        {userRole !== 'receptionist' && (
+                          <td className="px-6 py-4">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => openEditModal(room)}
+                                className="p-1.5 bg-slate-100 hover:bg-blue-50 text-slate-500 hover:text-blue-600 rounded-lg transition-all active:scale-[0.93]"
+                                title="Edit Room"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRoom(room.id, room.room_number)}
+                                className="p-1.5 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-lg transition-all active:scale-[0.93]"
+                                title="Delete Room"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

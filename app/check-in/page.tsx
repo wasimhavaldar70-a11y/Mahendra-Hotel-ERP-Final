@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '../../components/DashboardLayout';
 import CustomerSearch from '../../components/CustomerSearch';
 import CustomerForm from '../../components/CustomerForm';
+import LoadingButton from '../../components/ui/LoadingButton';
 import { db, getSessionUser } from '../../lib/supabase/client';
 import { Room, Customer, CustomerDocument } from '../../types';
 import { 
@@ -22,7 +23,8 @@ import {
   Trash2,
   CalendarCheck,
   X,
-  Search
+  Search,
+  Loader2
 } from 'lucide-react';
 
 const calculateStayDuration = (
@@ -1147,6 +1149,7 @@ function CheckInFormContent() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Extra Charges (₹)</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={extraCharges}
                   onChange={(e) => setExtraCharges(e.target.value === '' ? '' : Number(e.target.value))}
                   className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
@@ -1157,6 +1160,7 @@ function CheckInFormContent() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Discount (₹)</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={discount}
                   onChange={(e) => setDiscount(e.target.value === '' ? '' : Number(e.target.value))}
                   className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
@@ -1219,6 +1223,7 @@ function CheckInFormContent() {
                 </div>
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={advancePaid === 0 ? '' : advancePaid}
                   onChange={(e) => {
                     setAdvancePaid(Number(e.target.value));
@@ -1250,14 +1255,19 @@ function CheckInFormContent() {
             </div>
 
             {/* Action button */}
-            <button
-              onClick={handleCheckInSubmit}
-              disabled={loading || !selectedRoomId || !selectedCustomer}
-              className="flex items-center justify-center gap-1.5 w-full bg-primary hover:bg-primary-hover text-white font-bold py-3.5 rounded-xl shadow-lg shadow-red-200 disabled:opacity-50 transition-all duration-200"
-            >
-              <CalendarCheck className="w-5 h-5" />
-              Complete Guest Check-In
-            </button>
+            <div className="sticky-action-footer">
+              <LoadingButton
+                type="button"
+                loading={loading}
+                loadingText="Processing Check-In..."
+                disabled={!selectedRoomId || !selectedCustomer}
+                onClick={handleCheckInSubmit}
+                className="flex items-center justify-center gap-1.5 w-full bg-primary hover:bg-primary-hover text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all duration-200 text-sm"
+              >
+                <CalendarCheck className="w-5 h-5" />
+                Complete Guest Check-In
+              </LoadingButton>
+            </div>
           </div>
         </div>
       </div>

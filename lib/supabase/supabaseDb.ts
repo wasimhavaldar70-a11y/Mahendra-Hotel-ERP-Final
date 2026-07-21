@@ -1273,6 +1273,7 @@ export const supabaseDb = {
     broadcastDbUpdate('checkins');
     broadcastDbUpdate('rooms');
     broadcastDbUpdate('payments');
+    broadcastDbUpdate('customers');
 
     return checkIn;
   },

@@ -11,6 +11,7 @@ import { Customer } from '../types';
 import { STATE_CITIES } from '../lib/constants/statesCities';
 import { supabase, getSessionUser } from '../lib/supabase/client';
 import { optimizeImage } from '../lib/imageOptimizer';
+import LoadingButton from './ui/LoadingButton';
 
 interface CustomerFormProps {
   initialData?: Partial<Customer>;
@@ -360,6 +361,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Phone Number *</label>
             <input
               type="tel"
+              inputMode="tel"
               required
               value={phone}
               onChange={(e) => {
@@ -409,6 +411,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
             <input
               type="email"
+              inputMode="email"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -718,6 +721,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ID Document Number *</label>
             <input
               type="text"
+              inputMode={docType === 'Aadhar' ? 'numeric' : 'text'}
               required
               value={docNumber}
               onChange={(e) => {
@@ -909,32 +913,24 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
       </div>
 
       {/* Form Submission Buttons */}
-      <div className="flex gap-3 justify-end">
+      <div className="sticky-action-footer sm:static sm:flex sm:gap-3 sm:justify-end flex gap-3">
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-3 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 bg-white hover:bg-slate-50 transition-colors"
+            className="px-6 py-3 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 bg-white hover:bg-slate-50 transition-colors active:scale-[0.96] min-h-[44px]"
           >
             Cancel
           </button>
         )}
-        <button
+        <LoadingButton
           type="submit"
-          disabled={loading || frontUploading || backUploading}
-          className="bg-primary hover:bg-primary-hover text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-55 flex items-center gap-1.5"
+          loading={loading || frontUploading || backUploading}
+          loadingText={(frontUploading || backUploading) ? 'Uploading...' : 'Saving...'}
+          className="flex-1 sm:flex-none bg-primary hover:bg-primary-hover text-white font-semibold text-xs px-6 py-3 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 min-h-[44px]"
         >
-          {(frontUploading || backUploading) ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Uploading Documents...
-            </>
-          ) : loading ? (
-            'Saving Guest...'
-          ) : (
-            'Save Guest Details'
-          )}
-        </button>
+          Save Guest Details
+        </LoadingButton>
       </div>
     </form>
   );
