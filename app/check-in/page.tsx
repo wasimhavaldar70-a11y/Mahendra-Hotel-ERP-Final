@@ -25,6 +25,38 @@ import {
   Search
 } from 'lucide-react';
 
+const calculateStayDuration = (
+  inDate: string,
+  inTime: string,
+  outDate: string,
+  outTime: string
+) => {
+  if (!inDate || !outDate) return { nights: 0, days: 0 };
+  
+  const checkInDT = new Date(`${inDate}T${inTime || '00:00'}`);
+  const checkOutDT = new Date(`${outDate}T${outTime || '00:00'}`);
+  
+  if (isNaN(checkInDT.getTime()) || isNaN(checkOutDT.getTime())) {
+    return { nights: 0, days: 0 };
+  }
+  
+  const diffMs = checkOutDT.getTime() - checkInDT.getTime();
+  if (diffMs <= 0) return { nights: 0, days: 0 };
+  
+  const inDateObj = new Date(inDate);
+  const outDateObj = new Date(outDate);
+  inDateObj.setHours(0, 0, 0, 0);
+  outDateObj.setHours(0, 0, 0, 0);
+  const dateDiffMs = outDateObj.getTime() - inDateObj.getTime();
+  const dateDiffNights = Math.round(dateDiffMs / (1000 * 60 * 60 * 24));
+  
+  // same-day is 1 night / day stay (hotel policy)
+  const nights = dateDiffNights === 0 ? 1 : dateDiffNights;
+  const days = dateDiffNights + 1;
+  
+  return { nights, days };
+};
+
 function CheckInFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,7 +94,16 @@ function CheckInFormContent() {
 
   // Booking & Room Details
   const [selectedRoomId, setSelectedRoomId] = useState('');
-  const [expectedCheckout, setExpectedCheckout] = useState('');
+  const [checkInDate, setCheckInDate] = useState('');
+  const [checkInTime, setCheckInTime] = useState('');
+  const [checkOutDate, setCheckOutDate] = useState('');
+  const [checkOutTime, setCheckOutTime] = useState('11:00');
+  const [purposeOfStay, setPurposeOfStay] = useState('Tourism');
+  const [arrivalFrom, setArrivalFrom] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [extraCharges, setExtraCharges] = useState<number | string>('');
+  const [discount, setDiscount] = useState<number | string>('');
+  const [applyTax, setApplyTax] = useState(false);
   const [advancePaid, setAdvancePaid] = useState(0);
   const [customRoomPrice, setCustomRoomPrice] = useState<number | string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -92,9 +133,16 @@ function CheckInFormContent() {
       }
 
       // Default expected checkout date = tomorrow
+      const now = new Date();
+      const localDate = now.toISOString().substring(0, 10);
+      const localTime = now.toTimeString().substring(0, 5); // "HH:MM"
+      
+      setCheckInDate(localDate);
+      setCheckInTime(localTime);
+
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      setExpectedCheckout(tomorrow.toISOString().substring(0, 10));
+      setCheckOutDate(tomorrow.toISOString().substring(0, 10));
     } catch (err) {
       console.error(err);
     } finally {
@@ -268,30 +316,66 @@ function CheckInFormContent() {
 
     if (!selectedCustomer) {
       newErrors.selectedCustomer = 'Please select or create a guest profile first';
+    } else {
+      // Validate address proof exists
+      if (selectedCustomer.id === 'temp-new-id') {
+        if (!tempDocData || !tempDocData.number || !tempDocData.number.trim()) {
+          newErrors.selectedCustomer = 'Address proof document is required for new guests';
+        }
+      } else {
+        if (!selectedCustomerDocs || selectedCustomerDocs.length === 0) {
+          newErrors.selectedCustomer = 'Missing address proof! Please click "Update Details" to upload a document for this guest.';
+        }
+      }
     }
 
     if (!selectedRoomId) {
       newErrors.selectedRoomId = 'Please select a room';
     }
 
-    const todayStr = new Date().toISOString().substring(0, 10);
-    if (!expectedCheckout) {
-      newErrors.expectedCheckout = 'Expected checkout date is required';
-    } else if (expectedCheckout <= todayStr) {
-      newErrors.expectedCheckout = 'Expected checkout date must be in the future (tomorrow or later)';
+    if (!checkInDate || !checkInTime) {
+      newErrors.checkIn = 'Check-in date and time are required';
+    }
+    if (!checkOutDate || !checkOutTime) {
+      newErrors.checkOut = 'Check-out date and time are required';
+    }
+
+    if (checkInDate && checkOutDate) {
+      const checkInDT = new Date(`${checkInDate}T${checkInTime || '00:00'}`);
+      const checkOutDT = new Date(`${checkOutDate}T${checkOutTime || '00:00'}`);
+      
+      if (checkOutDT.getTime() <= checkInDT.getTime()) {
+        newErrors.checkOut = 'Check-out must be after check-in';
+      }
     }
 
     const room = rooms.find(r => r.id === selectedRoomId);
-    const roomPrice = Number(customRoomPrice !== '' ? customRoomPrice : (room?.price || 0));
-    if (isNaN(roomPrice) || roomPrice < 0) {
+    const roomPriceRateVal = Number(customRoomPrice !== '' ? customRoomPrice : (room?.price || 0));
+    if (isNaN(roomPriceRateVal) || roomPriceRateVal < 0) {
       newErrors.customRoomPrice = 'Room price cannot be negative';
     }
+
+    // Vehicle validation if entered
+    if (vehicleNumber && vehicleNumber.trim() !== '') {
+      const cleanVehicle = vehicleNumber.replace(/\s+/g, '');
+      if (cleanVehicle.length < 8 || cleanVehicle.length > 13) {
+        newErrors.vehicleNumber = 'Please enter a valid vehicle number (e.g. MH09AB1234, 8 to 13 characters)';
+      }
+    }
+
+    const durationVal = calculateStayDuration(checkInDate, checkInTime, checkOutDate, checkOutTime);
+    const totalNightsVal = durationVal.nights;
+    const roomChargesVal = totalNightsVal * roomPriceRateVal;
+    const subtotalVal = roomChargesVal + Number(extraCharges || 0);
+    const discountAmountVal = Number(discount || 0);
+    const taxAmountVal = applyTax ? Math.round((subtotalVal - discountAmountVal) * (12 / 100)) : 0;
+    const grandTotalVal = Math.max(0, subtotalVal - discountAmountVal + taxAmountVal);
 
     const advPaidNum = Number(advancePaid);
     if (isNaN(advPaidNum) || advPaidNum < 0) {
       newErrors.advancePaid = 'Advance paid cannot be negative';
-    } else if (advPaidNum > roomPrice) {
-      newErrors.advancePaid = `Advance paid (₹${advPaidNum}) cannot exceed total room price (₹${roomPrice})`;
+    } else if (advPaidNum > grandTotalVal) {
+      newErrors.advancePaid = `Advance paid (₹${advPaidNum}) cannot exceed grand total (₹${grandTotalVal})`;
     }
 
     // Additional guests validation
@@ -331,7 +415,7 @@ function CheckInFormContent() {
       if (!selectedCustomer) return;
       let finalCustomer = selectedCustomer;
 
-      // If it's a new customer, save to the mock database first
+      // If it's a new customer, save to the database first
       if (selectedCustomer.id === 'temp-new-id' && tempCustomerData) {
         finalCustomer = await db.addCustomer(
           currentHotel.id,
@@ -342,11 +426,6 @@ function CheckInFormContent() {
           tempDocData?.back
         );
       }
-
-      // Resolve room details
-      const room = rooms.find(r => r.id === selectedRoomId);
-      const roomPrice = Number(customRoomPrice || room?.price || 0);
-      const pendingVal = Math.max(0, roomPrice - advancePaid);
 
       // Create primary guest account and add extra guests
       const parsedGuestsList = await Promise.all(
@@ -360,7 +439,6 @@ function CheckInFormContent() {
             };
           } else {
             // Additional guests
-            // Suffix-based phone number linkage if blank
             const resolvedPhone = g.phone && g.phone.trim() !== ''
               ? g.phone.trim()
               : `${finalCustomer.phone}-${index + 1}`;
@@ -391,13 +469,29 @@ function CheckInFormContent() {
         {
           room_id: selectedRoomId,
           primary_customer_id: finalCustomer.id,
-          expected_checkout: new Date(expectedCheckout + 'T' + (currentHotel?.cms_data?.checkoutTime || '12:00:00')).toISOString(),
-          number_of_guests: guests.length
+          expected_checkout: new Date(`${checkOutDate}T${checkOutTime}:00`).toISOString(),
+          number_of_guests: guests.length,
+          purpose_of_stay: purposeOfStay,
+          arrival_from: arrivalFrom,
+          residential_address: finalCustomer.address,
+          address_proof_type: tempDocData?.type || selectedCustomerDocs?.[0]?.document_type || 'Aadhar',
+          document_number: tempDocData?.number || selectedCustomerDocs?.[0]?.document_number || '',
+          vehicle_number: vehicleNumber || finalCustomer.vehicle_number || '',
+          check_in_date: checkInDate,
+          check_in_time: checkInTime + ':00',
+          total_nights: totalNightsVal,
+          room_rate: roomPriceRateVal,
+          room_charges: roomChargesVal,
+          subtotal: subtotalVal,
+          discount: discountAmountVal,
+          extra_charges: Number(extraCharges || 0),
+          tax_amount: taxAmountVal,
+          grand_total: grandTotalVal
         },
         {
-          room_price: roomPrice,
+          room_price: grandTotalVal,
           advance: advancePaid,
-          pending: pendingVal,
+          pending: Math.max(0, grandTotalVal - advancePaid),
           payment_method: 'UPI'
         },
         parsedGuestsList
@@ -412,8 +506,19 @@ function CheckInFormContent() {
   };
 
   const selectedRoom = rooms.find(r => r.id === selectedRoomId);
-  const roomPrice = Number(customRoomPrice || selectedRoom?.price || 0);
-  const pendingAmount = Math.max(0, roomPrice - advancePaid);
+  const roomPriceRate = Number(customRoomPrice || selectedRoom?.price || 0);
+
+  const duration = calculateStayDuration(checkInDate, checkInTime, checkOutDate, checkOutTime);
+  const totalNights = duration.nights;
+  const totalDays = duration.days;
+
+  const roomCharges = totalNights * roomPriceRate;
+  const subtotal = roomCharges + Number(extraCharges || 0);
+  const discountAmount = Number(discount || 0);
+  const taxRateVal = 12; // 12% Standard
+  const taxAmount = applyTax ? Math.round((subtotal - discountAmount) * (taxRateVal / 100)) : 0;
+  const grandTotal = Math.max(0, subtotal - discountAmount + taxAmount);
+  const pendingAmount = Math.max(0, grandTotal - advancePaid);
 
   return (
     <div className="space-y-6">
@@ -766,15 +871,16 @@ function CheckInFormContent() {
 
         {/* Room & Billing Checklist (Right Sidebar panel) */}
         <div className="space-y-6">
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-5">
+          {/* CARD 1: ROOM ASSIGNMENT & DATES */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
             <h2 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-150 pb-2">
               <BedDouble className="w-4 h-4 text-primary" />
-              2. Room Assignment & Bill
+              2. Room & Dates
             </h2>
 
             {/* Room selection dropdown */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Available Rooms *</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Available Rooms *</label>
               <select
                 required
                 value={selectedRoomId}
@@ -804,35 +910,192 @@ function CheckInFormContent() {
               )}
             </div>
 
-            {/* Expected checkout */}
+            {/* Check-in Date & Time Grid */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Check-in Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={checkInDate}
+                  onChange={(e) => {
+                    setCheckInDate(e.target.value);
+                    if (errors.checkIn) {
+                      setErrors(prev => {
+                        const copy = { ...prev };
+                        delete copy.checkIn;
+                        return copy;
+                      });
+                    }
+                  }}
+                  className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                    errors.checkIn ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                  }`}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Check-in Time *</label>
+                <input
+                  type="time"
+                  required
+                  value={checkInTime}
+                  onChange={(e) => {
+                    setCheckInTime(e.target.value);
+                    if (errors.checkIn) {
+                      setErrors(prev => {
+                        const copy = { ...prev };
+                        delete copy.checkIn;
+                        return copy;
+                      });
+                    }
+                  }}
+                  className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                    errors.checkIn ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                  }`}
+                />
+              </div>
+            </div>
+            {errors.checkIn && (
+              <span className="text-[10px] font-bold text-red-500 mt-0.5 block">{errors.checkIn}</span>
+            )}
+
+            {/* Check-out Date & Time Grid */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Check-out Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={checkOutDate}
+                  onChange={(e) => {
+                    setCheckOutDate(e.target.value);
+                    if (errors.checkOut) {
+                      setErrors(prev => {
+                        const copy = { ...prev };
+                        delete copy.checkOut;
+                        return copy;
+                      });
+                    }
+                  }}
+                  className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                    errors.checkOut ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                  }`}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Check-out Time *</label>
+                <input
+                  type="time"
+                  required
+                  value={checkOutTime}
+                  onChange={(e) => {
+                    setCheckOutTime(e.target.value);
+                    if (errors.checkOut) {
+                      setErrors(prev => {
+                        const copy = { ...prev };
+                        delete copy.checkOut;
+                        return copy;
+                      });
+                    }
+                  }}
+                  className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
+                    errors.checkOut ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                  }`}
+                />
+              </div>
+            </div>
+            {errors.checkOut && (
+              <span className="text-[10px] font-bold text-red-500 mt-0.5 block">{errors.checkOut}</span>
+            )}
+
+            {/* Stay Duration Display */}
+            {totalNights > 0 && (
+              <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl text-xs font-bold text-blue-700 flex justify-between items-center">
+                <span>Calculated Duration:</span>
+                <span>{totalNights} Night{totalNights > 1 ? 's' : ''} ({totalDays} Day{totalDays > 1 ? 's' : ''})</span>
+              </div>
+            )}
+          </div>
+
+          {/* CARD 2: STAY DETAILS */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+            <h2 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-150 pb-2">
+              <ClipboardSignature className="w-4 h-4 text-primary" />
+              3. Stay Information
+            </h2>
+
+            {/* Purpose of Stay */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Expected Checkout Date *</label>
-              <input
-                type="date"
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Purpose of Stay *</label>
+              <select
                 required
-                value={expectedCheckout}
+                value={purposeOfStay}
+                onChange={(e) => setPurposeOfStay(e.target.value)}
+                className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="Tourism">Tourism</option>
+                <option value="Business">Business</option>
+                <option value="Family Visit">Family Visit</option>
+                <option value="Medical">Medical</option>
+                <option value="Education">Education</option>
+                <option value="Marriage">Marriage</option>
+                <option value="Official Work">Official Work</option>
+                <option value="Transit">Transit</option>
+                <option value="Religious Visit">Religious Visit</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            {/* Arrival From */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Arrival From *</label>
+              <input
+                type="text"
+                required
+                value={arrivalFrom}
+                onChange={(e) => setArrivalFrom(e.target.value)}
+                className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Pune, Kolhapur, Delhi"
+              />
+            </div>
+
+            {/* Vehicle Number */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Vehicle Number (Optional)</label>
+              <input
+                type="text"
+                value={vehicleNumber}
                 onChange={(e) => {
-                  setExpectedCheckout(e.target.value);
-                  if (errors.expectedCheckout) {
+                  setVehicleNumber(e.target.value.toUpperCase());
+                  if (errors.vehicleNumber) {
                     setErrors(prev => {
                       const copy = { ...prev };
-                      delete copy.expectedCheckout;
+                      delete copy.vehicleNumber;
                       return copy;
                     });
                   }
                 }}
                 className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
-                  errors.expectedCheckout ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
+                  errors.vehicleNumber ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
                 }`}
+                placeholder="e.g. MH09AB1234"
               />
-              {errors.expectedCheckout && (
-                <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.expectedCheckout}</span>
+              {errors.vehicleNumber && (
+                <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.vehicleNumber}</span>
               )}
             </div>
+          </div>
 
-            {/* Price Adjustment */}
+          {/* CARD 3: BILLING & PAYMENT */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm space-y-4">
+            <h2 className="text-sm font-bold text-slate-700 flex items-center gap-1.5 border-b border-slate-150 pb-2">
+              <DollarSign className="w-4 h-4 text-primary" />
+              4. Billing & Payments
+            </h2>
+
+            {/* Nightly Price Rate */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Rent (Adjust if needed)</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Nightly Rate (₹)</label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                   <span className="text-xs font-bold text-slate-400">₹</span>
@@ -861,9 +1124,78 @@ function CheckInFormContent() {
               )}
             </div>
 
+            {/* Extra Charges & Discount */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Extra Charges (₹)</label>
+                <input
+                  type="number"
+                  value={extraCharges}
+                  onChange={(e) => setExtraCharges(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Discount (₹)</label>
+                <input
+                  type="number"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            {/* Tax Enable Toggle */}
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="apply-tax-toggle"
+                checked={applyTax}
+                onChange={(e) => setApplyTax(e.target.checked)}
+                className="w-4 h-4 rounded text-primary focus:ring-primary border-slate-300"
+              />
+              <label htmlFor="apply-tax-toggle" className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer select-none">
+                Apply GST Tax (12% SGST + CGST)
+              </label>
+            </div>
+
+            {/* Itemized Billing Breakdown */}
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-2">
+              <div className="flex justify-between text-slate-500 font-bold">
+                <span>Room Charges ({totalNights} Night{totalNights > 1 ? 's' : ''}):</span>
+                <span>₹{roomCharges.toLocaleString('en-IN')}</span>
+              </div>
+              {Number(extraCharges) > 0 && (
+                <div className="flex justify-between text-slate-500 font-bold">
+                  <span>Extra Charges:</span>
+                  <span>+ ₹{Number(extraCharges).toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              {Number(discount) > 0 && (
+                <div className="flex justify-between text-red-500 font-bold">
+                  <span>Discount:</span>
+                  <span>- ₹{Number(discount).toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              {taxAmount > 0 && (
+                <div className="flex justify-between text-slate-500 font-bold">
+                  <span>GST Tax (12%):</span>
+                  <span>+ ₹{taxAmount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              <div className="h-[1px] bg-slate-200 my-1"></div>
+              <div className="flex justify-between font-extrabold text-slate-800 text-sm">
+                <span>Grand Total:</span>
+                <span>₹{grandTotal.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
             {/* Advance payment */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Advance Paid (₹)</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Advance Paid (₹)</label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                   <span className="text-xs font-bold text-slate-400">₹</span>
@@ -892,21 +1224,12 @@ function CheckInFormContent() {
               )}
             </div>
 
-            {/* Receipt Summary */}
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-2">
-              <div className="flex justify-between font-bold text-slate-500">
-                <span>Room Charges:</span>
-                <span>₹{roomPrice}</span>
-              </div>
-              <div className="flex justify-between font-bold text-emerald-600">
-                <span>Advance Paid:</span>
-                <span>- ₹{advancePaid}</span>
-              </div>
-              <div className="h-[1px] bg-slate-200 my-1"></div>
-              <div className="flex justify-between font-extrabold text-slate-800 text-sm">
-                <span>Pending Balance:</span>
-                <span className={pendingAmount > 0 ? 'text-red-600' : 'text-slate-800'}>₹{pendingAmount}</span>
-              </div>
+            {/* Pending Balance Card */}
+            <div className="p-3.5 bg-slate-100 rounded-xl border border-slate-200 text-xs flex justify-between items-center font-extrabold text-slate-700">
+              <span>Outstanding Balance:</span>
+              <span className={pendingAmount > 0 ? 'text-red-650 text-sm font-black' : 'text-slate-800 text-sm font-black'}>
+                ₹{pendingAmount.toLocaleString('en-IN')}
+              </span>
             </div>
 
             {/* Action button */}

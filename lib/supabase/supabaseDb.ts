@@ -1087,6 +1087,22 @@ export const supabaseDb = {
       primary_customer_id: string;
       expected_checkout: string;
       number_of_guests: number;
+      purpose_of_stay?: string;
+      arrival_from?: string;
+      residential_address?: string;
+      address_proof_type?: string;
+      document_number?: string;
+      vehicle_number?: string;
+      check_in_date?: string;
+      check_in_time?: string;
+      total_nights?: number;
+      room_rate?: number;
+      room_charges?: number;
+      subtotal?: number;
+      discount?: number;
+      extra_charges?: number;
+      tax_amount?: number;
+      grand_total?: number;
     },
     paymentData: {
       room_price: number;
@@ -1113,7 +1129,23 @@ export const supabaseDb = {
       p_advance: paymentData.advance,
       p_pending: paymentData.pending,
       p_payment_method: paymentData.payment_method,
-      p_guests: guestsList
+      p_guests: guestsList,
+      p_purpose_of_stay: checkInData.purpose_of_stay,
+      p_arrival_from: checkInData.arrival_from,
+      p_residential_address: checkInData.residential_address,
+      p_address_proof_type: checkInData.address_proof_type,
+      p_document_number: checkInData.document_number,
+      p_vehicle_number: checkInData.vehicle_number,
+      p_check_in_date: checkInData.check_in_date,
+      p_check_in_time: checkInData.check_in_time,
+      p_total_nights: checkInData.total_nights,
+      p_room_rate: checkInData.room_rate,
+      p_room_charges: checkInData.room_charges,
+      p_subtotal: checkInData.subtotal,
+      p_discount: checkInData.discount,
+      p_extra_charges: checkInData.extra_charges,
+      p_tax_amount: checkInData.tax_amount,
+      p_grand_total: checkInData.grand_total
     });
 
     if (error || !checkinId) {
@@ -1182,13 +1214,31 @@ export const supabaseDb = {
   },
 
   // Checkout Operation
-  checkOut: async (hotelId: string, checkInId: string, finalPaymentMethod: 'UPI' | 'Cash' | 'Card'): Promise<CheckIn | null> => {
+  checkOut: async (
+    hotelId: string, 
+    checkInId: string, 
+    finalPaymentMethod: 'UPI' | 'Cash' | 'Card',
+    checkoutDetails?: {
+      check_out_date?: string;
+      check_out_time?: string;
+      discount?: number;
+      extra_charges?: number;
+      tax_amount?: number;
+      grand_total?: number;
+    }
+  ): Promise<CheckIn | null> => {
     if (!supabase) return null;
 
     const { error } = await supabase.rpc('checkout_stay_transactional', {
       p_hotel_id: hotelId,
       p_checkin_id: checkInId,
-      p_final_payment_method: finalPaymentMethod
+      p_final_payment_method: finalPaymentMethod,
+      p_check_out_date: checkoutDetails?.check_out_date,
+      p_check_out_time: checkoutDetails?.check_out_time,
+      p_discount: checkoutDetails?.discount,
+      p_extra_charges: checkoutDetails?.extra_charges,
+      p_tax_amount: checkoutDetails?.tax_amount,
+      p_grand_total: checkoutDetails?.grand_total
     });
 
     if (error) {

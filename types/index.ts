@@ -94,6 +94,25 @@ export interface CheckIn {
   status: 'Pending' | 'Reserved' | 'Active' | 'Completed' | 'Cancelled';
   deleted_at?: string;
   created_at: string;
+  purpose_of_stay?: string;
+  arrival_from?: string;
+  residential_address?: string;
+  address_proof_type?: string;
+  document_number?: string;
+  vehicle_number?: string;
+  check_in_date?: string;
+  check_in_time?: string;
+  check_out_date?: string;
+  check_out_time?: string;
+  total_nights?: number;
+  room_rate?: number;
+  room_charges?: number;
+  subtotal?: number;
+  discount?: number;
+  extra_charges?: number;
+  tax_amount?: number;
+  grand_total?: number;
+  actual_checkout?: string;
 }
 
 export interface CheckInGuest {

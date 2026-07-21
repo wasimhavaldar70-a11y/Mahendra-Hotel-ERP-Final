@@ -36,6 +36,37 @@ interface RoomDetailModalProps {
   onStatusChanged: (updatedRoom?: Room) => void;
 }
 
+const calculateStayDuration = (
+  inDate: string,
+  inTime: string,
+  outDate: string,
+  outTime: string
+) => {
+  if (!inDate || !outDate) return { nights: 0, days: 0 };
+  
+  const checkInDT = new Date(`${inDate}T${inTime || '00:00'}`);
+  const checkOutDT = new Date(`${outDate}T${outTime || '00:00'}`);
+  
+  if (isNaN(checkInDT.getTime()) || isNaN(checkOutDT.getTime())) {
+    return { nights: 0, days: 0 };
+  }
+  
+  const diffMs = checkOutDT.getTime() - checkInDT.getTime();
+  if (diffMs <= 0) return { nights: 0, days: 0 };
+  
+  const inDateObj = new Date(inDate);
+  const outDateObj = new Date(outDate);
+  inDateObj.setHours(0, 0, 0, 0);
+  outDateObj.setHours(0, 0, 0, 0);
+  const dateDiffMs = outDateObj.getTime() - inDateObj.getTime();
+  const dateDiffNights = Math.round(dateDiffMs / (1000 * 60 * 60 * 24));
+  
+  const nights = dateDiffNights === 0 ? 1 : dateDiffNights;
+  const days = dateDiffNights + 1;
+  
+  return { nights, days };
+};
+
 export default function RoomDetailModal({ room, hotelId, onClose, onStatusChanged }: RoomDetailModalProps) {
   const router = useRouter();
   const [stayData, setStayData] = useState<ExtendedCheckIn | null>(null);
@@ -49,6 +80,11 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
   // Checkout states
   const [checkingOut, setCheckingOut] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Cash' | 'Card'>('UPI');
+  const [checkoutDate, setCheckoutDate] = useState('');
+  const [checkoutTime, setCheckoutTime] = useState('');
+  const [checkoutDiscount, setCheckoutDiscount] = useState<number | string>('');
+  const [checkoutExtraCharges, setCheckoutExtraCharges] = useState<number | string>('');
+  const [checkoutApplyTax, setCheckoutApplyTax] = useState(false);
 
   // Dynamic Hotel Info state
   const [currentHotel, setCurrentHotel] = useState<any>(null);
@@ -97,6 +133,14 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         const expDate = new Date(data.expected_checkout);
         expDate.setDate(expDate.getDate() + 1);
         setNewCheckoutDate(expDate.toISOString().substring(0, 10));
+
+        // Initialize checkout details with current stay data & actual local time
+        const now = new Date();
+        setCheckoutDate(now.toISOString().substring(0, 10));
+        setCheckoutTime(now.toTimeString().substring(0, 5));
+        setCheckoutDiscount(data.discount || 0);
+        setCheckoutExtraCharges(data.extra_charges || 0);
+        setCheckoutApplyTax(Number(data.tax_amount || 0) > 0);
 
         // Load folio ledger entries
         const entries = await db.getLedgerEntries(data.id);
@@ -187,10 +231,28 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
   const handleCheckoutSubmit = async () => {
     if (!stayData) return;
     try {
+      const inDate = stayData.check_in_date || stayData.check_in.substring(0, 10);
+      const inTime = stayData.check_in_time || stayData.check_in.substring(11, 16);
+      const durationVal = calculateStayDuration(inDate, inTime, checkoutDate, checkoutTime);
+      const rateVal = Number(stayData.room_rate || room.price || 0);
+      const roomChargesVal = durationVal.nights * rateVal;
+      const subtotalVal = roomChargesVal + Number(checkoutExtraCharges || 0);
+      const discountVal = Number(checkoutDiscount || 0);
+      const taxVal = checkoutApplyTax ? Math.round((subtotalVal - discountVal) * (12 / 100)) : 0;
+      const grandTotalVal = Math.max(0, subtotalVal - discountVal + taxVal);
+
       const updated = { ...room, status: 'Dirty' as RoomStatus };
       onStatusChanged(updated);
       onClose();
-      await db.checkOut(hotelId, stayData.id, paymentMethod);
+      
+      await db.checkOut(hotelId, stayData.id, paymentMethod, {
+        check_out_date: checkoutDate,
+        check_out_time: checkoutTime + ':00',
+        discount: discountVal,
+        extra_charges: Number(checkoutExtraCharges || 0),
+        tax_amount: taxVal,
+        grand_total: grandTotalVal
+      });
     } catch (err) {
       console.error(err);
     }
@@ -252,6 +314,20 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
               {stayData.primary_customer?.email && (
                 <p style={{ margin: '3px 0', fontSize: '12px', color: '#475569' }}>✉️ {stayData.primary_customer?.email}</p>
               )}
+              <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '10px', paddingTop: '10px', display: 'grid', gridTemplateColumns: 'auto auto', gap: '4px 8px', fontSize: '11px', color: '#475569' }}>
+                <span style={{ fontWeight: '500' }}>Purpose of Stay:</span>
+                <span style={{ fontWeight: '700', color: '#0f172a' }}>{stayData.purpose_of_stay || 'Tourism'}</span>
+                
+                <span style={{ fontWeight: '500' }}>Arrival From:</span>
+                <span style={{ fontWeight: '700', color: '#0f172a' }}>{stayData.arrival_from || 'N/A'}</span>
+                
+                {stayData.vehicle_number && (
+                  <>
+                    <span style={{ fontWeight: '500' }}>Vehicle Number:</span>
+                    <span style={{ fontWeight: '700', color: '#0f172a' }}>{stayData.vehicle_number}</span>
+                  </>
+                )}
+              </div>
             </div>
             
             <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
@@ -260,11 +336,29 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                 <span style={{ fontWeight: '500' }}>Room Assigned:</span>
                 <span style={{ fontWeight: '700', color: '#0f172a' }}>Room {room.room_number} ({room.room_type})</span>
                 
-                <span style={{ fontWeight: '500' }}>Check-in Date:</span>
-                <span>{new Date(stayData.check_in).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                <span style={{ fontWeight: '500' }}>Check-in:</span>
+                <span>
+                  {stayData.check_in_date
+                    ? `${new Date(stayData.check_in_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} ${stayData.check_in_time?.substring(0, 5) || ''}`
+                    : new Date(stayData.check_in).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  }
+                </span>
                 
-                <span style={{ fontWeight: '500' }}>Checkout Date:</span>
-                <span>{new Date(stayData.expected_checkout).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                <span style={{ fontWeight: '500' }}>Check-out:</span>
+                <span>
+                  {stayData.check_out_date
+                    ? `${new Date(stayData.check_out_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} ${stayData.check_out_time?.substring(0, 5) || ''}`
+                    : stayData.status === 'Completed' && stayData.actual_checkout
+                      ? new Date(stayData.actual_checkout).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      : new Date(stayData.expected_checkout).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                  }
+                </span>
+
+                <span style={{ fontWeight: '500' }}>Nights Stayed:</span>
+                <span style={{ fontWeight: '700', color: '#0f172a' }}>{stayData.total_nights || 1} Night(s)</span>
+
+                <span style={{ fontWeight: '500' }}>Nightly Rate:</span>
+                <span style={{ fontWeight: '700', color: '#0f172a' }}>₹{Number(stayData.room_rate || room.price).toLocaleString('en-IN')}</span>
               </div>
             </div>
           </div>
@@ -301,13 +395,36 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
           {/* Totals Summary Box aligned Right */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '50px' }}>
             <div style={{ width: '320px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0', fontSize: '13px', color: '#475569' }}>
-                <span>Total Charges (Debits):</span>
-                <span style={{ fontWeight: '600' }}>₹{Number(stayData.payment?.room_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                <span>Room Charges:</span>
+                <span style={{ fontWeight: '600' }}>₹{Number(stayData.room_charges || (stayData.total_nights || 1) * (stayData.room_rate || room.price)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0', fontSize: '13px', color: '#475569' }}>
-                <span>Total Payments (Credits):</span>
-                <span style={{ fontWeight: '600' }}>₹{Number(stayData.payment?.advance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              {Number(stayData.extra_charges) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                  <span>Extra Charges:</span>
+                  <span style={{ fontWeight: '600' }}>₹{Number(stayData.extra_charges).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              {Number(stayData.discount) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#ef4444' }}>
+                  <span>Discount:</span>
+                  <span style={{ fontWeight: '600' }}>-₹{Number(stayData.discount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              {Number(stayData.tax_amount) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                  <span>GST Tax (12%):</span>
+                  <span style={{ fontWeight: '600' }}>₹{Number(stayData.tax_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div style={{ height: '1px', backgroundColor: '#e2e8f0', margin: '8px 0' }}></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
+                <span>Grand Total:</span>
+                <span style={{ fontWeight: '700' }}>₹{Number(stayData.grand_total || stayData.payment?.room_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#10b981' }}>
+                <span>Payments (Credits):</span>
+                <span style={{ fontWeight: '600' }}>-₹{Number(stayData.payment?.advance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', margin: '12px 0 0 0', fontSize: '15px', fontWeight: '800', color: '#0f172a', borderTop: '2px solid #e2e8f0', paddingTop: '12px' }}>
                 <span>Outstanding Balance:</span>
@@ -696,11 +813,134 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                     </div>
                   ) : checkingOut ? (
                     /* CHECKOUT DRAWER */
-                    <div className="p-4 rounded-xl border border-emerald-250 bg-emerald-50/10 space-y-4">
-                      <h4 className="text-sm font-bold text-slate-800">Settle & Checkout</h4>
-                      <p className="text-xs text-slate-500 font-medium">
-                        Confirm checkout and settle the final pending balance of <strong className="text-red-650 font-bold text-sm">₹{Number(stayData.payment?.pending).toLocaleString('en-IN')}</strong>.
-                      </p>
+                    <div className="p-4 rounded-xl border border-emerald-250 bg-emerald-50/10 space-y-4 text-xs font-medium text-slate-700">
+                      <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                        <Receipt className="w-4 h-4 text-emerald-600" />
+                        Checkout & Billing Settlement
+                      </h4>
+
+                      {/* Check-out Date & Time Inputs */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Check-out Date</label>
+                          <input 
+                            type="date"
+                            value={checkoutDate}
+                            onChange={(e) => setCheckoutDate(e.target.value)}
+                            className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Check-out Time</label>
+                          <input 
+                            type="time"
+                            value={checkoutTime}
+                            onChange={(e) => setCheckoutTime(e.target.value)}
+                            className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Extra Charges & Discount adjusters */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Extra Charges (₹)</label>
+                          <input 
+                            type="number"
+                            value={checkoutExtraCharges}
+                            onChange={(e) => setCheckoutExtraCharges(e.target.value === '' ? '' : Number(e.target.value))}
+                            className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Discount (₹)</label>
+                          <input 
+                            type="number"
+                            value={checkoutDiscount}
+                            onChange={(e) => setCheckoutDiscount(e.target.value === '' ? '' : Number(e.target.value))}
+                            className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tax checkbox */}
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <input
+                          type="checkbox"
+                          id="checkout-tax-toggle"
+                          checked={checkoutApplyTax}
+                          onChange={(e) => setCheckoutApplyTax(e.target.checked)}
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                        />
+                        <label htmlFor="checkout-tax-toggle" className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer select-none">
+                          Apply GST Tax (12%)
+                        </label>
+                      </div>
+
+                      {/* Dynamic billing calculation breakdown */}
+                      {(() => {
+                        const inDate = stayData.check_in_date || stayData.check_in.substring(0, 10);
+                        const inTime = stayData.check_in_time || stayData.check_in.substring(11, 16);
+                        const durationVal = calculateStayDuration(inDate, inTime, checkoutDate, checkoutTime);
+                        const rateVal = Number(stayData.room_rate || room.price || 0);
+                        const roomChargesVal = durationVal.nights * rateVal;
+                        const subtotalVal = roomChargesVal + Number(checkoutExtraCharges || 0);
+                        const discountVal = Number(checkoutDiscount || 0);
+                        const taxVal = checkoutApplyTax ? Math.round((subtotalVal - discountVal) * (12 / 100)) : 0;
+                        const grandTotalVal = Math.max(0, subtotalVal - discountVal + taxVal);
+                        const advancePaidVal = Number(stayData.payment?.advance || 0);
+                        const pendingVal = Math.max(0, grandTotalVal - advancePaidVal);
+
+                        return (
+                          <div className="p-3 bg-white border border-slate-200 rounded-lg text-xs space-y-1.5">
+                            <div className="flex justify-between text-slate-500 font-semibold">
+                              <span>Stay Duration:</span>
+                              <span>{durationVal.nights} Night{durationVal.nights > 1 ? 's' : ''} ({durationVal.days} Day{durationVal.days > 1 ? 's' : ''})</span>
+                            </div>
+                            <div className="flex justify-between text-slate-500 font-semibold">
+                              <span>Room Charges:</span>
+                              <span>₹{roomChargesVal.toLocaleString('en-IN')}</span>
+                            </div>
+                            {Number(checkoutExtraCharges) > 0 && (
+                              <div className="flex justify-between text-slate-500 font-semibold">
+                                <span>Extra Charges:</span>
+                                <span>+ ₹{Number(checkoutExtraCharges).toLocaleString('en-IN')}</span>
+                              </div>
+                            )}
+                            {Number(checkoutDiscount) > 0 && (
+                              <div className="flex justify-between text-red-500 font-semibold">
+                                <span>Discount:</span>
+                                <span>- ₹{Number(checkoutDiscount).toLocaleString('en-IN')}</span>
+                              </div>
+                            )}
+                            {taxVal > 0 && (
+                              <div className="flex justify-between text-slate-500 font-semibold">
+                                <span>GST Tax (12%):</span>
+                                <span>+ ₹{taxVal.toLocaleString('en-IN')}</span>
+                              </div>
+                            )}
+                            <div className="h-[1px] bg-slate-100 my-0.5"></div>
+                            <div className="flex justify-between font-bold text-slate-800 text-[13px]">
+                              <span>Grand Total:</span>
+                              <span>₹{grandTotalVal.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-emerald-600 font-semibold">
+                              <span>Advance Paid:</span>
+                              <span>- ₹{advancePaidVal.toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="h-[1px] bg-slate-100 my-0.5"></div>
+                            <div className="flex justify-between font-extrabold text-[13px]">
+                              <span>Balance to Settle:</span>
+                              <span className={pendingVal > 0 ? 'text-red-650' : 'text-slate-800'}>
+                                ₹{pendingVal.toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       <div>
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Payment Method</label>
                         <div className="grid grid-cols-3 gap-2">
@@ -720,12 +960,13 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                           ))}
                         </div>
                       </div>
+
                       <div className="flex gap-2 pt-2">
                         <button
                           onClick={handleCheckoutSubmit}
                           className="flex-1 bg-emerald-600 text-white text-xs font-semibold py-2.5 rounded-lg hover:bg-emerald-750 shadow-md transition-colors"
                         >
-                          Settle & Mark Room Green
+                          Confirm & Checkout
                         </button>
                         <button
                           onClick={() => setCheckingOut(false)}

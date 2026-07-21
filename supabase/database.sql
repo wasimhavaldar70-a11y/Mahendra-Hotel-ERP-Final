@@ -502,15 +502,42 @@ CREATE OR REPLACE FUNCTION check_in_guests_transactional(
   p_advance NUMERIC(10,2),
   p_pending NUMERIC(10,2),
   p_payment_method VARCHAR(50),
-  p_guests JSONB
+  p_guests JSONB,
+  p_purpose_of_stay VARCHAR(100) DEFAULT NULL,
+  p_arrival_from VARCHAR(255) DEFAULT NULL,
+  p_residential_address TEXT DEFAULT NULL,
+  p_address_proof_type VARCHAR(100) DEFAULT NULL,
+  p_document_number VARCHAR(100) DEFAULT NULL,
+  p_vehicle_number VARCHAR(50) DEFAULT NULL,
+  p_check_in_date DATE DEFAULT NULL,
+  p_check_in_time TIME DEFAULT NULL,
+  p_total_nights INT DEFAULT NULL,
+  p_room_rate NUMERIC(10,2) DEFAULT NULL,
+  p_room_charges NUMERIC(10,2) DEFAULT NULL,
+  p_subtotal NUMERIC(10,2) DEFAULT NULL,
+  p_discount NUMERIC(10,2) DEFAULT 0.00,
+  p_extra_charges NUMERIC(10,2) DEFAULT 0.00,
+  p_tax_amount NUMERIC(10,2) DEFAULT 0.00,
+  p_grand_total NUMERIC(10,2) DEFAULT NULL
 ) RETURNS UUID AS $$
 DECLARE
   v_checkin_id UUID;
   v_guest JSONB;
 BEGIN
   -- 1. Insert check-in record
-  INSERT INTO public.check_ins (hotel_id, room_id, primary_customer_id, number_of_guests, check_in, expected_checkout, status)
-  VALUES (p_hotel_id, p_room_id, p_primary_customer_id, p_number_of_guests, timezone('utc'::text, now()), p_expected_checkout, 'Active')
+  INSERT INTO public.check_ins (
+    hotel_id, room_id, primary_customer_id, number_of_guests, 
+    check_in, expected_checkout, status,
+    purpose_of_stay, arrival_from, residential_address, address_proof_type, document_number, vehicle_number,
+    check_in_date, check_in_time, total_nights, room_rate, room_charges, subtotal, discount, extra_charges, tax_amount, grand_total
+  )
+  VALUES (
+    p_hotel_id, p_room_id, p_primary_customer_id, p_number_of_guests, 
+    timezone('utc'::text, now()), p_expected_checkout, 'Active',
+    p_purpose_of_stay, p_arrival_from, p_residential_address, p_address_proof_type, p_document_number, p_vehicle_number,
+    COALESCE(p_check_in_date, timezone('utc'::text, now())::date), COALESCE(p_check_in_time, timezone('utc'::text, now())::time), 
+    p_total_nights, p_room_rate, p_room_charges, p_subtotal, p_discount, p_extra_charges, p_tax_amount, p_grand_total
+  )
   RETURNING id INTO v_checkin_id;
 
   -- 2. Insert payment record
@@ -935,6 +962,27 @@ ALTER TABLE customers ADD COLUMN IF NOT EXISTS vehicle_number VARCHAR(50);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS emergency_contact VARCHAR(100);
 ALTER TABLE customers ADD COLUMN IF NOT EXISTS nationality VARCHAR(100) DEFAULT 'Indian';
 
+-- 1.1 Extend check_ins table with stay and detailed billing information
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS purpose_of_stay VARCHAR(100);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS arrival_from VARCHAR(255);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS residential_address TEXT;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS address_proof_type VARCHAR(100);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS document_number VARCHAR(100);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS vehicle_number VARCHAR(50);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS check_in_date DATE;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS check_in_time TIME;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS check_out_date DATE;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS check_out_time TIME;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS total_nights INTEGER;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS room_rate NUMERIC(10, 2);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS room_charges NUMERIC(10, 2);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS subtotal NUMERIC(10, 2);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS discount NUMERIC(10, 2) DEFAULT 0.00;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS extra_charges NUMERIC(10, 2) DEFAULT 0.00;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(10, 2) DEFAULT 0.00;
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS grand_total NUMERIC(10, 2);
+ALTER TABLE public.check_ins ADD COLUMN IF NOT EXISTS actual_checkout TIMESTAMP WITH TIME ZONE;
+
 -- 2. Extend customer_documents with audit metadata and primary flag
 ALTER TABLE customer_documents ADD COLUMN IF NOT EXISTS upload_date TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
 ALTER TABLE customer_documents ADD COLUMN IF NOT EXISTS verification_date TIMESTAMP WITH TIME ZONE;
@@ -1268,6 +1316,7 @@ CREATE TABLE IF NOT EXISTS public.folio_ledger (
 ALTER TABLE public.folio_ledger ENABLE ROW LEVEL SECURITY;
 
 -- Security policy for tenant isolation
+DROP POLICY IF EXISTS "Users can manage folio ledger of their hotel" ON public.folio_ledger;
 CREATE POLICY "Users can manage folio ledger of their hotel" ON public.folio_ledger
   FOR ALL TO authenticated USING (hotel_id = get_user_hotel_id()) WITH CHECK (hotel_id = get_user_hotel_id());
 
@@ -1378,7 +1427,13 @@ FOR EACH ROW EXECUTE FUNCTION public.init_ledger_from_payment();
 CREATE OR REPLACE FUNCTION checkout_stay_transactional(
   p_hotel_id UUID,
   p_checkin_id UUID,
-  p_final_payment_method VARCHAR(50)
+  p_final_payment_method VARCHAR(50),
+  p_check_out_date DATE DEFAULT NULL,
+  p_check_out_time TIME DEFAULT NULL,
+  p_discount NUMERIC(10,2) DEFAULT NULL,
+  p_extra_charges NUMERIC(10,2) DEFAULT NULL,
+  p_tax_amount NUMERIC(10,2) DEFAULT NULL,
+  p_grand_total NUMERIC(10,2) DEFAULT NULL
 ) RETURNS VOID AS $$
 DECLARE
   v_room_id UUID;
@@ -1390,10 +1445,16 @@ BEGIN
   FROM public.check_ins
   WHERE id = p_checkin_id AND hotel_id = p_hotel_id;
 
-  -- 2. Set Check-In status to Completed
+  -- 2. Set Check-In status to Completed and update checkout metadata
   UPDATE public.check_ins 
   SET status = 'Completed', 
-      actual_checkout = timezone('utc'::text, now())
+      actual_checkout = timezone('utc'::text, now()),
+      check_out_date = COALESCE(p_check_out_date, timezone('utc'::text, now())::date),
+      check_out_time = COALESCE(p_check_out_time, timezone('utc'::text, now())::time),
+      discount = COALESCE(p_discount, discount),
+      extra_charges = COALESCE(p_extra_charges, extra_charges),
+      tax_amount = COALESCE(p_tax_amount, tax_amount),
+      grand_total = COALESCE(p_grand_total, grand_total)
   WHERE id = p_checkin_id AND hotel_id = p_hotel_id;
 
   -- 3. Calculate remaining pending balance from payments table
