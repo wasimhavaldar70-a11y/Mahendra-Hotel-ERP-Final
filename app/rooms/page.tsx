@@ -36,7 +36,7 @@ export default function RoomsPage() {
   // Add Room form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [roomNumber, setRoomNumber] = useState('');
-  const [roomType, setRoomType] = useState('Deluxe Room');
+  const [roomType, setRoomType] = useState('Deluxe A/C');
   const [floor, setFloor] = useState('Ground Floor');
   const [price, setPrice] = useState('');
   const [capacity, setCapacity] = useState(2);
@@ -48,7 +48,7 @@ export default function RoomsPage() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [editRoomNumber, setEditRoomNumber] = useState('');
-  const [editRoomType, setEditRoomType] = useState('Deluxe Room');
+  const [editRoomType, setEditRoomType] = useState('Deluxe A/C');
   const [editFloor, setEditFloor] = useState('Ground Floor');
   const [editPrice, setEditPrice] = useState('');
   const [editCapacity, setEditCapacity] = useState(2);
@@ -379,10 +379,24 @@ export default function RoomsPage() {
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Type</label>
                       <select value={roomType} onChange={(e) => setRoomType(e.target.value)} className={modalInputClass}>
-                        <option value="Deluxe Room">Deluxe Room</option>
-                        <option value="Super Deluxe Room">Super Deluxe Room</option>
-                        <option value="Family Suite">Family Suite</option>
-                        <option value="Executive Suite">Executive Suite</option>
+                        <optgroup label="── A/C Rooms ──">
+                          <option value="Standard A/C">Standard A/C</option>
+                          <option value="Semi Deluxe A/C">Semi Deluxe A/C</option>
+                          <option value="Deluxe A/C">Deluxe A/C</option>
+                          <option value="Super Deluxe A/C">Super Deluxe A/C</option>
+                          <option value="Family Suite A/C">Family Suite A/C</option>
+                          <option value="Executive Suite A/C">Executive Suite A/C</option>
+                          <option value="Dormitory A/C">Dormitory A/C</option>
+                        </optgroup>
+                        <optgroup label="── Non A/C Rooms ──">
+                          <option value="Standard Non A/C">Standard Non A/C</option>
+                          <option value="Semi Deluxe Non A/C">Semi Deluxe Non A/C</option>
+                          <option value="Deluxe Non A/C">Deluxe Non A/C</option>
+                          <option value="Super Deluxe Non A/C">Super Deluxe Non A/C</option>
+                          <option value="Family Suite Non A/C">Family Suite Non A/C</option>
+                          <option value="Executive Suite Non A/C">Executive Suite Non A/C</option>
+                          <option value="Dormitory Non A/C">Dormitory Non A/C</option>
+                        </optgroup>
                       </select>
                     </div>
                     <div>
@@ -503,10 +517,24 @@ export default function RoomsPage() {
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Room Type</label>
                       <select value={editRoomType} onChange={(e) => setEditRoomType(e.target.value)} className={modalInputClass}>
-                        <option value="Deluxe Room">Deluxe Room</option>
-                        <option value="Super Deluxe Room">Super Deluxe Room</option>
-                        <option value="Family Suite">Family Suite</option>
-                        <option value="Executive Suite">Executive Suite</option>
+                        <optgroup label="── A/C Rooms ──">
+                          <option value="Standard A/C">Standard A/C</option>
+                          <option value="Semi Deluxe A/C">Semi Deluxe A/C</option>
+                          <option value="Deluxe A/C">Deluxe A/C</option>
+                          <option value="Super Deluxe A/C">Super Deluxe A/C</option>
+                          <option value="Family Suite A/C">Family Suite A/C</option>
+                          <option value="Executive Suite A/C">Executive Suite A/C</option>
+                          <option value="Dormitory A/C">Dormitory A/C</option>
+                        </optgroup>
+                        <optgroup label="── Non A/C Rooms ──">
+                          <option value="Standard Non A/C">Standard Non A/C</option>
+                          <option value="Semi Deluxe Non A/C">Semi Deluxe Non A/C</option>
+                          <option value="Deluxe Non A/C">Deluxe Non A/C</option>
+                          <option value="Super Deluxe Non A/C">Super Deluxe Non A/C</option>
+                          <option value="Family Suite Non A/C">Family Suite Non A/C</option>
+                          <option value="Executive Suite Non A/C">Executive Suite Non A/C</option>
+                          <option value="Dormitory Non A/C">Dormitory Non A/C</option>
+                        </optgroup>
                       </select>
                     </div>
                     <div>
