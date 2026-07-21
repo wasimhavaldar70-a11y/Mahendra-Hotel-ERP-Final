@@ -6,6 +6,7 @@
 // ========================================================
 
 import React, { useState, useEffect } from 'react';
+import { validatePassword } from '../../lib/passwordStrength';
 import DashboardLayout from '../../components/DashboardLayout';
 import { db } from '../../lib/supabase/client';
 import { Hotel } from '../../types';
@@ -114,8 +115,11 @@ export default function SuperAdminPage() {
 
     if (!password) {
       newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else {
+      const pwdResult = validatePassword(password);
+      if (!pwdResult.valid) {
+        newErrors.password = `Password must have: ${pwdResult.errors.join(', ')}`;
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -182,8 +186,13 @@ export default function SuperAdminPage() {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      setResetError('Password must be at least 6 characters');
+    if (!newPassword) {
+      setResetError('Password is required');
+      return;
+    }
+    const pwdResult = validatePassword(newPassword);
+    if (!pwdResult.valid) {
+      setResetError(`Password must have: ${pwdResult.errors.join(', ')}`);
       return;
     }
 
@@ -436,7 +445,7 @@ export default function SuperAdminPage() {
                       className={`w-full text-xs font-bold text-slate-700 bg-slate-50/50 border rounded-xl p-3 pr-10 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary ${
                         errors.password ? 'border-red-500 focus:ring-red-500' : 'border-slate-200'
                       }`}
-                      placeholder="Set owner password (min 6 chars)"
+                      placeholder="Min 8 chars, uppercase + number"
                     />
                     <button
                       type="button"
@@ -451,6 +460,25 @@ export default function SuperAdminPage() {
                       )}
                     </button>
                   </div>
+                  {/* Password Strength Meter */}
+                  {password && (() => {
+                    const result = validatePassword(password);
+                    const colors = ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-emerald-500'];
+                    const labels = ['Weak', 'Fair', 'Good', 'Strong'];
+                    const score = Math.min(result.score, 3);
+                    return (
+                      <div className="mt-1.5 space-y-1">
+                        <div className="flex gap-1">
+                          {[0,1,2,3].map(i => (
+                            <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= score ? colors[score] : 'bg-slate-200'}`} />
+                          ))}
+                        </div>
+                        <span className={`text-[10px] font-bold ${
+                          score === 3 ? 'text-emerald-600' : score >= 2 ? 'text-yellow-600' : 'text-orange-600'
+                        }`}>{labels[score]}</span>
+                      </div>
+                    );
+                  })()}
                   {errors.password && (
                     <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.password}</span>
                   )}
@@ -529,7 +557,7 @@ export default function SuperAdminPage() {
                         if (resetError) setResetError('');
                       }}
                       className="w-full text-xs font-bold text-slate-700 bg-slate-50/50 border border-slate-200 rounded-xl p-3 pr-10 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
-                      placeholder="Enter new password (min 6 chars)"
+                      placeholder="Min 8 chars, uppercase + number"
                     />
                     <button
                       type="button"
@@ -544,6 +572,25 @@ export default function SuperAdminPage() {
                       )}
                     </button>
                   </div>
+                  {/* Password Strength Meter */}
+                  {newPassword && (() => {
+                    const result = validatePassword(newPassword);
+                    const colors = ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-emerald-500'];
+                    const labels = ['Weak', 'Fair', 'Good', 'Strong'];
+                    const score = Math.min(result.score, 3);
+                    return (
+                      <div className="mt-1.5 space-y-1">
+                        <div className="flex gap-1">
+                          {[0,1,2,3].map(i => (
+                            <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= score ? colors[score] : 'bg-slate-200'}`} />
+                          ))}
+                        </div>
+                        <span className={`text-[10px] font-bold ${
+                          score === 3 ? 'text-emerald-600' : score >= 2 ? 'text-yellow-600' : 'text-orange-600'
+                        }`}>{labels[score]}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex gap-2 pt-2">

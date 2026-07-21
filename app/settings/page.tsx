@@ -18,13 +18,47 @@ import {
   ToggleLeft,
   ToggleRight,
   Shield,
-  MessageSquare
+  MessageSquare,
+  Download,
+  FileJson
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const [currentHotel, setCurrentHotel] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportMsg, setExportMsg] = useState('');
+
+  const handleExportGuestData = async () => {
+    setExportLoading(true);
+    setExportMsg('');
+    try {
+      const res = await fetch('/api/export-guest-data', { method: 'GET' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setExportMsg(body.error || 'Export failed. Please try again.');
+        return;
+      }
+      // Trigger browser download
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const cd = res.headers.get('content-disposition') || '';
+      const filenameMatch = cd.match(/filename="([^"]+)"/);
+      a.href = url;
+      a.download = filenameMatch?.[1] || 'guest-data-export.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportMsg('Export downloaded successfully.');
+    } catch (err) {
+      setExportMsg('Export failed. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   // Future features states
   const [features, setFeatures] = useState({
@@ -215,6 +249,39 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Data Privacy / GDPR */}
+        <div className="bg-white rounded-[24px] border border-slate-100 p-6 shadow-sm">
+          <h3 className="text-sm font-bold text-slate-800 border-b border-slate-50 pb-2 flex items-center gap-1.5 mb-4">
+            <Shield className="w-4 h-4 text-primary" />
+            Data Privacy &amp; Export
+          </h3>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <FileJson className="w-3.5 h-3.5 text-slate-500" />
+                Export All Guest Data (GDPR)
+              </h4>
+              <p className="text-[10px] text-slate-400 font-medium mt-1 max-w-xs">
+                Download a complete JSON archive of all guests, check-ins, documents metadata, and payments for your property. Contains personally identifiable information — handle with care.
+              </p>
+              {exportMsg && (
+                <p className={`text-[10px] font-bold mt-2 ${
+                  exportMsg.includes('successfully') ? 'text-emerald-600' : 'text-red-500'
+                }`}>{exportMsg}</p>
+              )}
+            </div>
+            <button
+              onClick={handleExportGuestData}
+              disabled={exportLoading}
+              className="flex items-center gap-1.5 bg-slate-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-slate-700 transition-colors shadow-sm whitespace-nowrap disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5" />
+              {exportLoading ? 'Exporting...' : 'Download Export'}
+            </button>
+          </div>
+        </div>
+
       </div>
     </DashboardLayout>
   );

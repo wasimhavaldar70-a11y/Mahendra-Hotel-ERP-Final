@@ -5,9 +5,32 @@ import { pool } from '../../../lib/db';
 import { isRequestAllowed } from '../../../lib/rateLimit';
 import { getAuthenticatedUser } from '../../../lib/supabase/server';
 import { logger } from '../../../lib/logger';
+import { validateCsrfOrigin } from '../../../lib/csrf';
+import { writeAuditLog } from '../../../lib/auditLog';
+import { sendWelcomeEmail } from '../../../lib/email';
+import { passwordValidationMessage } from '../../../lib/passwordStrength';
+import { createClient } from '@supabase/supabase-js';
+
+// ========================================================
+// Singleton Supabase Admin Client (avoid re-creating per request)
+// ========================================================
+let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
+function getSupabaseAdmin() {
+  if (!_supabaseAdmin) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    _supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+  }
+  return _supabaseAdmin;
+}
 
 export async function POST(request: Request) {
-  // Apply rate limiter (10 requests per minute)
+  // 1. CSRF Origin validation
+  if (!validateCsrfOrigin(request)) {
+    return NextResponse.json({ error: 'Forbidden: Invalid request origin' }, { status: 403 });
+  }
+
+  // 2. Rate limiting (10 requests per minute)
   const clientIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
   if (!await isRequestAllowed(clientIp, 10, 60000)) {
     return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
@@ -30,6 +53,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // 3. Password strength validation (8+ chars, uppercase + number required)
+    const pwdError = passwordValidationMessage(password);
+    if (pwdError) {
+      return NextResponse.json({ error: pwdError }, { status: 400 });
+    }
+
     pgClient = await pool.connect();
 
     if (adminUserId) {
@@ -41,7 +70,7 @@ export async function POST(request: Request) {
 
     const lowercaseEmail = email.toLowerCase().trim();
 
-    // 1. Email validation step (prevent silent deletes of other hotel users - Issue 11)
+    // 4. Email validation step (prevent silent deletes of other hotel users)
     const emailCheck = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
     if (emailCheck.rows.length > 0) {
       return NextResponse.json({ error: 'Email address is already in use' }, { status: 400 });
@@ -58,7 +87,7 @@ export async function POST(request: Request) {
 
     let hotel: any = null;
 
-    // A. Create Hotel record first to generate hotel.id (Issue 8) with default CMS and config structures
+    // A. Create Hotel record first to generate hotel.id with default CMS and config structures
     await pgClient.query('BEGIN;');
 
     const defaultCmsData = {
@@ -127,10 +156,8 @@ export async function POST(request: Request) {
     
     hotel = insertHotelRes.rows[0];
 
-    // B. Provision account via official Supabase admin client (Issue 7)
-    const { createClient } = require('@supabase/supabase-js');
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAdmin = createClient(supabaseUrl!, serviceRoleKey!);
+    // B. Provision account via official Supabase admin client
+    const supabaseAdmin = getSupabaseAdmin();
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: lowercaseEmail,
@@ -177,7 +204,7 @@ export async function POST(request: Request) {
       SET role = 'hotel_owner', hotel_id = $3;
     `, [authData.user.id, lowercaseEmail, hotel.id]);
 
-    // D. Explicitly update auth.users metadata to ensure JWT claims are populated (Issue 7/8)
+    // D. Explicitly update auth.users metadata to ensure JWT claims are populated
     await pgClient.query(`
       UPDATE auth.users 
       SET raw_app_meta_data = jsonb_set(
@@ -209,6 +236,33 @@ export async function POST(request: Request) {
       role: 'hotel_owner'
     });
 
+    // F. Write Audit Log (non-blocking)
+    void writeAuditLog({
+      action: 'hotel.created',
+      actor_id: adminUserId,
+      actor_email: user.email,
+      hotel_id: hotel.id,
+      target_type: 'hotel',
+      target_id: hotel.id,
+      metadata: { hotel_name, owner_name, email: lowercaseEmail, subscription_plan },
+      ip: clientIp,
+    });
+
+    // G. Send welcome email (non-blocking — never fail provisioning due to email error)
+    void sendWelcomeEmail({
+      to: lowercaseEmail,
+      hotelName: hotel_name,
+      ownerName: owner_name,
+      loginEmail: lowercaseEmail,
+      loginPassword: password,
+    }).then(sent => {
+      if (sent) {
+        logger.info('Provision', `Welcome email sent to ${lowercaseEmail}`);
+      } else {
+        logger.warn('Provision', `Welcome email could not be sent to ${lowercaseEmail} — check RESEND_API_KEY`);
+      }
+    });
+
     return NextResponse.json({ success: true, hotel });
 
   } catch (err: any) {
@@ -220,7 +274,7 @@ export async function POST(request: Request) {
       }
     }
     logger.error('Provision', `Hotel onboarding provisioning failed for: ${hotelNameForLog}`, err);
-    return NextResponse.json({ error: err.message || 'Failed to provision hotel account' }, { status: 500 });
+    return NextResponse.json({ error: 'Hotel provisioning failed. Please try again.' }, { status: 500 });
   } finally {
     if (pgClient) {
       pgClient.release();
