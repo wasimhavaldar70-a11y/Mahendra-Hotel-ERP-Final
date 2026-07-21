@@ -1354,37 +1354,66 @@ export const supabaseDb = {
   getAllStaysForHotel: async (hotelId: string): Promise<ExtendedCheckIn[]> => {
     if (!supabase) return [];
 
-    const { data, error } = await supabase
-      .from('check_ins')
-      .select(`
-        *,
-        primary_customer:customers(
-          *,
-          customer_documents(*)
-        ),
-        room:rooms(*),
-        payment:payments(*),
-        guests:check_in_guests(
-          *,
-          customer:customers(*, customer_documents(*))
-        )
-      `)
-      .eq('hotel_id', hotelId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+    try {
+      // Fetch check_ins with customer & payment in parallel with rooms to avoid composite FK join issues
+      const [checkInsRes, roomsList] = await Promise.all([
+        supabase
+          .from('check_ins')
+          .select('*, primary_customer:customers(*, customer_documents(*)), payment:payments(*)')
+          .eq('hotel_id', hotelId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+        supabaseDb.getRooms(hotelId)
+      ]);
 
-    if (error) {
-      console.error('Error fetching all stays for hotel:', error.message);
+      const roomsMap: Record<string, any> = {};
+      (roomsList || []).forEach((r: any) => {
+        roomsMap[r.id] = r;
+      });
+
+      if (checkInsRes.error) {
+        console.error('Error fetching check_ins for stay logs with joins:', checkInsRes.error.message);
+        // Fallback: fetch raw check_ins and resolve customers & payments manually
+        const { data: rawCheckIns, error: rawErr } = await supabase
+          .from('check_ins')
+          .select('*')
+          .eq('hotel_id', hotelId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false });
+
+        if (rawErr || !rawCheckIns) return [];
+
+        const [custRes, payRes] = await Promise.all([
+          supabase.from('customers').select('*, customer_documents(*)').eq('hotel_id', hotelId),
+          supabase.from('payments').select('*')
+        ]);
+
+        const custMap: Record<string, any> = {};
+        (custRes.data || []).forEach((c: any) => { custMap[c.id] = c; });
+
+        const payMap: Record<string, any> = {};
+        (payRes.data || []).forEach((p: any) => { payMap[p.checkin_id] = p; });
+
+        return rawCheckIns.map((stay: any) => ({
+          ...stay,
+          primary_customer: custMap[stay.primary_customer_id] || undefined,
+          room: roomsMap[stay.room_id] || undefined,
+          payment: payMap[stay.id] || undefined,
+          guests: []
+        })) as ExtendedCheckIn[];
+      }
+
+      return (checkInsRes.data || []).map((stay: any) => ({
+        ...stay,
+        primary_customer: stay.primary_customer || undefined,
+        room: roomsMap[stay.room_id] || undefined,
+        payment: Array.isArray(stay.payment) ? stay.payment[0] : (stay.payment || undefined),
+        guests: stay.guests || []
+      })) as ExtendedCheckIn[];
+    } catch (err) {
+      console.error('Failed to get all stays for hotel:', err);
       return [];
     }
-
-    return (data || []).map((stay: any) => ({
-      ...stay,
-      primary_customer: stay.primary_customer || undefined,
-      room: stay.room || undefined,
-      payment: Array.isArray(stay.payment) ? stay.payment[0] : (stay.payment || undefined),
-      guests: stay.guests || []
-    })) as ExtendedCheckIn[];
   },
 
   // Full extended details for Room Modals

@@ -8,7 +8,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { db, getSessionUser } from '../../lib/supabase/client';
-import { ExtendedCheckIn, RoomStatus } from '../../types';
+import { ExtendedCheckIn } from '../../types';
 import * as XLSX from 'xlsx';
 import { 
   History, 
@@ -25,26 +25,16 @@ import {
   ArrowDown, 
   User, 
   Phone, 
-  Mail, 
-  MapPin, 
-  CreditCard, 
-  ShieldCheck, 
   Calendar, 
   Clock, 
   BedDouble, 
   IndianRupee, 
   CheckCircle2, 
-  Clock3, 
   LogOut, 
-  AlertCircle, 
   Eye, 
   EyeOff, 
   Printer, 
-  Sparkles,
-  Users,
-  Compass,
-  FileCheck,
-  Tag
+  CreditCard
 } from 'lucide-react';
 
 type SortColumn = 
@@ -61,6 +51,26 @@ type SortColumn =
 
 type SortDirection = 'asc' | 'desc';
 
+const STANDARD_AC_ROOMS = [
+  'Standard A/C',
+  'Semi Deluxe A/C',
+  'Deluxe A/C',
+  'Super Deluxe A/C',
+  'Family Suite A/C',
+  'Executive Suite A/C',
+  'Dormitory A/C'
+];
+
+const STANDARD_NON_AC_ROOMS = [
+  'Standard Non A/C',
+  'Semi Deluxe Non A/C',
+  'Deluxe Non A/C',
+  'Super Deluxe Non A/C',
+  'Family Suite Non A/C',
+  'Executive Suite Non A/C',
+  'Dormitory Non A/C'
+];
+
 export default function StayLogsPage() {
   const [currentHotel, setCurrentHotel] = useState<any>(null);
   const [stays, setStays] = useState<ExtendedCheckIn[]>([]);
@@ -71,14 +81,11 @@ export default function StayLogsPage() {
   const [showFiltersPanel, setShowFiltersPanel] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('ALL');
-  const [sourceFilter, setSourceFilter] = useState<string>('ALL');
   const [roomTypeFilter, setRoomTypeFilter] = useState<string>('ALL');
   const [checkInFromDate, setCheckInFromDate] = useState('');
   const [checkInToDate, setCheckInToDate] = useState('');
   const [checkOutFromDate, setCheckOutFromDate] = useState('');
   const [checkOutToDate, setCheckOutToDate] = useState('');
-  const [minNights, setMinNights] = useState<string>('');
-  const [maxNights, setMaxNights] = useState<string>('');
 
   // Sorting State
   const [sortColumn, setSortColumn] = useState<SortColumn>('check_in');
@@ -146,7 +153,6 @@ export default function StayLogsPage() {
     const maskedLength = clean.length - visibleLength;
     const maskedPart = 'X'.repeat(maskedLength);
     
-    // Group in 4s if long (like Aadhaar)
     const combined = maskedPart + visibleDigits;
     return combined.replace(/(.{4})/g, '$1-').replace(/-$/, '');
   };
@@ -179,23 +185,17 @@ export default function StayLogsPage() {
     return 'Pending';
   };
 
-  // Unique Room Types for Filter Dropdown
-  const availableRoomTypes = useMemo(() => {
-    const typesSet = new Set<string>();
+  // Other Custom Room Types present in data
+  const otherRoomTypes = useMemo(() => {
+    const allStandard = new Set([...STANDARD_AC_ROOMS, ...STANDARD_NON_AC_ROOMS]);
+    const set = new Set<string>();
     stays.forEach(s => {
-      if (s.room?.room_type) typesSet.add(s.room.room_type);
+      const type = s.room?.room_type;
+      if (type && !allStandard.has(type)) {
+        set.add(type);
+      }
     });
-    return Array.from(typesSet);
-  }, [stays]);
-
-  // Unique Booking Sources
-  const availableBookingSources = useMemo(() => {
-    const sourcesSet = new Set<string>();
-    stays.forEach(s => {
-      const src = s.booking_source || 'Walk-in';
-      sourcesSet.add(src);
-    });
-    return Array.from(sourcesSet);
+    return Array.from(set);
   }, [stays]);
 
   // Filtered & Searched Data Logic
@@ -205,66 +205,67 @@ export default function StayLogsPage() {
       const room = stay.room;
       const doc = customer?.customer_documents?.[0];
 
-      const bookingIdStr = stay.booking_id || `BK-${stay.id.slice(0, 8).toUpperCase()}`;
-      const customerName = customer?.full_name || '';
-      const mobileNumber = customer?.phone || '';
-      const docNumber = doc?.document_number || stay.document_number || '';
-      const roomNumber = room?.room_number || '';
-      const roomType = room?.room_type || '';
-      const stayStatusCat = getStayStatusCategory(stay.status);
-      const payStatus = getPaymentStatus(stay);
-      const bookingSource = stay.booking_source || 'Walk-in';
+      const bookingIdStr = (stay.booking_id || `BK-${stay.id.slice(0, 8).toUpperCase()}`).toLowerCase();
+      const customerName = (customer?.full_name || '').toLowerCase();
+      const mobileNumber = (customer?.phone || '').toLowerCase();
+      const emailAddr = (customer?.email || '').toLowerCase();
+      const docType = (doc?.document_type || stay.address_proof_type || '').toLowerCase();
+      const docNumber = (doc?.document_number || stay.document_number || '').toLowerCase();
+      const roomNumber = (room?.room_number || '').toLowerCase();
+      const roomType = (room?.room_type || '').toLowerCase();
+      const stayStatusCat = getStayStatusCategory(stay.status).toLowerCase();
+      const payStatus = getPaymentStatus(stay).toLowerCase();
+      const purpose = (stay.purpose_of_stay || '').toLowerCase();
+      const vehicle = (stay.vehicle_number || '').toLowerCase();
 
-      // 1. Text Search (Matches Customer Name, Mobile, Booking ID, Room Number, Room Type, ID Number, Payment Status, Stay Status)
+      // 1. Multi-Field Substring Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesQuery = 
-          customerName.toLowerCase().includes(q) ||
+          customerName.includes(q) ||
           mobileNumber.includes(q) ||
-          bookingIdStr.toLowerCase().includes(q) ||
-          roomNumber.toLowerCase().includes(q) ||
-          roomType.toLowerCase().includes(q) ||
-          docNumber.toLowerCase().includes(q) ||
-          stayStatusCat.toLowerCase().includes(q) ||
-          payStatus.toLowerCase().includes(q);
+          emailAddr.includes(q) ||
+          docType.includes(q) ||
+          docNumber.includes(q) ||
+          roomNumber.includes(q) ||
+          roomType.includes(q) ||
+          bookingIdStr.includes(q) ||
+          stayStatusCat.includes(q) ||
+          payStatus.includes(q) ||
+          purpose.includes(q) ||
+          vehicle.includes(q);
 
         if (!matchesQuery) return false;
       }
 
       // 2. Stay Status Filter
-      if (statusFilter !== 'ALL' && stayStatusCat !== statusFilter) {
+      if (statusFilter !== 'ALL' && getStayStatusCategory(stay.status) !== statusFilter) {
         return false;
       }
 
       // 3. Payment Status Filter
-      if (paymentStatusFilter !== 'ALL' && payStatus !== paymentStatusFilter) {
+      if (paymentStatusFilter !== 'ALL' && getPaymentStatus(stay) !== paymentStatusFilter) {
         return false;
       }
 
-      // 4. Booking Source Filter
-      if (sourceFilter !== 'ALL' && bookingSource !== sourceFilter) {
-        return false;
+      // 4. Room Type Filter (Flexible substring or exact match)
+      if (roomTypeFilter !== 'ALL') {
+        const stayType = roomType.trim();
+        const filterType = roomTypeFilter.toLowerCase().trim();
+        if (!stayType.includes(filterType) && !filterType.includes(stayType)) {
+          return false;
+        }
       }
 
-      // 5. Room Type Filter
-      if (roomTypeFilter !== 'ALL' && roomType !== roomTypeFilter) {
-        return false;
-      }
-
-      // 6. Check-in Date Range Filter
+      // 5. Check-in Date Range Filter
       const inDate = stay.check_in_date || stay.check_in?.substring(0, 10);
       if (checkInFromDate && inDate < checkInFromDate) return false;
       if (checkInToDate && inDate > checkInToDate) return false;
 
-      // 7. Check-out Date Range Filter
+      // 6. Check-out Date Range Filter
       const outDate = stay.check_out_date || stay.actual_checkout?.substring(0, 10) || stay.expected_checkout?.substring(0, 10);
       if (checkOutFromDate && outDate < checkOutFromDate) return false;
       if (checkOutToDate && outDate > checkOutToDate) return false;
-
-      // 8. Nights Filter
-      const nights = stay.total_nights || 1;
-      if (minNights !== '' && nights < Number(minNights)) return false;
-      if (maxNights !== '' && nights > Number(maxNights)) return false;
 
       return true;
     });
@@ -273,14 +274,11 @@ export default function StayLogsPage() {
     searchQuery,
     statusFilter,
     paymentStatusFilter,
-    sourceFilter,
     roomTypeFilter,
     checkInFromDate,
     checkInToDate,
     checkOutFromDate,
-    checkOutToDate,
-    minNights,
-    maxNights
+    checkOutToDate
   ]);
 
   // Sorted Data Logic
@@ -362,14 +360,11 @@ export default function StayLogsPage() {
     setSearchQuery('');
     setStatusFilter('ALL');
     setPaymentStatusFilter('ALL');
-    setSourceFilter('ALL');
     setRoomTypeFilter('ALL');
     setCheckInFromDate('');
     setCheckInToDate('');
     setCheckOutFromDate('');
     setCheckOutToDate('');
-    setMinNights('');
-    setMaxNights('');
     setCurrentPage(1);
   };
 
@@ -379,24 +374,19 @@ export default function StayLogsPage() {
     if (searchQuery) count++;
     if (statusFilter !== 'ALL') count++;
     if (paymentStatusFilter !== 'ALL') count++;
-    if (sourceFilter !== 'ALL') count++;
     if (roomTypeFilter !== 'ALL') count++;
     if (checkInFromDate || checkInToDate) count++;
     if (checkOutFromDate || checkOutToDate) count++;
-    if (minNights || maxNights) count++;
     return count;
   }, [
     searchQuery,
     statusFilter,
     paymentStatusFilter,
-    sourceFilter,
     roomTypeFilter,
     checkInFromDate,
     checkInToDate,
     checkOutFromDate,
-    checkOutToDate,
-    minNights,
-    maxNights
+    checkOutToDate
   ]);
 
   // Export to Excel (.xlsx)
@@ -442,7 +432,6 @@ export default function StayLogsPage() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Stay Logs Register');
 
-    // Auto-width columns
     const colWidths = Object.keys(exportRows[0] || {}).map(key => ({
       wch: Math.max(key.length + 3, 16)
     }));
@@ -587,7 +576,7 @@ export default function StayLogsPage() {
                 type="search"
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                placeholder="Search guest name, mobile, booking ID, room, ID proof..."
+                placeholder="Search guest name, mobile, proof id, e.t.c"
                 className="block w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-4 text-xs font-semibold placeholder-slate-400 focus:bg-white focus:border-primary focus:outline-none transition-all shadow-inner"
               />
             </div>
@@ -624,9 +613,9 @@ export default function StayLogsPage() {
             </div>
           </div>
 
-          {/* Expandable Combinable Filters Panel */}
+          {/* Expandable Combinable Filters Panel (Retaining ONLY Stay status, payment status, room type, check-in, check-out) */}
           {showFiltersPanel && (
-            <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 animate-in fade-in duration-150">
+            <div className="pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 animate-in fade-in duration-150">
               {/* Stay Status */}
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Stay Status</label>
@@ -658,7 +647,7 @@ export default function StayLogsPage() {
                 </select>
               </div>
 
-              {/* Room Type */}
+              {/* Room Type (Categorized into A/C & Non A/C) */}
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Room Type</label>
                 <select
@@ -667,24 +656,23 @@ export default function StayLogsPage() {
                   className="w-full text-xs font-semibold border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
                 >
                   <option value="ALL">All Room Types</option>
-                  {availableRoomTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Booking Source */}
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Booking Source</label>
-                <select
-                  value={sourceFilter}
-                  onChange={(e) => { setSourceFilter(e.target.value); setCurrentPage(1); }}
-                  className="w-full text-xs font-semibold border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none"
-                >
-                  <option value="ALL">All Sources</option>
-                  {availableBookingSources.map(src => (
-                    <option key={src} value={src}>{src}</option>
-                  ))}
+                  <optgroup label="── A/C Rooms ──">
+                    {STANDARD_AC_ROOMS.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="── Non A/C Rooms ──">
+                    {STANDARD_NON_AC_ROOMS.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </optgroup>
+                  {otherRoomTypes.length > 0 && (
+                    <optgroup label="── Other Room Categories ──">
+                      {otherRoomTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 
