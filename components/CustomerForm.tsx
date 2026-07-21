@@ -6,7 +6,7 @@
 // ========================================================
 
 import React, { useState } from 'react';
-import { User, Phone, MapPin, ShieldAlert, Upload, Check, Loader2 } from 'lucide-react';
+import { User, Phone, MapPin, ShieldAlert, Upload, Check, Loader2, Camera } from 'lucide-react';
 import { Customer } from '../types';
 import { STATE_CITIES } from '../lib/constants/statesCities';
 import { supabase, getSessionUser } from '../lib/supabase/client';
@@ -772,7 +772,9 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ID Card Front Side *</span>
-            <label className={`flex flex-col items-center justify-center h-36 rounded-xl border border-dashed bg-slate-50/50 hover:bg-slate-50 cursor-pointer overflow-hidden transition-all relative ${
+
+            {/* Preview area (read-only, no click-to-upload) */}
+            <div className={`flex flex-col items-center justify-center h-36 rounded-xl border border-dashed bg-slate-50/50 overflow-hidden relative ${
               errors.frontImage || frontError ? 'border-red-500 animate-pulse' : 'border-slate-200'
             }`}>
               {frontPreview ? (
@@ -785,10 +787,12 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   )}
                 </>
               ) : (
-                <div className="flex flex-col items-center text-center p-4">
-                  <Upload className="w-6 h-6 text-slate-400 mb-1" />
-                  <span className="text-xs font-bold text-slate-600">Upload Front Image</span>
-                  <span className="text-[9px] text-slate-400 mt-0.5">Click to choose image file</span>
+                <div className="flex flex-col items-center text-center p-4 select-none">
+                  <div className="flex gap-3 mb-2">
+                    <Upload className="w-5 h-5 text-slate-300" />
+                    <Camera className="w-5 h-5 text-slate-300" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-400">Front side of ID</span>
                 </div>
               )}
 
@@ -796,7 +800,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
               {frontUploading && (
                 <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 z-10">
                   <Loader2 className="w-5 h-5 animate-spin mb-1.5 text-primary" />
-                  <span className="text-[10px] font-bold tracking-wider">Optimizing & Uploading...</span>
+                  <span className="text-[10px] font-bold tracking-wider">Optimizing &amp; Uploading...</span>
                   <div className="w-full bg-slate-800 rounded-full h-1 mt-2 max-w-[120px] overflow-hidden">
                     <div className="bg-primary h-full transition-all duration-150" style={{ width: `${frontProgress}%` }}></div>
                   </div>
@@ -806,14 +810,13 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
 
               {/* Upload Error overlay */}
               {frontError && (
-                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-white p-3 text-center z-10" onClick={(e) => e.stopPropagation()}>
+                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-white p-3 text-center z-10">
                   <span className="text-[10px] font-bold">Upload Failed</span>
                   <span className="text-[9px] mt-1 opacity-90 max-w-[150px] truncate">{frontError}</span>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.preventDefault();
-                      e.stopPropagation();
                       if (frontBlob) {
                         const hotelId = getSessionUser()?.hotel?.id || 'default';
                         const targetFileName = `${hotelId}/${customerId}/front-${Date.now()}.webp`;
@@ -826,15 +829,42 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   </button>
                 </div>
               )}
+            </div>
 
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e, 'front')}
-                className="hidden"
-                disabled={frontUploading}
-              />
-            </label>
+            {/* Action buttons row */}
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {/* Upload File */}
+              <label className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all active:scale-95 select-none ${
+                frontUploading ? 'opacity-50 pointer-events-none' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+              }`}>
+                <Upload className="w-3.5 h-3.5" />
+                Upload File
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, 'front')}
+                  className="hidden"
+                  disabled={frontUploading}
+                />
+              </label>
+
+              {/* Take Photo (camera capture — works on mobile & tablet) */}
+              <label className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all active:scale-95 select-none ${
+                frontUploading ? 'opacity-50 pointer-events-none' : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-600'
+              }`}>
+                <Camera className="w-3.5 h-3.5" />
+                Take Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleImageUpload(e, 'front')}
+                  className="hidden"
+                  disabled={frontUploading}
+                />
+              </label>
+            </div>
+
             {errors.frontImage && (
               <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.frontImage}</span>
             )}
@@ -842,7 +872,9 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
 
           <div>
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ID Card Back Side *</span>
-            <label className={`flex flex-col items-center justify-center h-36 rounded-xl border border-dashed bg-slate-50/50 hover:bg-slate-50 cursor-pointer overflow-hidden transition-all relative ${
+
+            {/* Preview area (read-only, no click-to-upload) */}
+            <div className={`flex flex-col items-center justify-center h-36 rounded-xl border border-dashed bg-slate-50/50 overflow-hidden relative ${
               errors.backImage || backError ? 'border-red-500 animate-pulse' : 'border-slate-200'
             }`}>
               {backPreview ? (
@@ -855,10 +887,12 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   )}
                 </>
               ) : (
-                <div className="flex flex-col items-center text-center p-4">
-                  <Upload className="w-6 h-6 text-slate-400 mb-1" />
-                  <span className="text-xs font-bold text-slate-600">Upload Back Image</span>
-                  <span className="text-[9px] text-slate-400 mt-0.5">Click to choose image file</span>
+                <div className="flex flex-col items-center text-center p-4 select-none">
+                  <div className="flex gap-3 mb-2">
+                    <Upload className="w-5 h-5 text-slate-300" />
+                    <Camera className="w-5 h-5 text-slate-300" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-400">Back side of ID</span>
                 </div>
               )}
 
@@ -866,7 +900,7 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
               {backUploading && (
                 <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 z-10">
                   <Loader2 className="w-5 h-5 animate-spin mb-1.5 text-primary" />
-                  <span className="text-[10px] font-bold tracking-wider">Optimizing & Uploading...</span>
+                  <span className="text-[10px] font-bold tracking-wider">Optimizing &amp; Uploading...</span>
                   <div className="w-full bg-slate-800 rounded-full h-1 mt-2 max-w-[120px] overflow-hidden">
                     <div className="bg-primary h-full transition-all duration-150" style={{ width: `${backProgress}%` }}></div>
                   </div>
@@ -876,14 +910,13 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
 
               {/* Upload Error overlay */}
               {backError && (
-                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-white p-3 text-center z-10" onClick={(e) => e.stopPropagation()}>
+                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-white p-3 text-center z-10">
                   <span className="text-[10px] font-bold">Upload Failed</span>
                   <span className="text-[9px] mt-1 opacity-90 max-w-[150px] truncate">{backError}</span>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.preventDefault();
-                      e.stopPropagation();
                       if (backBlob) {
                         const hotelId = getSessionUser()?.hotel?.id || 'default';
                         const targetFileName = `${hotelId}/${customerId}/back-${Date.now()}.webp`;
@@ -896,15 +929,42 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                   </button>
                 </div>
               )}
+            </div>
 
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e, 'back')}
-                className="hidden"
-                disabled={backUploading}
-              />
-            </label>
+            {/* Action buttons row */}
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {/* Upload File */}
+              <label className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all active:scale-95 select-none ${
+                backUploading ? 'opacity-50 pointer-events-none' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+              }`}>
+                <Upload className="w-3.5 h-3.5" />
+                Upload File
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, 'back')}
+                  className="hidden"
+                  disabled={backUploading}
+                />
+              </label>
+
+              {/* Take Photo (camera capture — works on mobile & tablet) */}
+              <label className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all active:scale-95 select-none ${
+                backUploading ? 'opacity-50 pointer-events-none' : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-600'
+              }`}>
+                <Camera className="w-3.5 h-3.5" />
+                Take Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleImageUpload(e, 'back')}
+                  className="hidden"
+                  disabled={backUploading}
+                />
+              </label>
+            </div>
+
             {errors.backImage && (
               <span className="text-[10px] font-bold text-red-500 mt-1 block">{errors.backImage}</span>
             )}
