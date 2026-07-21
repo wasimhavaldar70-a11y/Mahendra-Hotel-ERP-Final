@@ -1228,6 +1228,10 @@ export const supabaseDb = {
       tax_amount?: number;
       grand_total?: number;
       proceeding_to?: string;
+      room_rate?: number;
+      room_charges?: number;
+      subtotal?: number;
+      total_nights?: number;
     }
   ): Promise<CheckIn | null> => {
     if (!supabase) return null;
@@ -1242,7 +1246,11 @@ export const supabaseDb = {
       p_extra_charges: checkoutDetails?.extra_charges,
       p_tax_amount: checkoutDetails?.tax_amount,
       p_grand_total: checkoutDetails?.grand_total,
-      p_proceeding_to: checkoutDetails?.proceeding_to
+      p_proceeding_to: checkoutDetails?.proceeding_to,
+      p_room_rate: checkoutDetails?.room_rate,
+      p_room_charges: checkoutDetails?.room_charges,
+      p_subtotal: checkoutDetails?.subtotal,
+      p_total_nights: checkoutDetails?.total_nights
     });
 
     if (error) {

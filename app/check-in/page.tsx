@@ -1180,7 +1180,7 @@ function CheckInFormContent() {
             {/* Itemized Billing Breakdown */}
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-2">
               <div className="flex justify-between text-slate-500 font-bold">
-                <span>Room Charges ({totalNights} Night{totalNights > 1 ? 's' : ''}):</span>
+                <span>Room Charges ({totalNights} Night{totalNights > 1 ? 's' : ''} × ₹{roomPriceRate.toLocaleString('en-IN')}):</span>
                 <span>₹{roomCharges.toLocaleString('en-IN')}</span>
               </div>
               {Number(extraCharges) > 0 && (

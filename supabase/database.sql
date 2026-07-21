@@ -1444,7 +1444,11 @@ CREATE OR REPLACE FUNCTION checkout_stay_transactional(
   p_extra_charges NUMERIC(10,2) DEFAULT NULL,
   p_tax_amount NUMERIC(10,2) DEFAULT NULL,
   p_grand_total NUMERIC(10,2) DEFAULT NULL,
-  p_proceeding_to VARCHAR(255) DEFAULT NULL
+  p_proceeding_to VARCHAR(255) DEFAULT NULL,
+  p_room_rate NUMERIC(10,2) DEFAULT NULL,
+  p_room_charges NUMERIC(10,2) DEFAULT NULL,
+  p_subtotal NUMERIC(10,2) DEFAULT NULL,
+  p_total_nights INT DEFAULT NULL
 ) RETURNS VOID AS $$
 DECLARE
   v_room_id UUID;
@@ -1462,6 +1466,10 @@ BEGIN
       actual_checkout = timezone('utc'::text, now()),
       check_out_date = COALESCE(p_check_out_date, timezone('utc'::text, now())::date),
       check_out_time = COALESCE(p_check_out_time, timezone('utc'::text, now())::time),
+      room_rate = COALESCE(p_room_rate, room_rate),
+      room_charges = COALESCE(p_room_charges, room_charges),
+      subtotal = COALESCE(p_subtotal, subtotal),
+      total_nights = COALESCE(p_total_nights, total_nights),
       discount = COALESCE(p_discount, discount),
       extra_charges = COALESCE(p_extra_charges, extra_charges),
       tax_amount = COALESCE(p_tax_amount, tax_amount),

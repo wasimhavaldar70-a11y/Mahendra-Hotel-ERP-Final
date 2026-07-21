@@ -85,6 +85,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
   const [checkoutDiscount, setCheckoutDiscount] = useState<number | string>('');
   const [checkoutExtraCharges, setCheckoutExtraCharges] = useState<number | string>('');
   const [checkoutApplyTax, setCheckoutApplyTax] = useState(false);
+  const [checkoutRoomRate, setCheckoutRoomRate] = useState<number | string>('');
 
   // Dynamic Hotel Info state
   const [currentHotel, setCurrentHotel] = useState<any>(null);
@@ -141,6 +142,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         setCheckoutDiscount(data.discount || 0);
         setCheckoutExtraCharges(data.extra_charges || 0);
         setCheckoutApplyTax(Number(data.tax_amount || 0) > 0);
+        setCheckoutRoomRate(data.room_rate || room.price || 0);
 
         // Load folio ledger entries
         const entries = await db.getLedgerEntries(data.id);
@@ -234,7 +236,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
       const inDate = stayData.check_in_date || stayData.check_in.substring(0, 10);
       const inTime = stayData.check_in_time || stayData.check_in.substring(11, 16);
       const durationVal = calculateStayDuration(inDate, inTime, checkoutDate, checkoutTime);
-      const rateVal = Number(stayData.room_rate || room.price || 0);
+      const rateVal = Number(checkoutRoomRate === '' ? (stayData.room_rate || room.price || 0) : checkoutRoomRate);
       const roomChargesVal = durationVal.nights * rateVal;
       const subtotalVal = roomChargesVal + Number(checkoutExtraCharges || 0);
       const discountVal = Number(checkoutDiscount || 0);
@@ -251,7 +253,11 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         discount: discountVal,
         extra_charges: Number(checkoutExtraCharges || 0),
         tax_amount: taxVal,
-        grand_total: grandTotalVal
+        grand_total: grandTotalVal,
+        room_rate: rateVal,
+        room_charges: roomChargesVal,
+        subtotal: subtotalVal,
+        total_nights: durationVal.nights
       });
     } catch (err) {
       console.error(err);
@@ -399,7 +405,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '50px' }}>
             <div style={{ width: '320px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                <span>Room Charges:</span>
+                <span>Room Charges ({stayData.total_nights || 1} Night(s) × ₹{Number(stayData.room_rate || room.price).toLocaleString('en-IN')}):</span>
                 <span style={{ fontWeight: '600' }}>₹{Number(stayData.room_charges || (stayData.total_nights || 1) * (stayData.room_rate || room.price)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
               </div>
               {Number(stayData.extra_charges) > 0 && (
@@ -855,6 +861,18 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                         </div>
                       </div>
 
+                      {/* Nightly Room Rate */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Room Rate (₹ / Night) *</label>
+                        <input 
+                          type="number"
+                          value={checkoutRoomRate}
+                          onChange={(e) => setCheckoutRoomRate(e.target.value === '' ? '' : Number(e.target.value))}
+                          className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-primary focus:outline-none"
+                          placeholder="0"
+                        />
+                      </div>
+
                       {/* Extra Charges & Discount adjusters */}
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -898,7 +916,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                         const inDate = stayData.check_in_date || stayData.check_in.substring(0, 10);
                         const inTime = stayData.check_in_time || stayData.check_in.substring(11, 16);
                         const durationVal = calculateStayDuration(inDate, inTime, checkoutDate, checkoutTime);
-                        const rateVal = Number(stayData.room_rate || room.price || 0);
+                        const rateVal = Number(checkoutRoomRate === '' ? (stayData.room_rate || room.price || 0) : checkoutRoomRate);
                         const roomChargesVal = durationVal.nights * rateVal;
                         const subtotalVal = roomChargesVal + Number(checkoutExtraCharges || 0);
                         const discountVal = Number(checkoutDiscount || 0);
@@ -914,7 +932,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                               <span>{durationVal.nights} Night{durationVal.nights > 1 ? 's' : ''} ({durationVal.days} Day{durationVal.days > 1 ? 's' : ''})</span>
                             </div>
                             <div className="flex justify-between text-slate-500 font-semibold">
-                              <span>Room Charges:</span>
+                              <span>Room Charges ({durationVal.nights} Night{durationVal.nights > 1 ? 's' : ''} × ₹{rateVal.toLocaleString('en-IN')}):</span>
                               <span>₹{roomChargesVal.toLocaleString('en-IN')}</span>
                             </div>
                             {Number(checkoutExtraCharges) > 0 && (
