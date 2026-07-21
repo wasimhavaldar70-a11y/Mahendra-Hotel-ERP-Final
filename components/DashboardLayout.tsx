@@ -25,7 +25,8 @@ import {
   Calendar,
   Globe,
   ChevronLeft,
-  MoreHorizontal
+  MoreHorizontal,
+  History
 } from 'lucide-react';
 import { getSessionUser, setSessionUser, supabase, isRealSupabase, db } from '../lib/supabase/client';
 import { User, Hotel } from '../types';
@@ -190,6 +191,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Check In', path: '/check-in', icon: ClipboardSignature },
         { name: 'Check Out', path: '/check-out', icon: DoorClosed },
         { name: 'Payments', path: '/payments', icon: Coins },
+        { name: 'Stay Logs', path: '/stay-logs', icon: History },
         { name: 'Reports', path: '/reports', icon: FilePieChart },
         ...(!isReceptionist ? [{ name: 'Settings', path: '/settings', icon: Settings }] : []),
       ];

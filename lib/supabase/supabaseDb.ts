@@ -1350,6 +1350,43 @@ export const supabaseDb = {
     })) as ExtendedCheckIn[];
   },
 
+  // Get all historical & current stays for Stay Logs (permanent register)
+  getAllStaysForHotel: async (hotelId: string): Promise<ExtendedCheckIn[]> => {
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('check_ins')
+      .select(`
+        *,
+        primary_customer:customers(
+          *,
+          customer_documents(*)
+        ),
+        room:rooms(*),
+        payment:payments(*),
+        guests:check_in_guests(
+          *,
+          customer:customers(*, customer_documents(*))
+        )
+      `)
+      .eq('hotel_id', hotelId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching all stays for hotel:', error.message);
+      return [];
+    }
+
+    return (data || []).map((stay: any) => ({
+      ...stay,
+      primary_customer: stay.primary_customer || undefined,
+      room: stay.room || undefined,
+      payment: Array.isArray(stay.payment) ? stay.payment[0] : (stay.payment || undefined),
+      guests: stay.guests || []
+    })) as ExtendedCheckIn[];
+  },
+
   // Full extended details for Room Modals
   getActiveStayForRoom: async (hotelId: string, roomId: string): Promise<ExtendedCheckIn | null> => {
     if (!supabase) return null;

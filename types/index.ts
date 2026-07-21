@@ -112,6 +112,11 @@ export interface CheckIn {
   discount?: number;
   extra_charges?: number;
   tax_amount?: number;
+  booking_id?: string;
+  booking_source?: string;
+  adults?: number;
+  children?: number;
+  special_requests?: string;
   grand_total?: number;
   actual_checkout?: string;
 }
