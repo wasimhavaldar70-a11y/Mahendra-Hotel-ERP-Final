@@ -194,24 +194,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ...(!isReceptionist ? [{ name: 'Settings', path: '/settings', icon: Settings }] : []),
       ];
 
-  // Bottom nav shows top 4 items + "More" for the rest (non-superadmin)
-  const bottomNavItems = isSuperAdmin
-    ? [{ name: 'Hotels', path: '/super-admin', icon: Building2 }]
-    : [
-        { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { name: 'Check In', path: '/check-in', icon: ClipboardSignature },
-        { name: 'Check Out', path: '/check-out', icon: DoorClosed },
-        { name: 'Rooms', path: '/rooms', icon: BedDouble },
-      ];
-
-  const handleBottomNavTap = () => {
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(8);
-    }
-  };
-
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 has-bottom-nav">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* ── Sidebar - Desktop ──────────────────────────────── */}
       <aside className={`hidden md:flex md:flex-col bg-[#083B36] flex-shrink-0 border-r border-[#0D443E]/30 shadow-none transition-all duration-300 ${
         isCollapsed ? 'md:w-20' : 'md:w-64'
@@ -366,7 +350,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     href={item.path}
                     onClick={() => {
                       setSidebarOpen(false);
-                      handleBottomNavTap();
                     }}
                     className={`flex items-center justify-between px-4 py-3.5 rounded-lg text-sm font-medium transition-all duration-150 active:scale-[0.97] ${
                       isActive 
@@ -406,7 +389,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Header */}
         <header className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-white/90 backdrop-blur-md border-b border-slate-100 h-[60px] sm:h-[70px] sticky top-0 z-40 shadow-sm safe-top">
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Hamburger — only shown on mobile when needed for full menu access */}
+            {/* Hamburger button */}
             <button
               onClick={() => setSidebarOpen(true)}
               className="p-2.5 -ml-1 rounded-xl text-slate-500 hover:bg-slate-50 md:hidden min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-[0.93] active:bg-slate-100 transition-all duration-75"
@@ -456,56 +439,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           {children}
         </main>
       </div>
-
-      {/* ── Mobile Bottom Navigation Bar ─────────────────── */}
-      {!isSuperAdmin && (
-        <nav className="bottom-nav md:hidden" aria-label="Bottom navigation">
-          {bottomNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.path;
-            const hasBadge = item.name === 'Dashboard' && pendingCount > 0;
-
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                onClick={handleBottomNavTap}
-                className={`bottom-nav-item ${isActive ? 'active' : ''}`}
-                aria-label={item.name}
-                aria-current={isActive ? 'page' : undefined}
-              >
-                <span className="relative">
-                  <Icon className={`w-5 h-5 transition-transform duration-75 ${isActive ? 'scale-110' : ''}`} />
-                  {hasBadge && (
-                    <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-red-500 ring-1 ring-white" />
-                  )}
-                </span>
-                <span className={`text-[10px] font-semibold leading-none ${isActive ? 'font-bold' : ''}`}>
-                  {item.name === 'Check In' ? 'Check In' : item.name === 'Check Out' ? 'Check Out' : item.name}
-                </span>
-              </Link>
-            );
-          })}
-
-          {/* More button — opens sidebar drawer for remaining items */}
-          <button
-            type="button"
-            onClick={() => {
-              setSidebarOpen(true);
-              handleBottomNavTap();
-            }}
-            className={`bottom-nav-item ${
-              !bottomNavItems.some(i => i.path === pathname) && pathname !== '/dashboard' 
-                ? 'active' 
-                : ''
-            }`}
-            aria-label="More navigation options"
-          >
-            <MoreHorizontal className="w-5 h-5" />
-            <span className="text-[10px] font-semibold leading-none">More</span>
-          </button>
-        </nav>
-      )}
     </div>
   );
 }
