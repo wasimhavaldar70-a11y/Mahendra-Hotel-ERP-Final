@@ -37,35 +37,108 @@ interface RoomDetailModalProps {
   onStatusChanged: (updatedRoom?: Room) => void;
 }
 
+const getLocalDateString = (d: Date | string = new Date()) => {
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  if (isNaN(dateObj.getTime())) return '';
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getLocalTimeString = (d: Date = new Date()) => {
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
 const calculateStayDuration = (
-  inDate: string,
-  inTime: string,
-  outDate: string,
-  outTime: string
+  inDateStr: string,
+  inTimeStr: string,
+  outDateStr: string,
+  outTimeStr: string
 ) => {
-  if (!inDate || !outDate) return { nights: 0, days: 0 };
+  if (!inDateStr || !outDateStr) return { nights: 1, days: 1 };
   
-  const checkInDT = new Date(`${inDate}T${inTime || '00:00'}`);
-  const checkOutDT = new Date(`${outDate}T${outTime || '00:00'}`);
+  const cleanInDate = inDateStr.substring(0, 10);
+  const cleanOutDate = outDateStr.substring(0, 10);
+
+  const [inY, inM, inD] = cleanInDate.split('-').map(Number);
+  const [outY, outM, outD] = cleanOutDate.split('-').map(Number);
+
+  if (!inY || !inM || !inD || !outY || !outM || !outD) return { nights: 1, days: 1 };
+
+  const inDateObj = new Date(inY, inM - 1, inD);
+  const outDateObj = new Date(outY, outM - 1, outD);
+
+  const diffMs = outDateObj.getTime() - inDateObj.getTime();
+  const dateDiffNights = Math.round(diffMs / (1000 * 60 * 60 * 24));
   
-  if (isNaN(checkInDT.getTime()) || isNaN(checkOutDT.getTime())) {
-    return { nights: 0, days: 0 };
-  }
-  
-  const diffMs = checkOutDT.getTime() - checkInDT.getTime();
-  if (diffMs <= 0) return { nights: 0, days: 0 };
-  
-  const inDateObj = new Date(inDate);
-  const outDateObj = new Date(outDate);
-  inDateObj.setHours(0, 0, 0, 0);
-  outDateObj.setHours(0, 0, 0, 0);
-  const dateDiffMs = outDateObj.getTime() - inDateObj.getTime();
-  const dateDiffNights = Math.round(dateDiffMs / (1000 * 60 * 60 * 24));
-  
-  const nights = dateDiffNights === 0 ? 1 : dateDiffNights;
-  const days = dateDiffNights + 1;
+  const nights = dateDiffNights <= 0 ? 1 : dateDiffNights;
+  const days = nights + 1;
   
   return { nights, days };
+};
+
+const getItemDescriptionPlaceholder = (type: 'Debit' | 'Credit', category: string): string => {
+  if (type === 'Credit') {
+    switch (category) {
+      case 'Discount':
+        return 'e.g. 10% Loyalty Discount / Goodwill Allowance';
+      case 'Payment':
+      default:
+        return 'e.g. Partial Cash Payment / Mid-Stay UPI Transfer';
+    }
+  }
+  
+  switch (category) {
+    case 'Restaurant':
+      return 'e.g. Dinner - Room Service / Food Bill #102';
+    case 'Laundry':
+      return 'e.g. 2 Shirts Dry Cleaning & Pressing';
+    case 'Spa':
+      return 'e.g. Full Body Massage / Gym Pass';
+    case 'Extra Bed':
+      return 'e.g. Additional Mattress / Rollaway Bed';
+    case 'Taxi':
+      return 'e.g. Airport Drop Taxi / Sightseeing Tour';
+    case 'Airport Pickup':
+      return 'e.g. Dabolim Airport Pickup Transfer';
+    case 'Custom Charges':
+      return 'e.g. Late Checkout Fee / Minibar / Pool Towel';
+    case 'Refund':
+      return 'e.g. Refund for Unused Service';
+    default:
+      return 'e.g. Enter item description';
+  }
+};
+
+const getLedgerTotals = (entries: FolioLedger[]) => {
+  let ledgerExtraCharges = 0;
+  let ledgerDiscounts = 0;
+  let ledgerPayments = 0;
+
+  entries.forEach(e => {
+    if (e.status !== 'Active') return;
+    
+    if (e.transaction_type === 'Debit' || Number(e.debit) > 0) {
+      if (e.category !== 'Room Charge' && !e.description?.toLowerCase().includes('room rent')) {
+        ledgerExtraCharges += Number(e.debit || 0);
+      }
+    } else if (e.transaction_type === 'Credit' || Number(e.credit) > 0) {
+      if (e.category === 'Discount') {
+        ledgerDiscounts += Number(e.credit || 0);
+      } else {
+        ledgerPayments += Number(e.credit || 0);
+      }
+    }
+  });
+
+  return {
+    ledgerExtraCharges,
+    ledgerDiscounts,
+    ledgerPayments
+  };
 };
 
 export default function RoomDetailModal({ room, hotelId, onClose, onStatusChanged }: RoomDetailModalProps) {
@@ -140,12 +213,12 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         // Set default extend date (expected checkout + 1 day)
         const expDate = new Date(data.expected_checkout);
         expDate.setDate(expDate.getDate() + 1);
-        setNewCheckoutDate(expDate.toISOString().substring(0, 10));
+        setNewCheckoutDate(getLocalDateString(expDate));
 
         // Initialize checkout details with current stay data & actual local time
         const now = new Date();
-        setCheckoutDate(now.toISOString().substring(0, 10));
-        setCheckoutTime(now.toTimeString().substring(0, 5));
+        setCheckoutDate(getLocalDateString(now));
+        setCheckoutTime(getLocalTimeString(now));
         setCheckoutDiscount(data.discount || 0);
         setCheckoutExtraCharges(data.extra_charges || 0);
         setCheckoutApplyTax(Number(data.tax_amount || 0) > 0);
@@ -245,16 +318,20 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
   const handleCheckoutSubmit = async () => {
     if (!stayData) return;
+    setActionLoading(true);
     try {
-      const inDate = stayData.check_in_date || stayData.check_in.substring(0, 10);
-      const inTime = stayData.check_in_time || stayData.check_in.substring(11, 16);
+      const inDate = stayData.check_in_date || (stayData.check_in ? getLocalDateString(stayData.check_in) : '');
+      const inTime = stayData.check_in_time || (stayData.check_in ? stayData.check_in.substring(11, 16) : '');
       const durationVal = calculateStayDuration(inDate, inTime, checkoutDate, checkoutTime);
+      const ledgerTotals = getLedgerTotals(ledgerEntries);
+
       const rateVal = Number(checkoutRoomRate === '' ? (stayData.room_rate || room.price || 0) : checkoutRoomRate);
       const roomChargesVal = durationVal.nights * rateVal;
-      const subtotalVal = roomChargesVal + Number(checkoutExtraCharges || 0);
-      const discountVal = Number(checkoutDiscount || 0);
-      const taxVal = checkoutApplyTax ? Math.round((subtotalVal - discountVal) * (12 / 100)) : 0;
-      const grandTotalVal = Math.max(0, subtotalVal - discountVal + taxVal);
+      const totalExtraCharges = Number(checkoutExtraCharges || 0) + ledgerTotals.ledgerExtraCharges;
+      const totalDiscount = Number(checkoutDiscount || 0) + ledgerTotals.ledgerDiscounts;
+      const subtotalVal = roomChargesVal + totalExtraCharges;
+      const taxVal = checkoutApplyTax ? Math.round((subtotalVal - totalDiscount) * (12 / 100)) : 0;
+      const grandTotalVal = Math.max(0, subtotalVal - totalDiscount + taxVal);
 
       const updated = { ...room, status: 'Cleaning' as RoomStatus };
       onStatusChanged(updated);
@@ -263,8 +340,8 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
       await db.checkOut(hotelId, stayData.id, paymentMethod, {
         check_out_date: checkoutDate,
         check_out_time: checkoutTime + ':00',
-        discount: discountVal,
-        extra_charges: Number(checkoutExtraCharges || 0),
+        discount: totalDiscount,
+        extra_charges: totalExtraCharges,
         tax_amount: taxVal,
         grand_total: grandTotalVal,
         room_rate: rateVal,
@@ -278,6 +355,8 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
       onStatusChanged(updated);
     } catch (err) {
       console.error(err);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -420,50 +499,70 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
           {/* BILL BREAKDOWN Totals Summary Box aligned Right */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '50px' }}>
-            <div style={{ width: '340px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 12px 0', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', color: '#0f172a', borderBottom: '1px solid #cbd5e1', paddingBottom: '6px' }}>
-                BILL BREAKDOWN
-              </h4>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                <span>Room Rate (Per Night)</span>
-                <span style={{ fontWeight: '600' }}>₹{Number(stayData.room_rate || room.price || 0).toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                <span>Total Nights</span>
-                <span style={{ fontWeight: '600' }}>{stayData.total_nights || 1}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#0f172a', fontWeight: '700' }}>
-                <span>Room Charges</span>
-                <span>₹{Number(stayData.room_charges || (stayData.total_nights || 1) * (stayData.room_rate || room.price)).toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                <span>Extra Charges</span>
-                <span style={{ fontWeight: '600' }}>₹{Number(stayData.extra_charges || 0).toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                <span>Discount</span>
-                <span style={{ fontWeight: '600' }}>₹{Number(stayData.discount || 0).toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
-                <span>Tax (if enabled)</span>
-                <span style={{ fontWeight: '600' }}>₹{Number(stayData.tax_amount || 0).toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ height: '1px', backgroundColor: '#cbd5e1', margin: '8px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
-                <span>Grand Total</span>
-                <span>₹{Number(stayData.grand_total || stayData.payment?.room_price || 0).toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0 0 0', fontSize: '12px', color: '#166534', fontWeight: '700', borderTop: '1px solid #e2e8f0', paddingTop: '6px' }}>
-                <span>Advance Paid</span>
-                <span>- ₹{Number(stayData.payment?.advance || 0).toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0 0 0', fontSize: '14px', fontWeight: '800', color: '#0f172a', borderTop: '2px solid #e2e8f0', paddingTop: '8px' }}>
-                <span>Balance to Settle</span>
-                <span style={{ color: Number(stayData.payment?.pending || 0) > 0 ? '#b91c1c' : '#0f172a' }}>
-                  ₹{Number(stayData.payment?.pending || 0).toLocaleString('en-IN')}
-                </span>
-              </div>
-            </div>
+            {(() => {
+              const inDate = stayData.check_in_date || (stayData.check_in ? getLocalDateString(stayData.check_in) : '');
+              const inTime = stayData.check_in_time || (stayData.check_in ? stayData.check_in.substring(11, 16) : '');
+              const durationVal = calculateStayDuration(inDate, inTime, checkoutDate || getLocalDateString(), checkoutTime || getLocalTimeString());
+              const ledgerTotals = getLedgerTotals(ledgerEntries);
+              const rateVal = Number(checkoutRoomRate === '' ? (stayData.room_rate || room.price || 0) : checkoutRoomRate);
+              const roomChargesVal = durationVal.nights * rateVal;
+              const totalExtraCharges = Number(checkoutExtraCharges || 0) + ledgerTotals.ledgerExtraCharges;
+              const totalDiscount = Number(checkoutDiscount || 0) + ledgerTotals.ledgerDiscounts;
+              const subtotalVal = roomChargesVal + totalExtraCharges;
+              const taxVal = checkoutApplyTax ? Math.round((subtotalVal - totalDiscount) * (12 / 100)) : 0;
+              const grandTotalVal = Math.max(0, subtotalVal - totalDiscount + taxVal);
+              const advancePaidVal = ledgerTotals.ledgerPayments > 0 
+                ? ledgerTotals.ledgerPayments 
+                : Number(stayData.payment?.advance || 0);
+              const pendingVal = Math.max(0, grandTotalVal - advancePaidVal);
+
+              return (
+                <div style={{ width: '340px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', color: '#0f172a', borderBottom: '1px solid #cbd5e1', paddingBottom: '6px' }}>
+                    BILL BREAKDOWN
+                  </h4>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                    <span>Room Rate (Per Night)</span>
+                    <span style={{ fontWeight: '600' }}>₹{rateVal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                    <span>Total Nights</span>
+                    <span style={{ fontWeight: '600' }}>{durationVal.nights}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#0f172a', fontWeight: '700' }}>
+                    <span>Room Charges</span>
+                    <span>₹{roomChargesVal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                    <span>Extra Charges</span>
+                    <span style={{ fontWeight: '600' }}>₹{totalExtraCharges.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                    <span>Discount</span>
+                    <span style={{ fontWeight: '600' }}>₹{totalDiscount.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '12px', color: '#475569' }}>
+                    <span>Tax (if enabled)</span>
+                    <span style={{ fontWeight: '600' }}>₹{taxVal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div style={{ height: '1px', backgroundColor: '#cbd5e1', margin: '8px 0' }}></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '6px 0', fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
+                    <span>Grand Total</span>
+                    <span>₹{grandTotalVal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0 0 0', fontSize: '12px', color: '#166534', fontWeight: '700', borderTop: '1px solid #e2e8f0', paddingTop: '6px' }}>
+                    <span>Advance / Payments Paid</span>
+                    <span>- ₹{advancePaidVal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', margin: '8px 0 0 0', fontSize: '14px', fontWeight: '800', color: '#0f172a', borderTop: '2px solid #e2e8f0', paddingTop: '8px' }}>
+                    <span>Balance to Settle</span>
+                    <span style={{ color: pendingVal > 0 ? '#b91c1c' : '#0f172a' }}>
+                      ₹{pendingVal.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Signatures section */}
@@ -550,7 +649,11 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-slate-150 grid grid-cols-2 gap-2 text-xs">
+                    <div className="pt-3 border-t border-slate-150 grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Purpose of Stay</span>
+                        <span className="font-bold text-slate-700">{stayData.purpose_of_stay || 'Tourism'}</span>
+                      </div>
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Arrival From</span>
                         <span className="font-bold text-slate-700">{stayData.arrival_from || 'N/A'}</span>
@@ -616,20 +719,40 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                   {/* Bill Details */}
                   <div className="space-y-4">
                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Guest Folio & Ledger Balance</h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="p-3 rounded-xl border border-slate-200/60 text-center bg-white shadow-sm">
-                        <span className="text-[10px] font-bold text-slate-400 block">Total Charges</span>
-                        <span className="text-sm font-bold text-slate-800 mt-1">₹{Number(stayData.payment?.room_price || 0).toLocaleString('en-IN')}</span>
-                      </div>
-                      <div className="p-3 rounded-xl border border-green-150 text-center bg-green-50/10">
-                        <span className="text-[10px] font-bold text-green-600 block">Total Payments</span>
-                        <span className="text-sm font-bold text-green-600 mt-1">₹{Number(stayData.payment?.advance || 0).toLocaleString('en-IN')}</span>
-                      </div>
-                      <div className="p-3 rounded-xl border border-red-150 text-center bg-red-50/10">
-                        <span className="text-[10px] font-bold text-red-600 block">Outstanding</span>
-                        <span className="text-sm font-bold text-red-650 mt-1">₹{Number(stayData.payment?.pending || 0).toLocaleString('en-IN')}</span>
-                      </div>
-                    </div>
+                    {(() => {
+                      const inDate = stayData.check_in_date || (stayData.check_in ? getLocalDateString(stayData.check_in) : '');
+                      const inTime = stayData.check_in_time || (stayData.check_in ? stayData.check_in.substring(11, 16) : '');
+                      const durationVal = calculateStayDuration(inDate, inTime, checkoutDate || getLocalDateString(), checkoutTime || getLocalTimeString());
+                      const ledgerTotals = getLedgerTotals(ledgerEntries);
+                      const rateVal = Number(checkoutRoomRate === '' ? (stayData.room_rate || room.price || 0) : checkoutRoomRate);
+                      const roomChargesVal = durationVal.nights * rateVal;
+                      const totalExtraCharges = Number(checkoutExtraCharges || 0) + ledgerTotals.ledgerExtraCharges;
+                      const totalDiscount = Number(checkoutDiscount || 0) + ledgerTotals.ledgerDiscounts;
+                      const subtotalVal = roomChargesVal + totalExtraCharges;
+                      const taxVal = checkoutApplyTax ? Math.round((subtotalVal - totalDiscount) * (12 / 100)) : 0;
+                      const grandTotalVal = Math.max(0, subtotalVal - totalDiscount + taxVal);
+                      const advancePaidVal = ledgerTotals.ledgerPayments > 0 
+                        ? ledgerTotals.ledgerPayments 
+                        : Number(stayData.payment?.advance || 0);
+                      const pendingVal = Math.max(0, grandTotalVal - advancePaidVal);
+
+                      return (
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="p-3 rounded-xl border border-slate-200/60 text-center bg-white shadow-sm">
+                            <span className="text-[10px] font-bold text-slate-400 block">Total Charges</span>
+                            <span className="text-sm font-bold text-slate-800 mt-1">₹{grandTotalVal.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="p-3 rounded-xl border border-green-150 text-center bg-green-50/10">
+                            <span className="text-[10px] font-bold text-green-600 block">Total Payments</span>
+                            <span className="text-sm font-bold text-green-600 mt-1">₹{advancePaidVal.toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="p-3 rounded-xl border border-red-150 text-center bg-red-50/10">
+                            <span className="text-[10px] font-bold text-red-600 block">Outstanding</span>
+                            <span className="text-sm font-bold text-red-650 mt-1">₹{pendingVal.toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Folio Ledger details panel */}
                     <div className="border border-slate-200/80 rounded-xl overflow-hidden bg-white shadow-sm">
@@ -771,7 +894,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                                       type="text"
                                       value={newEntry.description}
                                       onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
-                                      placeholder="e.g. Dinner - Room Service"
+                                      placeholder={getItemDescriptionPlaceholder(newEntry.type, newEntry.category)}
                                       className="w-full text-xs font-medium border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-primary bg-white"
                                       required
                                     />
@@ -972,16 +1095,20 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
                       {/* Dynamic billing calculation breakdown */}
                       {(() => {
-                        const inDate = stayData.check_in_date || stayData.check_in.substring(0, 10);
-                        const inTime = stayData.check_in_time || stayData.check_in.substring(11, 16);
-                        const durationVal = calculateStayDuration(inDate, inTime, checkoutDate, checkoutTime);
+                        const inDate = stayData.check_in_date || (stayData.check_in ? getLocalDateString(stayData.check_in) : '');
+                        const inTime = stayData.check_in_time || (stayData.check_in ? stayData.check_in.substring(11, 16) : '');
+                        const durationVal = calculateStayDuration(inDate, inTime, checkoutDate || getLocalDateString(), checkoutTime || getLocalTimeString());
+                        const ledgerTotals = getLedgerTotals(ledgerEntries);
                         const rateVal = Number(checkoutRoomRate === '' ? (stayData.room_rate || room.price || 0) : checkoutRoomRate);
                         const roomChargesVal = durationVal.nights * rateVal;
-                        const subtotalVal = roomChargesVal + Number(checkoutExtraCharges || 0);
-                        const discountVal = Number(checkoutDiscount || 0);
-                        const taxVal = checkoutApplyTax ? Math.round((subtotalVal - discountVal) * (12 / 100)) : 0;
-                        const grandTotalVal = Math.max(0, subtotalVal - discountVal + taxVal);
-                        const advancePaidVal = Number(stayData.payment?.advance || 0);
+                        const totalExtraCharges = Number(checkoutExtraCharges || 0) + ledgerTotals.ledgerExtraCharges;
+                        const totalDiscount = Number(checkoutDiscount || 0) + ledgerTotals.ledgerDiscounts;
+                        const subtotalVal = roomChargesVal + totalExtraCharges;
+                        const taxVal = checkoutApplyTax ? Math.round((subtotalVal - totalDiscount) * (12 / 100)) : 0;
+                        const grandTotalVal = Math.max(0, subtotalVal - totalDiscount + taxVal);
+                        const advancePaidVal = ledgerTotals.ledgerPayments > 0 
+                          ? ledgerTotals.ledgerPayments 
+                          : Number(stayData.payment?.advance || 0);
                         const pendingVal = Math.max(0, grandTotalVal - advancePaidVal);
 
                         return (
@@ -1003,11 +1130,11 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                             </div>
                             <div className="flex justify-between text-slate-600 font-semibold">
                               <span>Extra Charges</span>
-                              <span>₹{Number(checkoutExtraCharges || 0).toLocaleString('en-IN')}</span>
+                              <span>₹{totalExtraCharges.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between text-slate-600 font-semibold">
                               <span>Discount</span>
-                              <span>₹{Number(checkoutDiscount || 0).toLocaleString('en-IN')}</span>
+                              <span>₹{totalDiscount.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between text-slate-600 font-semibold">
                               <span>Tax (if enabled)</span>
@@ -1019,7 +1146,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                               <span>₹{grandTotalVal.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between text-emerald-700 font-bold pt-1.5 border-t border-slate-200">
-                              <span>Advance Paid</span>
+                              <span>Advance / Payments Paid</span>
                               <span>- ₹{advancePaidVal.toLocaleString('en-IN')}</span>
                             </div>
                             <div className="flex justify-between font-black text-sm pt-1">
