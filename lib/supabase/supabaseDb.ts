@@ -38,15 +38,15 @@ const compressBase64ToWebP = async (
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      let maxWidth = 1600;
-      let quality = 0.8;
+      let maxWidth = 1000;
+      let quality = 0.6;
       
       if (type === 'room' || type === 'hero' || type === 'gallery') {
-        maxWidth = 1920;
-        quality = 0.85;
+        maxWidth = 1200;
+        quality = 0.7;
       } else if (type === 'logo') {
-        maxWidth = 512;
-        quality = 0.8;
+        maxWidth = 256;
+        quality = 0.7;
       }
 
       let width = img.width;
