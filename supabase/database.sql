@@ -1477,6 +1477,14 @@ BEGIN
       proceeding_to = COALESCE(p_proceeding_to, proceeding_to)
   WHERE id = p_checkin_id AND hotel_id = p_hotel_id;
 
+  -- 2.5 Update the initial Room Charge ledger entry to reflect final charges and nights
+  UPDATE public.folio_ledger
+  SET debit = COALESCE(p_room_charges, debit),
+      description = 'Final Room Rent (' || COALESCE(p_total_nights, 1) || ' Night(s) @ ₹' || COALESCE(p_room_rate, (debit / COALESCE(p_total_nights, 1))) || ')'
+  WHERE checkin_id = p_checkin_id
+    AND category = 'Room Charge'
+    AND (description = 'Initial Room Rent' OR description LIKE 'Final Room Rent%');
+
   -- 3. Calculate remaining pending balance from payments table
   SELECT pending INTO v_pending FROM public.payments
   WHERE checkin_id = p_checkin_id;

@@ -264,6 +264,8 @@ function CheckInFormContent() {
     const room = rooms.find(r => r.id === roomId);
     if (room) {
       setCustomRoomPrice(Number(room.price));
+    } else {
+      setCustomRoomPrice('');
     }
   };
 
