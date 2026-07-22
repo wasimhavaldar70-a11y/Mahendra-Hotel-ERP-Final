@@ -96,11 +96,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       return;
     }
 
-    setCurrentUser(session.user);
-    setCurrentHotel(session.hotel);
-    setLoading(false);
-
     if (session.hotel) {
+      if (session.hotel.subscription_status === 'Suspended') {
+        setSessionUser(null);
+        if (supabase) supabase.auth.signOut();
+        router.push('/login?error=suspended');
+        return;
+      }
+      if (session.hotel.subscription_status === 'Expired') {
+        setSessionUser(null);
+        if (supabase) supabase.auth.signOut();
+        router.push('/login?error=expired');
+        return;
+      }
+
+      setCurrentUser(session.user);
+      setCurrentHotel(session.hotel);
+      setLoading(false);
       loadPendingCount(session.hotel.id);
 
       const channel = new BroadcastChannel('hotelflow-sync');

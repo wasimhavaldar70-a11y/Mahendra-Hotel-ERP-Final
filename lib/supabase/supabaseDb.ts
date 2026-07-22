@@ -334,6 +334,18 @@ export const supabaseDb = {
         .select('*')
         .eq('id', user.hotel_id)
         .maybeSingle();
+
+      if (hotel) {
+        if (hotel.subscription_status === 'Suspended') {
+          await supabase.auth.signOut();
+          throw new Error('SUSPENDED_ACCOUNT: Your hotel account has been suspended by the Superadmin. Please contact support@staydesk.com to reactivate access.');
+        }
+        if (hotel.subscription_status === 'Expired') {
+          await supabase.auth.signOut();
+          throw new Error('EXPIRED_SUBSCRIPTION: Your hotel subscription has expired. Please renew your plan to continue using StayDesk CRM.');
+        }
+      }
+
       return { user, hotel: hotel || null, access_token };
     }
 

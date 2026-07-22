@@ -22,7 +22,22 @@ export default function LoginPage() {
     // Check for URL query parameter error
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('error') === 'no_hotel') {
+      const errParam = urlParams.get('error');
+      if (errParam === 'suspended') {
+        setError('Account Suspended: Your hotel account has been suspended by the Superadmin. Please contact support@staydesk.com to reactivate access.');
+        setEmail('');
+        setPassword('');
+        setSessionUser(null);
+        return;
+      }
+      if (errParam === 'expired') {
+        setError('Subscription Expired: Your hotel subscription has expired. Please renew your plan to log in.');
+        setEmail('');
+        setPassword('');
+        setSessionUser(null);
+        return;
+      }
+      if (errParam === 'no_hotel') {
         setError('Error: No hotel linked to this user account. Credentials cleared. Please log in with a valid hotel account.');
         setEmail('');
         setPassword('');
@@ -37,6 +52,20 @@ export default function LoginPage() {
       if (session.user.role === 'superadmin') {
         router.push('/super-admin');
       } else if (session.hotel) {
+        if (session.hotel.subscription_status === 'Suspended') {
+          setSessionUser(null);
+          setEmail('');
+          setPassword('');
+          setError('Account Suspended: Your hotel account has been suspended by the Superadmin.');
+          return;
+        }
+        if (session.hotel.subscription_status === 'Expired') {
+          setSessionUser(null);
+          setEmail('');
+          setPassword('');
+          setError('Subscription Expired: Your hotel subscription has expired. Please renew your plan to log in.');
+          return;
+        }
         router.push('/dashboard');
       } else {
         // Session has no hotel - clear credentials & session to prevent redirect loop
@@ -73,6 +102,20 @@ export default function LoginPage() {
           setSessionUser(res);
           router.push('/super-admin');
         } else if (res.hotel) {
+          if (res.hotel.subscription_status === 'Suspended') {
+            setEmail('');
+            setPassword('');
+            setSessionUser(null);
+            setError('Account Suspended: Your hotel account has been suspended by the Superadmin. Please contact support@staydesk.com.');
+            return;
+          }
+          if (res.hotel.subscription_status === 'Expired') {
+            setEmail('');
+            setPassword('');
+            setSessionUser(null);
+            setError('Subscription Expired: Your hotel subscription has expired. Please renew your plan to continue using StayDesk CRM.');
+            return;
+          }
           setSessionUser(res);
           router.push('/dashboard');
         } else {
@@ -85,8 +128,18 @@ export default function LoginPage() {
       } else {
         setError('Invalid credentials');
       }
-    } catch (err) {
-      setError('Something went wrong. Please try again.');
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setEmail('');
+      setPassword('');
+      setSessionUser(null);
+      if (msg.includes('SUSPENDED_ACCOUNT') || msg.includes('suspended')) {
+        setError('Account Suspended: Your hotel account has been suspended by the Superadmin. Please contact support@staydesk.com.');
+      } else if (msg.includes('EXPIRED_SUBSCRIPTION') || msg.includes('expired')) {
+        setError('Subscription Expired: Your hotel subscription has expired. Please renew your plan.');
+      } else {
+        setError(msg || 'Invalid credentials or login failed.');
+      }
     } finally {
       setLoading(false);
     }

@@ -55,6 +55,36 @@ export async function POST(request: Request) {
 
     const updatedHotel = updateRes.rows[0];
 
+    // 4.5 Ban or Unban associated users in Supabase Auth so authentication layer rejects suspended users
+    const linkedUsersRes = await pgClient.query(
+      `SELECT id FROM public.users WHERE hotel_id = $1;`,
+      [hotel_id]
+    );
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (serviceRoleKey && supabaseUrl) {
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+        for (const u of linkedUsersRes.rows) {
+          if (status === 'Suspended' || status === 'Expired') {
+            await supabaseAdmin.auth.admin.updateUserById(u.id, {
+              ban_duration: '876600h' // Ban user for 100 years
+            });
+          } else if (status === 'Active') {
+            await supabaseAdmin.auth.admin.updateUserById(u.id, {
+              ban_duration: 'none' // Unban user
+            });
+          }
+        }
+      } catch (authBanErr) {
+        console.error('Failed to update auth ban duration for linked hotel users:', authBanErr);
+      }
+    }
+
     logger.info('Application', `Hotel status updated to ${status} for hotel: ${updatedHotel.hotel_name} (${hotel_id})`, {
       userId: user.id,
       hotelId: hotel_id,
