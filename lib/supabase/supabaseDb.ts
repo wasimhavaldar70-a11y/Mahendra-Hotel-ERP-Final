@@ -136,11 +136,18 @@ const uploadRoomImageToStorage = async (hotelId: string, roomId: string, base64D
   }
 };
 
-// Helper: Get pre-signed URL for storage path
+// Helper: Get pre-signed URL for storage path with in-memory TTL caching
+const signedUrlCacheMap = new Map<string, { url: string; expiresAt: number }>();
+
 const resolveImageUrl = async (imagePath: string | null | undefined): Promise<string> => {
   if (!imagePath) return '';
   if (imagePath.startsWith('data:') || imagePath.startsWith('http')) return imagePath;
   if (!supabase) return '';
+
+  const cached = signedUrlCacheMap.get(imagePath);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.url;
+  }
 
   const isPublicAsset = imagePath.includes('/rooms/') || imagePath.includes('/gallery/') || imagePath.includes('/hero/') || imagePath.includes('hotel-assets');
   const bucketName = isPublicAsset ? 'hotel-assets' : 'customer-documents';
@@ -148,16 +155,22 @@ const resolveImageUrl = async (imagePath: string | null | undefined): Promise<st
   try {
     if (isPublicAsset) {
       const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
-      return pubData.publicUrl || '';
+      const url = pubData.publicUrl || '';
+      if (url) signedUrlCacheMap.set(imagePath, { url, expiresAt: Date.now() + 86400000 });
+      return url;
     }
 
     const { data, error } = await supabase.storage.from(bucketName).createSignedUrl(imagePath, 3600);
     if (error || !data) {
-      // Fallback to publicUrl if signing fails
       const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
-      return pubData.publicUrl || '';
+      const url = pubData.publicUrl || '';
+      return url;
     }
-    return data.signedUrl || '';
+    const signedUrl = data.signedUrl || '';
+    if (signedUrl) {
+      signedUrlCacheMap.set(imagePath, { url: signedUrl, expiresAt: Date.now() + 3000000 }); // 50 mins cache
+    }
+    return signedUrl;
   } catch (e) {
     const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(imagePath);
     return pubData.publicUrl || '';
@@ -700,30 +713,59 @@ export const supabaseDb = {
     const q = query.trim();
     if (!q) return [];
 
-    const { data, error } = await supabase
-      .from('customers')
-      .select(`
-        *,
-        customer_documents(*),
-        check_ins(id, check_in, expected_checkout, status, payments(pending))
-      `)
-      .eq('hotel_id', hotelId)
-      .is('deleted_at', null)
-      .or(`full_name.ilike.%${q}%,phone.like.%${q}%`);
+    // Query matching customers directly by name, phone, email, vehicle number OR by document number in parallel
+    const [custRes, docRes] = await Promise.all([
+      supabase
+        .from('customers')
+        .select(`
+          *,
+          customer_documents(id, customer_id, document_type, document_number, is_primary, upload_date),
+          check_ins(id, check_in, expected_checkout, status, payments(pending))
+        `)
+        .eq('hotel_id', hotelId)
+        .is('deleted_at', null)
+        .or(`full_name.ilike.%${q}%,phone.like.%${q}%,email.ilike.%${q}%,vehicle_number.ilike.%${q}%`)
+        .limit(25),
+      supabase
+        .from('customer_documents')
+        .select('customer_id')
+        .ilike('document_number', `%${q}%`)
+        .limit(25)
+    ]);
 
-    if (error || !data) return [];
+    let customersList = custRes.data || [];
+    const docCustIds = (docRes.data || []).map(d => d.customer_id).filter(Boolean);
 
-    const results = data.map((c: any) => {
+    if (docCustIds.length > 0) {
+      const existingIds = new Set(customersList.map(c => c.id));
+      const missingIds = docCustIds.filter(id => !existingIds.has(id));
+      if (missingIds.length > 0) {
+        const { data: additionalCusts } = await supabase
+          .from('customers')
+          .select(`
+            *,
+            customer_documents(id, customer_id, document_type, document_number, is_primary, upload_date),
+            check_ins(id, check_in, expected_checkout, status, payments(pending))
+          `)
+          .eq('hotel_id', hotelId)
+          .in('id', missingIds)
+          .is('deleted_at', null);
+
+        if (additionalCusts && additionalCusts.length > 0) {
+          customersList = [...customersList, ...additionalCusts];
+        }
+      }
+    }
+
+    return customersList.map((c: any) => {
       const docs = c.customer_documents || [];
       const stays = c.check_ins || [];
       const stayCount = stays.length;
 
-      // Last Visit
       const completedStays = stays.filter((s: any) => s.status === 'Completed');
       completedStays.sort((a: any, b: any) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
       const lastVisit = completedStays.length > 0 ? completedStays[0].check_in : null;
 
-      // Outstanding Balance (pending payments from active stays)
       let pendingBalance = 0;
       const activeStays = stays.filter((s: any) => s.status === 'Active');
       activeStays.forEach((s: any) => {
@@ -733,49 +775,49 @@ export const supabaseDb = {
         }
       });
 
-      const customerInfo: Customer = {
-        id: c.id,
-        hotel_id: c.hotel_id,
-        full_name: c.full_name,
-        phone: c.phone,
-        gender: c.gender,
-        address: c.address,
-        city: c.city,
-        state: c.state,
-        country: c.country,
-        email: c.email,
-        vehicle_number: c.vehicle_number,
-        emergency_contact: c.emergency_contact,
-        nationality: c.nationality,
-        created_at: c.created_at
-      };
-
       return {
-        customer: customerInfo,
+        customer: {
+          id: c.id,
+          hotel_id: c.hotel_id,
+          full_name: c.full_name,
+          phone: c.phone,
+          gender: c.gender,
+          address: c.address,
+          city: c.city,
+          state: c.state,
+          country: c.country,
+          email: c.email,
+          vehicle_number: c.vehicle_number,
+          emergency_contact: c.emergency_contact,
+          nationality: c.nationality,
+          created_at: c.created_at
+        },
         docs,
         stayCount,
         lastVisit,
         pendingBalance
       };
     });
-
-    return results;
   },
 
   getCustomerByPhoneOrAadhar: async (hotelId: string, identifier: string): Promise<{ customer: Customer; docs: CustomerDocument[]; stayCount: number; lastVisit: string | null; pendingBalance: number } | null> => {
     if (!supabase) return null;
     const cleanId = identifier.trim();
+    if (!cleanId) return null;
 
-    // 1. Fetch customer by phone
+    // Single query fetching customer with documents, check_ins, and payments
     let { data: customer, error } = await supabase
       .from('customers')
-      .select('*')
+      .select(`
+        *,
+        customer_documents(*),
+        check_ins(id, check_in, expected_checkout, status, payments(pending))
+      `)
       .eq('hotel_id', hotelId)
       .eq('phone', cleanId)
       .is('deleted_at', null)
       .maybeSingle();
 
-    // 2. If not found by phone, search through document numbers
     if (!customer) {
       const { data: docData } = await supabase
         .from('customer_documents')
@@ -786,7 +828,11 @@ export const supabaseDb = {
       if (docData && docData.length > 0) {
         const { data: custByDoc } = await supabase
           .from('customers')
-          .select('*')
+          .select(`
+            *,
+            customer_documents(*),
+            check_ins(id, check_in, expected_checkout, status, payments(pending))
+          `)
           .eq('hotel_id', hotelId)
           .eq('id', docData[0].customer_id)
           .is('deleted_at', null)
@@ -797,44 +843,22 @@ export const supabaseDb = {
 
     if (!customer) return null;
 
-    // 3. Fetch documents
-    const { data: docs } = await supabase
-      .from('customer_documents')
-      .select('*')
-      .eq('customer_id', customer.id);
+    const resolvedDocs = await resolveDocs(customer.customer_documents || []);
+    const stays = customer.check_ins || [];
+    const stayCount = stays.length;
 
-    const resolvedDocs = await resolveDocs(docs);
-
-    // 4. Fetch stays and payments for stats
-    const { data: stays } = await supabase
-      .from('check_ins')
-      .select('id, room_id, status, check_in')
-      .eq('hotel_id', hotelId)
-      .eq('primary_customer_id', customer.id)
-      .is('deleted_at', null);
-
-    const customerStays = stays || [];
-    const stayCount = customerStays.length;
-
-    // Last Visit
-    const completedStays = customerStays.filter(s => s.status === 'Completed');
-    completedStays.sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
+    const completedStays = stays.filter((s: any) => s.status === 'Completed');
+    completedStays.sort((a: any, b: any) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
     const lastVisit = completedStays.length > 0 ? completedStays[0].check_in : null;
 
-    // Outstanding Balance (pending payments from active stays)
     let pendingBalance = 0;
-    const activeStays = customerStays.filter(s => s.status === 'Active');
-    if (activeStays.length > 0) {
-      const activeIds = activeStays.map(s => s.id);
-      const { data: activePayments } = await supabase
-        .from('payments')
-        .select('pending')
-        .in('checkin_id', activeIds);
-
-      activePayments?.forEach(p => {
-        pendingBalance += Number(p.pending);
-      });
-    }
+    const activeStays = stays.filter((s: any) => s.status === 'Active');
+    activeStays.forEach((s: any) => {
+      const pay = Array.isArray(s.payments) ? s.payments[0] : s.payments;
+      if (pay) {
+        pendingBalance += Number(pay.pending || 0);
+      }
+    });
 
     return {
       customer,
@@ -1451,56 +1475,35 @@ export const supabaseDb = {
     }
   },
 
-  // Full extended details for Room Modals
+  // Full extended details for Room Modals (Single Consolidated Query for Maximum Performance)
   getActiveStayForRoom: async (hotelId: string, roomId: string): Promise<ExtendedCheckIn | null> => {
     if (!supabase) return null;
 
-    // Fetch active stay (excluding soft deleted)
-    const { data: activeStay } = await supabase
+    // Fetch active stay with nested room, primary customer with documents, payment, and check-in guests in 1 single relational query
+    const { data: activeStay, error } = await supabase
       .from('check_ins')
-      .select('*')
+      .select(`
+        *,
+        room:rooms(*),
+        primary_customer:customers(*, customer_documents(*)),
+        payment:payments(*),
+        check_in_guests(*, customers(*, customer_documents(*)))
+      `)
       .eq('hotel_id', hotelId)
       .eq('room_id', roomId)
       .eq('status', 'Active')
       .is('deleted_at', null)
       .maybeSingle();
 
-    if (!activeStay) return null;
+    if (error || !activeStay) return null;
 
-    // Fetch primary customer with documents (excluding soft deleted)
-    const { data: primaryCustomer } = await supabase
-      .from('customers')
-      .select('*, customer_documents(*)')
-      .eq('id', activeStay.primary_customer_id)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (primaryCustomer && primaryCustomer.customer_documents) {
-      primaryCustomer.customer_documents = await resolveDocs(primaryCustomer.customer_documents);
+    const primaryCust = activeStay.primary_customer;
+    if (primaryCust && primaryCust.customer_documents) {
+      primaryCust.customer_documents = await resolveDocs(primaryCust.customer_documents);
     }
 
-    // Fetch payment record
-    const { data: payment } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('checkin_id', activeStay.id)
-      .maybeSingle();
-
-    // Fetch stay guests joined with customers and their documents
-    const { data: stayGuests } = await supabase
-      .from('check_in_guests')
-      .select('*, customers(*, customer_documents(*))')
-      .eq('checkin_id', activeStay.id);
-
-    // Fetch room details (excluding soft deleted)
-    const { data: room } = await supabase
-      .from('rooms')
-      .select('*')
-      .eq('id', roomId)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    const formattedGuests = await Promise.all((stayGuests || []).map(async g => {
+    const rawGuests = activeStay.check_in_guests || [];
+    const formattedGuests = await Promise.all(rawGuests.map(async (g: any) => {
       const cust = g.customers;
       if (cust && cust.customer_documents) {
         cust.customer_documents = await resolveDocs(cust.customer_documents);
@@ -1516,12 +1519,14 @@ export const supabaseDb = {
       };
     }));
 
+    const paymentRecord = Array.isArray(activeStay.payment) ? activeStay.payment[0] : activeStay.payment;
+
     return {
       ...activeStay,
-      room: room || undefined,
-      primary_customer: primaryCustomer || undefined,
+      room: activeStay.room || undefined,
+      primary_customer: primaryCust || undefined,
       guests: formattedGuests,
-      payment: payment || undefined
+      payment: paymentRecord || undefined
     };
   },
 

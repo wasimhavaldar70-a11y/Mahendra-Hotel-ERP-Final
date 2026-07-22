@@ -1674,6 +1674,18 @@ CREATE INDEX IF NOT EXISTS idx_check_ins_status ON public.check_ins(status);
 CREATE INDEX IF NOT EXISTS idx_customers_full_name_trgm ON public.customers USING gin (full_name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_customers_phone_trgm ON public.customers USING gin (phone gin_trgm_ops);
 
+-- High-Performance Composite B-Tree & Partial Indexes
+CREATE INDEX IF NOT EXISTS idx_customers_hotel_phone ON public.customers (hotel_id, phone) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_customers_hotel_name ON public.customers (hotel_id, full_name) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_cust_docs_number ON public.customer_documents (document_number);
+CREATE INDEX IF NOT EXISTS idx_cust_docs_customer ON public.customer_documents (customer_id);
+CREATE INDEX IF NOT EXISTS idx_checkins_active_room ON public.check_ins (hotel_id, room_id, status) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_checkins_customer ON public.check_ins (primary_customer_id, status) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_folio_ledger_checkin ON public.folio_ledger (checkin_id, status);
+CREATE INDEX IF NOT EXISTS idx_folio_ledger_hotel ON public.folio_ledger (hotel_id);
+CREATE INDEX IF NOT EXISTS idx_payments_checkin ON public.payments (checkin_id);
+
+
 
 
 
