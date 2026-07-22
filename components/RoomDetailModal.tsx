@@ -215,10 +215,16 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         expDate.setDate(expDate.getDate() + 1);
         setNewCheckoutDate(getLocalDateString(expDate));
 
-        // Initialize checkout details with current stay data & actual local time
+        // Initialize checkout details with expected checkout date if in future / today, or current local time if overdue
         const now = new Date();
-        setCheckoutDate(getLocalDateString(now));
-        setCheckoutTime(getLocalTimeString(now));
+        const expectedCheckoutObj = data.expected_checkout ? new Date(data.expected_checkout) : null;
+        const validExpectedObj = expectedCheckoutObj && !isNaN(expectedCheckoutObj.getTime()) ? expectedCheckoutObj : null;
+        
+        // Default checkoutDate to expected checkout date unless stay is overdue
+        const defaultCheckoutObj = validExpectedObj ? (now > validExpectedObj ? now : validExpectedObj) : now;
+
+        setCheckoutDate(getLocalDateString(defaultCheckoutObj));
+        setCheckoutTime(validExpectedObj ? getLocalTimeString(validExpectedObj) : getLocalTimeString(now));
         setCheckoutDiscount(data.discount || 0);
         setCheckoutExtraCharges(data.extra_charges || 0);
         setCheckoutApplyTax(Number(data.tax_amount || 0) > 0);
@@ -460,7 +466,13 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                 </span>
 
                 <span style={{ fontWeight: '500' }}>Nights Stayed:</span>
-                <span style={{ fontWeight: '700', color: '#0f172a' }}>{stayData.total_nights || 1} Night(s)</span>
+                <span style={{ fontWeight: '700', color: '#0f172a' }}>
+                  {(() => {
+                    const inDate = stayData.check_in_date || (stayData.check_in ? getLocalDateString(stayData.check_in) : '');
+                    const inTime = stayData.check_in_time || (stayData.check_in ? stayData.check_in.substring(11, 16) : '');
+                    return calculateStayDuration(inDate, inTime, checkoutDate || getLocalDateString(), checkoutTime || getLocalTimeString()).nights;
+                  })()} Night(s)
+                </span>
 
                 <span style={{ fontWeight: '500' }}>Nightly Rate:</span>
                 <span style={{ fontWeight: '700', color: '#0f172a' }}>₹{Number(stayData.room_rate || room.price).toLocaleString('en-IN')}</span>
