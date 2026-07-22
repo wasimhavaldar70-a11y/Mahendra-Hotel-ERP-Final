@@ -68,11 +68,18 @@ export async function POST(request: Request) {
 
     const lowercaseEmail = email.toLowerCase().trim();
 
-    // 4. Email validation step across public.users and auth.users
-    const emailCheck = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
-    const authEmailCheck = await pgClient.query('SELECT id FROM auth.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
-    if (emailCheck.rows.length > 0 || authEmailCheck.rows.length > 0) {
-      return NextResponse.json({ error: 'Email address is already in use' }, { status: 400 });
+    // 4. Email validation step: check if an active hotel is already registered to this email
+    const hotelCheck = await pgClient.query('SELECT id FROM public.hotels WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+    if (hotelCheck.rows.length > 0) {
+      return NextResponse.json({ error: 'A hotel account with this email address already exists.' }, { status: 400 });
+    }
+
+    // Automatically clean up any unlinked/orphaned user records with the same email from incomplete past attempts
+    const orphanedUsers = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1) AND hotel_id IS NULL;', [lowercaseEmail]);
+    if (orphanedUsers.rows.length > 0) {
+      for (const row of orphanedUsers.rows) {
+        await pgClient.query('DELETE FROM public.users WHERE id = $1;', [row.id]);
+      }
     }
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
