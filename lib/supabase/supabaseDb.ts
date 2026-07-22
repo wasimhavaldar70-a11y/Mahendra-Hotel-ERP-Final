@@ -387,17 +387,28 @@ export const supabaseDb = {
   },
 
   updateHotelStatus: async (id: string, status: 'Active' | 'Expired' | 'Suspended'): Promise<Hotel | null> => {
-    if (!supabase) return null;
-    const { data, error } = await supabase
-      .from('hotels')
-      .update({ subscription_status: status })
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) return null;
+    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
+    const token = session?.access_token || '';
+
+    const response = await fetch('/api/update-hotel-status', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        hotel_id: id,
+        status: status
+      })
+    });
+
+    const resData = await response.json();
+    if (!response.ok) {
+      throw new Error(resData.error || 'Failed to update hotel subscription status');
+    }
+
     broadcastDbUpdate('hotels');
-    return data;
+    return resData.hotel;
   },
 
   updateHotelCMS: async (hotelId: string, cmsData: any): Promise<Hotel | null> => {

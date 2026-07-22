@@ -77,9 +77,7 @@ export async function POST(request: Request) {
     }
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey || serviceRoleKey.includes('[YOUR-')) {
-      return NextResponse.json({ error: 'Configuration Error: SUPABASE_SERVICE_ROLE_KEY is not configured on the server.' }, { status: 500 });
-    }
+    const hasServiceKey = serviceRoleKey && !serviceRoleKey.includes('[YOUR-');
 
     logger.info('Provision', `Initiating transactional customer onboarding for hotel: ${hotel_name}`, {
       metadata: { hotel_name, owner_name, email, phone, subscription_plan }
@@ -97,7 +95,7 @@ export async function POST(request: Request) {
       aboutOwnerMessage: `Welcome to ${hotel_name}. We ensure clean rooms and high quality guest satisfaction.`,
       addressVal: address ? String(address).trim() : 'Calangute, Goa, India',
       whatsappVal: phone,
-      googleMapsUrl: google_maps_url ? String(google_maps_url).trim() : 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3844.2014022416045!2d73.75338167590861!3d15.524584285078712!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bbfc1d560c5c363%3A0xc07cfb19cd7579bb!2sCalangute%20Beach!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin',
+      googleMapsUrl: google_maps_url ? String(google_maps_url).trim() : 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3844.2014022416045!2d73.75338167590861!3d15.524584285078712!2m3!1f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bbfc1d560c5c363%3A0xc07cfb19cd7579bb!2sCalangute%20Beach!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin',
       instagram: 'https://instagram.com',
       facebook: 'https://facebook.com',
       twitter: 'https://twitter.com',
@@ -156,44 +154,54 @@ export async function POST(request: Request) {
     
     hotel = insertHotelRes.rows[0];
 
-    // B. Provision account via official Supabase admin client
-    const supabaseAdmin = getSupabaseAdmin();
+    let authUserId: string;
 
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: lowercaseEmail,
-      password: password,
-      email_confirm: true,
-      app_metadata: {
-        role: 'hotel_owner',
-        hotel_id: hotel.id
+    if (hasServiceKey) {
+      // B1. Provision account via official Supabase admin client
+      const supabaseAdmin = getSupabaseAdmin();
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: lowercaseEmail,
+        password: password,
+        email_confirm: true,
+        app_metadata: {
+          role: 'hotel_owner',
+          hotel_id: hotel.id
+        }
+      });
+
+      if (authError || !authData.user) {
+        throw new Error(authError?.message || 'Failed to create user account via Supabase Admin API');
       }
-    });
+      authUserId = authData.user.id;
 
-    if (authError || !authData.user) {
-      throw new Error(authError?.message || 'Failed to create user account via Supabase Admin API');
-    }
-
-    // Ensure standard storage buckets exist on the storage backend using admin privileges
-    try {
-      const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
-      if (listError) throw listError;
-
-      if (!buckets?.some((b: any) => b.id === 'customer-documents')) {
-        const { error: bucketError } = await supabaseAdmin.storage.createBucket('customer-documents', {
-          public: false,
-          fileSizeLimit: 5242880 // 5MB
-        });
-        if (bucketError) throw bucketError;
+      // Ensure standard storage buckets exist on the storage backend using admin privileges
+      try {
+        const { data: buckets, error: listError } = await supabaseAdmin.storage.listBuckets();
+        if (!listError && !buckets?.some((b: any) => b.id === 'customer-documents')) {
+          await supabaseAdmin.storage.createBucket('customer-documents', { public: false, fileSizeLimit: 5242880 });
+        }
+        if (!listError && !buckets?.some((b: any) => b.id === 'hotel-assets')) {
+          await supabaseAdmin.storage.createBucket('hotel-assets', { public: true, fileSizeLimit: 5242880 });
+        }
+      } catch (err: any) {
+        logger.warn('Provision', 'Non-blocking storage bucket initialization check failed: ' + (err.message || err));
       }
-      if (!buckets?.some((b: any) => b.id === 'hotel-assets')) {
-        const { error: bucketError } = await supabaseAdmin.storage.createBucket('hotel-assets', {
-          public: true,
-          fileSizeLimit: 5242880 // 5MB
-        });
-        if (bucketError) throw bucketError;
-      }
-    } catch (err: any) {
-      logger.warn('Provision', 'Non-blocking storage bucket initialization check failed: ' + (err.message || err));
+    } else {
+      // B2. Fallback: Create account directly in auth.users using pgcrypto inside Postgres transaction
+      const createAuthUserRes = await pgClient.query(`
+        INSERT INTO auth.users (
+          instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+          raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+        ) VALUES (
+          '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated', $1,
+          crypt($2, gen_salt('bf')), NOW(),
+          jsonb_build_object('role', 'hotel_owner', 'hotel_id', $3::uuid),
+          jsonb_build_object('name', $4::text),
+          NOW(), NOW()
+        ) RETURNING id;
+      `, [lowercaseEmail, password, hotel.id, owner_name]);
+
+      authUserId = createAuthUserRes.rows[0].id;
     }
 
     // C. Ensure matching role and reference mapping in public schemas
@@ -202,7 +210,7 @@ export async function POST(request: Request) {
       VALUES ($1, $2, 'hotel_owner', $3)
       ON CONFLICT (id) DO UPDATE 
       SET role = 'hotel_owner', hotel_id = $3;
-    `, [authData.user.id, lowercaseEmail, hotel.id]);
+    `, [authUserId, lowercaseEmail, hotel.id]);
 
     // D. Explicitly update auth.users metadata to ensure JWT claims are populated
     await pgClient.query(`
@@ -217,7 +225,7 @@ export async function POST(request: Request) {
         '"hotel_owner"'::jsonb
       )
       WHERE id = $2::uuid;
-    `, [hotel.id, authData.user.id]);
+    `, [hotel.id, authUserId]);
 
     // E. Provision Initial Default Rooms inside the transaction
     await pgClient.query(`
@@ -231,7 +239,7 @@ export async function POST(request: Request) {
     await pgClient.query('COMMIT;');
 
     logger.info('Provision', `Successfully onboarded hotel: ${hotel_name} with user: ${lowercaseEmail}`, {
-      userId: authData.user.id,
+      userId: authUserId,
       hotelId: hotel.id,
       role: 'hotel_owner'
     });

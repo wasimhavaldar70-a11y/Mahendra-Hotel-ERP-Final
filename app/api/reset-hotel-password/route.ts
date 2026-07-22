@@ -83,23 +83,28 @@ export async function POST(request: Request) {
     const targetUser = userRes.rows[0];
     const targetUserId = targetUser.id;
 
-    // 6. Validate config
+    // 6. Securely update password using GoTrue Admin Client or direct PostgreSQL fallback
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey || serviceRoleKey.includes('[YOUR-')) {
-      return NextResponse.json({ error: 'Configuration Error: SUPABASE_SERVICE_ROLE_KEY is not configured.' }, { status: 500 });
-    }
+    const hasServiceKey = serviceRoleKey && !serviceRoleKey.includes('[YOUR-');
 
-    // 7. Securely update password using GoTrue Admin Client (singleton)
-    const supabaseAdmin = getSupabaseAdmin();
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
-      password: password
-    });
-
-    if (authError) {
-      logger.error('Application', 'Password reset via GoTrue Admin API failed', authError as unknown as Error, {
-        userId: adminUserId,
+    if (hasServiceKey) {
+      const supabaseAdmin = getSupabaseAdmin();
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+        password: password
       });
-      return NextResponse.json({ error: 'Failed to update password. Please try again.' }, { status: 500 });
+
+      if (authError) {
+        logger.error('Application', 'Password reset via GoTrue Admin API failed', authError as unknown as Error, {
+          userId: adminUserId,
+        });
+        return NextResponse.json({ error: 'Failed to update password. Please try again.' }, { status: 500 });
+      }
+    } else {
+      // Fallback: Direct Postgres update using pgcrypto crypt
+      await pgClient.query(
+        `UPDATE auth.users SET encrypted_password = crypt($1, gen_salt('bf')), updated_at = NOW() WHERE id = $2::uuid;`,
+        [password, targetUserId]
+      );
     }
 
     logger.info('Application', `Password reset successful for ${lowercaseEmail}`, {

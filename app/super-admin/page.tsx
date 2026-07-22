@@ -165,9 +165,10 @@ export default function SuperAdminPage() {
     const nextStatus = currentStatus === 'Active' ? 'Suspended' : 'Active';
     try {
       await db.updateHotelStatus(id, nextStatus);
-      loadHotels();
+      await loadHotels();
     } catch (err) {
       console.error(err);
+      alert(err instanceof Error ? err.message : 'Failed to update subscription status.');
     }
   };
 
