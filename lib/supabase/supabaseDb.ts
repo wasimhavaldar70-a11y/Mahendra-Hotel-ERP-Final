@@ -632,6 +632,8 @@ export const supabaseDb = {
 
   deleteRoom: async (hotelId: string, roomId: string): Promise<boolean> => {
     if (!supabase) return false;
+    
+    // Attempt soft delete update
     const { error } = await supabase
       .from('rooms')
       .update({ deleted_at: new Date().toISOString() })
@@ -639,9 +641,20 @@ export const supabaseDb = {
       .eq('hotel_id', hotelId);
 
     if (error) {
-      console.error('Delete room failed:', error.message);
-      throw new Error('Failed to delete room: ' + error.message);
+      console.warn('Soft delete room update encountered error, attempting hard delete:', error.message);
+      // Fallback to hard deletion if soft deletion update is restricted
+      const { error: deleteErr } = await supabase
+        .from('rooms')
+        .delete()
+        .eq('id', roomId)
+        .eq('hotel_id', hotelId);
+
+      if (deleteErr) {
+        console.error('Delete room failed:', deleteErr.message);
+        throw new Error('Failed to delete room: ' + (deleteErr.message || error.message));
+      }
     }
+
     broadcastDbUpdate('rooms');
     return true;
   },

@@ -905,7 +905,7 @@ CREATE TRIGGER audit_payments_trigger AFTER INSERT OR UPDATE OR DELETE ON public
 -- Rooms policies
 DROP POLICY IF EXISTS "Users can select rooms of their hotel" ON rooms;
 CREATE POLICY "Users can select rooms of their hotel" ON rooms 
-  FOR SELECT TO authenticated USING ((hotel_id = get_user_hotel_id() OR is_super_admin()) AND deleted_at IS NULL);
+  FOR SELECT TO authenticated USING (hotel_id = get_user_hotel_id() OR is_super_admin());
 
 DROP POLICY IF EXISTS "Owners can insert rooms of their hotel" ON rooms;
 DROP POLICY IF EXISTS "Users can insert rooms of their hotel" ON rooms;
@@ -937,12 +937,12 @@ CREATE POLICY "Owners can delete rooms of their hotel" ON rooms
 -- Customers policies
 DROP POLICY IF EXISTS "Users can select customers of their hotel" ON customers;
 CREATE POLICY "Users can select customers of their hotel" ON customers 
-  FOR SELECT TO authenticated USING (hotel_id = get_user_hotel_id() AND deleted_at IS NULL);
+  FOR SELECT TO authenticated USING (hotel_id = get_user_hotel_id() OR is_super_admin());
 
 -- Check-ins policies
 DROP POLICY IF EXISTS "Users can select check-ins of their hotel" ON check_ins;
 CREATE POLICY "Users can select check-ins of their hotel" ON check_ins 
-  FOR SELECT TO authenticated USING (hotel_id = get_user_hotel_id() AND deleted_at IS NULL);
+  FOR SELECT TO authenticated USING (hotel_id = get_user_hotel_id() OR is_super_admin());
 
 -- Payments policies (owners-only role guard)
 DROP POLICY IF EXISTS "Owners can update payments of their hotel" ON payments;
