@@ -6,7 +6,7 @@
 // ========================================================
 
 import React, { useState } from 'react';
-import { User, Phone, MapPin, ShieldAlert, Upload, Check, Loader2, Camera } from 'lucide-react';
+import { User, Phone, MapPin, ShieldAlert, Upload, Check, Loader2, Camera, ShieldCheck, Sparkles, FileText } from 'lucide-react';
 import { Customer } from '../types';
 import { STATE_CITIES } from '../lib/constants/statesCities';
 import { supabase, getSessionUser } from '../lib/supabase/client';
@@ -697,10 +697,25 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
 
       {/* 3. Document Verification Section */}
       <div className="bg-white rounded-xl border border-slate-200/80 p-5 space-y-4 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-900 border-b border-slate-150 pb-2 flex items-center gap-1.5">
-          <ShieldAlert className="w-4 h-4 text-primary" />
-          Document Upload & Verification
-        </h3>
+        <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-emerald-500 flex items-center justify-center shadow-md shadow-emerald-600/20 text-white">
+              <ShieldCheck className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-slate-800 tracking-wide uppercase flex items-center gap-1.5">
+                ID Document Verification &amp; Scanner
+              </h3>
+              <p className="text-[10px] text-slate-400 font-semibold">
+                Upload clear front &amp; back side photos of guest identification
+              </p>
+            </div>
+          </div>
+          <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200/60 shadow-xs">
+            <Sparkles className="w-3 h-3 text-emerald-600 animate-pulse" />
+            Auto WebP Compression
+          </span>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -769,49 +784,61 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
         </div>
 
         {/* Upload dropzones */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3">
-          <div>
-            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ID Card Front Side *</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {/* Front Side */}
+          <div className="bg-slate-50/60 p-3 rounded-2xl border border-slate-200/70 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                <FileText className="w-3 h-3 text-emerald-600" />
+                ID Front Side *
+              </span>
+              {frontSuccess && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-extrabold shadow-xs">
+                  <Check className="w-3 h-3" /> VERIFIED
+                </span>
+              )}
+            </div>
 
-            {/* Preview area (read-only, no click-to-upload) */}
-            <div className={`flex flex-col items-center justify-center h-36 rounded-xl border border-dashed bg-slate-50/50 overflow-hidden relative ${
-              errors.frontImage || frontError ? 'border-red-500 animate-pulse' : 'border-slate-200'
+            {/* Scanner Preview Frame */}
+            <div className={`flex flex-col items-center justify-center h-36 rounded-xl border-2 border-dashed bg-white overflow-hidden relative transition-all duration-200 group ${
+              errors.frontImage || frontError ? 'border-red-400 bg-red-50/30' : frontSuccess ? 'border-emerald-300 ring-2 ring-emerald-500/10' : 'border-slate-200/90 hover:border-teal-400'
             }`}>
+              {/* Corner crosshairs for scanner effect */}
+              <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-emerald-500/60 rounded-tl-xs pointer-events-none z-10"></div>
+              <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-emerald-500/60 rounded-tr-xs pointer-events-none z-10"></div>
+              <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-emerald-500/60 rounded-bl-xs pointer-events-none z-10"></div>
+              <div className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-emerald-500/60 rounded-br-xs pointer-events-none z-10"></div>
+
               {frontPreview ? (
                 <>
-                  <img src={frontPreview} alt="ID Front" className="object-cover w-full h-full" />
-                  {frontSuccess && (
-                    <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full shadow z-20">
-                      <Check className="w-3.5 h-3.5" />
-                    </div>
-                  )}
+                  <img src={frontPreview} alt="ID Front" className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
                 </>
               ) : (
-                <div className="flex flex-col items-center text-center p-4 select-none">
-                  <div className="flex gap-3 mb-2">
-                    <Upload className="w-5 h-5 text-slate-300" />
-                    <Camera className="w-5 h-5 text-slate-300" />
+                <div className="flex flex-col items-center text-center p-3 select-none">
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center mb-1.5 text-emerald-600 shadow-xs border border-emerald-100">
+                    <Upload className="w-5 h-5" />
                   </div>
-                  <span className="text-[10px] font-semibold text-slate-400">Front side of ID</span>
+                  <span className="text-[11px] font-bold text-slate-700">Front Side Photo</span>
+                  <span className="text-[9px] font-medium text-slate-400 mt-0.5">Click buttons below to upload or snap</span>
                 </div>
               )}
 
               {/* Uploading progress overlay */}
               {frontUploading && (
-                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 z-10">
-                  <Loader2 className="w-5 h-5 animate-spin mb-1.5 text-primary" />
-                  <span className="text-[10px] font-bold tracking-wider">Optimizing &amp; Uploading...</span>
-                  <div className="w-full bg-slate-800 rounded-full h-1 mt-2 max-w-[120px] overflow-hidden">
-                    <div className="bg-primary h-full transition-all duration-150" style={{ width: `${frontProgress}%` }}></div>
+                <div className="absolute inset-0 bg-slate-900/75 backdrop-blur-[2px] flex flex-col items-center justify-center text-white p-3 z-20 animate-fade-in">
+                  <Loader2 className="w-6 h-6 animate-spin mb-1.5 text-emerald-400" />
+                  <span className="text-[10px] font-extrabold tracking-wider text-emerald-300">Optimizing &amp; Uploading...</span>
+                  <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 max-w-[120px] overflow-hidden border border-slate-700">
+                    <div className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-150" style={{ width: `${frontProgress}%` }}></div>
                   </div>
-                  <span className="text-[9px] text-slate-350 mt-1 font-bold">{frontProgress}%</span>
+                  <span className="text-[9px] text-slate-300 mt-1 font-bold">{frontProgress}%</span>
                 </div>
               )}
 
               {/* Upload Error overlay */}
               {frontError && (
-                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-white p-3 text-center z-10">
-                  <span className="text-[10px] font-bold">Upload Failed</span>
+                <div className="absolute inset-0 bg-red-900/85 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 text-center z-20">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-red-200">Upload Failed</span>
                   <span className="text-[9px] mt-1 opacity-90 max-w-[150px] truncate">{frontError}</span>
                   <button
                     type="button"
@@ -823,22 +850,27 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                         startBackgroundUpload('front', frontBlob, targetFileName);
                       }
                     }}
-                    className="mt-2 text-[9px] font-bold bg-white text-red-600 px-3 py-1 rounded-lg shadow-sm active:scale-95 transition-all"
+                    className="mt-2 text-[9px] font-extrabold bg-white text-red-700 px-3 py-1 rounded-lg shadow-sm active:scale-95 transition-all hover:bg-red-50"
                   >
-                    Retry
+                    Retry Upload
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Action buttons row */}
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {/* Upload File */}
-              <label className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all active:scale-95 select-none ${
-                frontUploading ? 'opacity-50 pointer-events-none' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+            {/* Catchy Action Buttons Row */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              {/* Upload File Button */}
+              <label className={`flex items-center justify-center gap-2 py-2.5 px-2 rounded-xl border border-slate-200 bg-white hover:bg-emerald-50/50 hover:border-emerald-300 text-slate-700 shadow-xs hover:shadow-sm transition-all duration-200 group cursor-pointer select-none active:scale-[0.98] ${
+                frontUploading ? 'opacity-50 pointer-events-none' : ''
               }`}>
-                <Upload className="w-3.5 h-3.5" />
-                Upload File
+                <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-emerald-600 group-hover:text-white text-slate-600 flex items-center justify-center transition-colors duration-200 shrink-0">
+                  <Upload className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[11px] font-extrabold text-slate-800 group-hover:text-emerald-700">Upload File</span>
+                  <span className="text-[9px] text-slate-400 font-medium mt-0.5">Gallery / JPG</span>
+                </div>
                 <input
                   type="file"
                   accept="image/*"
@@ -848,12 +880,17 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                 />
               </label>
 
-              {/* Take Photo (camera capture — works on mobile & tablet) */}
-              <label className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all active:scale-95 select-none ${
-                frontUploading ? 'opacity-50 pointer-events-none' : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-600'
+              {/* Take Photo Button */}
+              <label className={`flex items-center justify-center gap-2 py-2.5 px-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm hover:shadow-md shadow-emerald-600/20 transition-all duration-200 group cursor-pointer select-none active:scale-[0.98] ${
+                frontUploading ? 'opacity-50 pointer-events-none' : ''
               }`}>
-                <Camera className="w-3.5 h-3.5" />
-                Take Photo
+                <div className="w-6 h-6 rounded-lg bg-white/20 text-white flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shrink-0">
+                  <Camera className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[11px] font-extrabold text-white tracking-wide">Take Photo</span>
+                  <span className="text-[9px] text-emerald-100/90 font-medium mt-0.5">Live Camera</span>
+                </div>
                 <input
                   type="file"
                   accept="image/*"
@@ -870,48 +907,60 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
             )}
           </div>
 
-          <div>
-            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">ID Card Back Side *</span>
+          {/* Back Side */}
+          <div className="bg-slate-50/60 p-3 rounded-2xl border border-slate-200/70 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                <FileText className="w-3 h-3 text-teal-600" />
+                ID Back Side *
+              </span>
+              {backSuccess && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-extrabold shadow-xs">
+                  <Check className="w-3 h-3" /> VERIFIED
+                </span>
+              )}
+            </div>
 
-            {/* Preview area (read-only, no click-to-upload) */}
-            <div className={`flex flex-col items-center justify-center h-36 rounded-xl border border-dashed bg-slate-50/50 overflow-hidden relative ${
-              errors.backImage || backError ? 'border-red-500 animate-pulse' : 'border-slate-200'
+            {/* Scanner Preview Frame */}
+            <div className={`flex flex-col items-center justify-center h-36 rounded-xl border-2 border-dashed bg-white overflow-hidden relative transition-all duration-200 group ${
+              errors.backImage || backError ? 'border-red-400 bg-red-50/30' : backSuccess ? 'border-emerald-300 ring-2 ring-emerald-500/10' : 'border-slate-200/90 hover:border-teal-400'
             }`}>
+              {/* Corner crosshairs for scanner effect */}
+              <div className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-teal-500/60 rounded-tl-xs pointer-events-none z-10"></div>
+              <div className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-teal-500/60 rounded-tr-xs pointer-events-none z-10"></div>
+              <div className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-teal-500/60 rounded-bl-xs pointer-events-none z-10"></div>
+              <div className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-teal-500/60 rounded-br-xs pointer-events-none z-10"></div>
+
               {backPreview ? (
                 <>
-                  <img src={backPreview} alt="ID Back" className="object-cover w-full h-full" />
-                  {backSuccess && (
-                    <div className="absolute top-2 right-2 bg-emerald-500 text-white p-1 rounded-full shadow z-20">
-                      <Check className="w-3.5 h-3.5" />
-                    </div>
-                  )}
+                  <img src={backPreview} alt="ID Back" className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
                 </>
               ) : (
-                <div className="flex flex-col items-center text-center p-4 select-none">
-                  <div className="flex gap-3 mb-2">
-                    <Upload className="w-5 h-5 text-slate-300" />
-                    <Camera className="w-5 h-5 text-slate-300" />
+                <div className="flex flex-col items-center text-center p-3 select-none">
+                  <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center mb-1.5 text-teal-600 shadow-xs border border-teal-100">
+                    <Upload className="w-5 h-5" />
                   </div>
-                  <span className="text-[10px] font-semibold text-slate-400">Back side of ID</span>
+                  <span className="text-[11px] font-bold text-slate-700">Back Side Photo</span>
+                  <span className="text-[9px] font-medium text-slate-400 mt-0.5">Click buttons below to upload or snap</span>
                 </div>
               )}
 
               {/* Uploading progress overlay */}
               {backUploading && (
-                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 z-10">
-                  <Loader2 className="w-5 h-5 animate-spin mb-1.5 text-primary" />
-                  <span className="text-[10px] font-bold tracking-wider">Optimizing &amp; Uploading...</span>
-                  <div className="w-full bg-slate-800 rounded-full h-1 mt-2 max-w-[120px] overflow-hidden">
-                    <div className="bg-primary h-full transition-all duration-150" style={{ width: `${backProgress}%` }}></div>
+                <div className="absolute inset-0 bg-slate-900/75 backdrop-blur-[2px] flex flex-col items-center justify-center text-white p-3 z-20 animate-fade-in">
+                  <Loader2 className="w-6 h-6 animate-spin mb-1.5 text-teal-400" />
+                  <span className="text-[10px] font-extrabold tracking-wider text-teal-300">Optimizing &amp; Uploading...</span>
+                  <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2 max-w-[120px] overflow-hidden border border-slate-700">
+                    <div className="bg-gradient-to-r from-teal-500 to-emerald-400 h-full transition-all duration-150" style={{ width: `${backProgress}%` }}></div>
                   </div>
-                  <span className="text-[9px] text-slate-350 mt-1 font-bold">{backProgress}%</span>
+                  <span className="text-[9px] text-slate-300 mt-1 font-bold">{backProgress}%</span>
                 </div>
               )}
 
               {/* Upload Error overlay */}
               {backError && (
-                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-white p-3 text-center z-10">
-                  <span className="text-[10px] font-bold">Upload Failed</span>
+                <div className="absolute inset-0 bg-red-900/85 backdrop-blur-[1px] flex flex-col items-center justify-center text-white p-3 text-center z-20">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-red-200">Upload Failed</span>
                   <span className="text-[9px] mt-1 opacity-90 max-w-[150px] truncate">{backError}</span>
                   <button
                     type="button"
@@ -923,22 +972,27 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                         startBackgroundUpload('back', backBlob, targetFileName);
                       }
                     }}
-                    className="mt-2 text-[9px] font-bold bg-white text-red-600 px-3 py-1 rounded-lg shadow-sm active:scale-95 transition-all"
+                    className="mt-2 text-[9px] font-extrabold bg-white text-red-700 px-3 py-1 rounded-lg shadow-sm active:scale-95 transition-all hover:bg-red-50"
                   >
-                    Retry
+                    Retry Upload
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Action buttons row */}
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {/* Upload File */}
-              <label className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all active:scale-95 select-none ${
-                backUploading ? 'opacity-50 pointer-events-none' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+            {/* Catchy Action Buttons Row */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              {/* Upload File Button */}
+              <label className={`flex items-center justify-center gap-2 py-2.5 px-2 rounded-xl border border-slate-200 bg-white hover:bg-teal-50/50 hover:border-teal-300 text-slate-700 shadow-xs hover:shadow-sm transition-all duration-200 group cursor-pointer select-none active:scale-[0.98] ${
+                backUploading ? 'opacity-50 pointer-events-none' : ''
               }`}>
-                <Upload className="w-3.5 h-3.5" />
-                Upload File
+                <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-teal-600 group-hover:text-white text-slate-600 flex items-center justify-center transition-colors duration-200 shrink-0">
+                  <Upload className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[11px] font-extrabold text-slate-800 group-hover:text-teal-700">Upload File</span>
+                  <span className="text-[9px] text-slate-400 font-medium mt-0.5">Gallery / JPG</span>
+                </div>
                 <input
                   type="file"
                   accept="image/*"
@@ -948,12 +1002,17 @@ export default function CustomerForm({ initialData, initialDoc, onSubmit, onCanc
                 />
               </label>
 
-              {/* Take Photo (camera capture — works on mobile & tablet) */}
-              <label className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-[10px] font-bold cursor-pointer transition-all active:scale-95 select-none ${
-                backUploading ? 'opacity-50 pointer-events-none' : 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-600'
+              {/* Take Photo Button */}
+              <label className={`flex items-center justify-center gap-2 py-2.5 px-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white shadow-sm hover:shadow-md shadow-emerald-600/20 transition-all duration-200 group cursor-pointer select-none active:scale-[0.98] ${
+                backUploading ? 'opacity-50 pointer-events-none' : ''
               }`}>
-                <Camera className="w-3.5 h-3.5" />
-                Take Photo
+                <div className="w-6 h-6 rounded-lg bg-white/20 text-white flex items-center justify-center group-hover:scale-110 transition-transform duration-200 shrink-0">
+                  <Camera className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col text-left leading-none">
+                  <span className="text-[11px] font-extrabold text-white tracking-wide">Take Photo</span>
+                  <span className="text-[9px] text-emerald-100/90 font-medium mt-0.5">Live Camera</span>
+                </div>
                 <input
                   type="file"
                   accept="image/*"
