@@ -339,13 +339,15 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
       const taxVal = checkoutApplyTax ? Math.round((subtotalVal - totalDiscount) * (12 / 100)) : 0;
       const grandTotalVal = Math.max(0, subtotalVal - totalDiscount + taxVal);
 
-      const updated = { ...room, status: 'Cleaning' as RoomStatus };
-      onStatusChanged(updated);
-      onClose();
-      
+      // Clean check_out_time format (HH:MM:SS)
+      let cleanTime = checkoutTime ? checkoutTime.trim() : '11:00';
+      if (cleanTime.split(':').length === 2) {
+        cleanTime = `${cleanTime}:00`;
+      }
+
       await db.checkOut(hotelId, stayData.id, paymentMethod, {
         check_out_date: checkoutDate,
-        check_out_time: checkoutTime + ':00',
+        check_out_time: cleanTime,
         discount: totalDiscount,
         extra_charges: totalExtraCharges,
         tax_amount: taxVal,
@@ -358,9 +360,13 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
         arrival_from: checkoutArrivalFrom,
         proceeding_to: checkoutProceedingTo
       });
+
+      const updated = { ...room, status: 'Cleaning' as RoomStatus };
       onStatusChanged(updated);
+      onClose();
     } catch (err) {
-      console.error(err);
+      console.error('Checkout error:', err);
+      alert('Failed to checkout room: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setActionLoading(false);
     }
