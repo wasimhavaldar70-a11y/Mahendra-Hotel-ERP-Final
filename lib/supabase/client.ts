@@ -59,6 +59,12 @@ if (typeof window !== 'undefined' && supabase) {
         }
       }
       
+      // If user is not superadmin and has no hotel assigned, do not store session in local cache
+      if (userRole !== 'superadmin' && !hotel && !hotelId) {
+        setSessionUser(null);
+        return;
+      }
+
       setSessionUser({
         user: {
           id: session.user.id,

@@ -19,13 +19,31 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Check if already logged in
+    // Check for URL query parameter error
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('error') === 'no_hotel') {
+        setError('Error: No hotel linked to this user account. Credentials cleared. Please log in with a valid hotel account.');
+        setEmail('');
+        setPassword('');
+        setSessionUser(null);
+        return;
+      }
+    }
+
+    // Check if already logged in with a valid session
     const session = getSessionUser();
     if (session) {
       if (session.user.role === 'superadmin') {
         router.push('/super-admin');
-      } else {
+      } else if (session.hotel) {
         router.push('/dashboard');
+      } else {
+        // Session has no hotel - clear credentials & session to prevent redirect loop
+        setSessionUser(null);
+        setEmail('');
+        setPassword('');
+        setError('Error: No hotel linked to this user account. Credentials cleared. Please log in with a valid hotel account.');
       }
     }
   }, [router]);
@@ -51,11 +69,18 @@ export default function LoginPage() {
     try {
       const res = await db.login(email, password);
       if (res) {
-        setSessionUser(res);
         if (res.user.role === 'superadmin') {
+          setSessionUser(res);
           router.push('/super-admin');
-        } else {
+        } else if (res.hotel) {
+          setSessionUser(res);
           router.push('/dashboard');
+        } else {
+          // Account exists but has no hotel assigned - erase credentials & clear session
+          setEmail('');
+          setPassword('');
+          setSessionUser(null);
+          setError('Error: No hotel linked to this user account. Credentials cleared. Please log in with a provisioned hotel account or contact superadmin.');
         }
       } else {
         setError('Invalid credentials');

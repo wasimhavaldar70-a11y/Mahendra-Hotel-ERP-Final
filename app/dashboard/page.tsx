@@ -147,9 +147,8 @@ export default function DashboardPage() {
     }
 
     if (!session.hotel) {
-      alert('Error: No hotel linked to this user account.');
       setSessionUser(null);
-      window.location.href = '/login';
+      window.location.href = '/login?error=no_hotel';
       return;
     }
 
