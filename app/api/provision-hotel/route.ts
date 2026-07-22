@@ -10,6 +10,7 @@ import { writeAuditLog } from '../../../lib/auditLog';
 import { sendWelcomeEmail } from '../../../lib/email';
 import { passwordValidationMessage } from '../../../lib/passwordStrength';
 import { createClient } from '@supabase/supabase-js';
+import { isSuperAdminUser } from '../../../lib/authGuard';
 
 // ========================================================
 // Singleton Supabase Admin Client (avoid re-creating per request)
@@ -43,7 +44,6 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized: Invalid session or token' }, { status: 401 });
     }
-    const adminUserId = user.id;
 
     const body = await request.json();
     const { hotel_name, owner_name, phone, email, subscription_plan, password, address, google_maps_url } = body;
@@ -61,18 +61,17 @@ export async function POST(request: Request) {
 
     pgClient = await pool.connect();
 
-    if (adminUserId) {
-      const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
-      if (roleRes.rows.length === 0 || roleRes.rows[0].role !== 'superadmin') {
-        return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
-      }
+    const isSuperAdmin = await isSuperAdminUser(user, pgClient);
+    if (!isSuperAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
     }
 
     const lowercaseEmail = email.toLowerCase().trim();
 
-    // 4. Email validation step (prevent silent deletes of other hotel users)
+    // 4. Email validation step across public.users and auth.users
     const emailCheck = await pgClient.query('SELECT id FROM public.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
-    if (emailCheck.rows.length > 0) {
+    const authEmailCheck = await pgClient.query('SELECT id FROM auth.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+    if (emailCheck.rows.length > 0 || authEmailCheck.rows.length > 0) {
       return NextResponse.json({ error: 'Email address is already in use' }, { status: 400 });
     }
 
@@ -247,7 +246,7 @@ export async function POST(request: Request) {
     // F. Write Audit Log (non-blocking)
     void writeAuditLog({
       action: 'hotel.created',
-      actor_id: adminUserId,
+      actor_id: user.id,
       actor_email: user.email,
       hotel_id: hotel.id,
       target_type: 'hotel',
@@ -282,7 +281,7 @@ export async function POST(request: Request) {
       }
     }
     logger.error('Provision', `Hotel onboarding provisioning failed for: ${hotelNameForLog}`, err);
-    return NextResponse.json({ error: 'Hotel provisioning failed. Please try again.' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Hotel provisioning failed. Please try again.' }, { status: 500 });
   } finally {
     if (pgClient) {
       pgClient.release();

@@ -198,6 +198,34 @@ const addCustomerHistoryEntry = async (
   }
 };
 
+// Helper: Safely resolve authentication token from active Supabase session or cached localStorage session
+const getAuthToken = async (): Promise<string> => {
+  try {
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.access_token) {
+        return data.session.access_token;
+      }
+    }
+  } catch (e) {
+    console.error('Error getting Supabase auth session:', e);
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('hf_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.access_token) {
+          return parsed.access_token;
+        }
+      }
+    } catch {
+      // Ignore parse error
+    }
+  }
+  return '';
+};
+
 export const supabaseDb = {
   addCustomerHistoryEntry,
   // Authentication
@@ -356,8 +384,7 @@ export const supabaseDb = {
   },
 
   addHotel: async (data: Omit<Hotel, 'id' | 'created_at' | 'subscription_status'> & { password?: string; address?: string; google_maps_url?: string }): Promise<Hotel> => {
-    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
-    const token = session?.access_token || '';
+    const token = await getAuthToken();
 
     const response = await fetch('/api/provision-hotel', {
       method: 'POST',
@@ -387,8 +414,7 @@ export const supabaseDb = {
   },
 
   updateHotelStatus: async (id: string, status: 'Active' | 'Expired' | 'Suspended'): Promise<Hotel | null> => {
-    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
-    const token = session?.access_token || '';
+    const token = await getAuthToken();
 
     const response = await fetch('/api/update-hotel-status', {
       method: 'POST',
@@ -429,8 +455,7 @@ export const supabaseDb = {
   },
 
   deleteHotel: async (id: string): Promise<boolean> => {
-    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
-    const token = session?.access_token || '';
+    const token = await getAuthToken();
 
     const response = await fetch('/api/delete-hotel', {
       method: 'POST',
@@ -451,8 +476,7 @@ export const supabaseDb = {
   },
 
   resetHotelPassword: async (email: string, password?: string): Promise<boolean> => {
-    const session = supabase ? (await supabase.auth.getSession()).data.session : null;
-    const token = session?.access_token || '';
+    const token = await getAuthToken();
 
     const response = await fetch('/api/reset-hotel-password', {
       method: 'POST',

@@ -10,9 +10,6 @@
  * All state-changing API routes already require a valid Supabase JWT, so the
  * risk is low. This adds defence-in-depth by rejecting requests that do not
  * originate from the known application domain.
- *
- * Set NEXT_PUBLIC_APP_URL in your environment (e.g. https://app.staydesk.in).
- * In development, localhost is always allowed.
  */
 
 const ALLOWED_ORIGINS_EXTRA: string[] = [
@@ -24,53 +21,68 @@ const ALLOWED_ORIGINS_EXTRA: string[] = [
  * a cross-origin request that should be blocked.
  */
 export function validateCsrfOrigin(request: Request): boolean {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-  // Build the list of allowed origins
-  const allowedOrigins: string[] = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://127.0.0.1:3000',
-    ...ALLOWED_ORIGINS_EXTRA,
-  ];
-
-  if (appUrl) {
-    try {
-      const parsed = new URL(appUrl);
-      allowedOrigins.push(parsed.origin); // e.g. "https://app.staydesk.in"
-    } catch {
-      // Ignore malformed URL
-    }
-  }
-
-  // Check Origin header (preferred)
   const originHeader = request.headers.get('origin');
-  if (originHeader) {
-    // 'null' origin can appear from file:// or sandboxed iframes — block it
-    if (originHeader === 'null') return false;
-    return allowedOrigins.some(allowed => originHeader === allowed);
-  }
-
-  // Fallback: Check Referer header
   const refererHeader = request.headers.get('referer');
-  if (refererHeader) {
-    try {
-      const referer = new URL(refererHeader);
-      return allowedOrigins.some(allowed => {
-        try {
-          const allowedParsed = new URL(allowed);
-          return referer.origin === allowedParsed.origin;
-        } catch {
-          return false;
-        }
-      });
-    } catch {
-      return false;
-    }
-  }
+  const hostHeader = request.headers.get('host');
+
+  const targetHeader = originHeader || refererHeader;
 
   // If neither Origin nor Referer is present (e.g. server-to-server calls),
   // allow the request — this handles health checks and internal admin tools.
-  // The Supabase JWT check still provides authentication protection.
-  return true;
+  if (!targetHeader) {
+    return true;
+  }
+
+  // 'null' origin can appear from sandboxed iframes or file:// — block it
+  if (targetHeader === 'null') {
+    return false;
+  }
+
+  try {
+    const url = new URL(targetHeader);
+    const hostname = url.hostname.toLowerCase();
+
+    // 1. Allow any localhost / loopback / local network IP across all ports
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.endsWith('.local')
+    ) {
+      return true;
+    }
+
+    // 2. Same-Origin Check: Match Origin/Referer host with the request's own Host header
+    if (hostHeader) {
+      const hostWithoutPort = hostHeader.split(':')[0].toLowerCase();
+      if (url.host.toLowerCase() === hostHeader.toLowerCase() || hostname === hostWithoutPort) {
+        return true;
+      }
+    }
+
+    // 3. Check NEXT_PUBLIC_APP_URL if defined
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (appUrl) {
+      try {
+        const appParsed = new URL(appUrl);
+        if (url.origin.toLowerCase() === appParsed.origin.toLowerCase()) {
+          return true;
+        }
+      } catch {
+        // Ignore malformed URL
+      }
+    }
+
+    // 4. Check extra allowed origins list
+    if (ALLOWED_ORIGINS_EXTRA.some(allowed => url.origin.toLowerCase() === allowed.toLowerCase())) {
+      return true;
+    }
+
+  } catch {
+    return false;
+  }
+
+  return false;
 }

@@ -7,6 +7,7 @@ import { getAuthenticatedUser } from '../../../lib/supabase/server';
 import { logger } from '../../../lib/logger';
 import { validateCsrfOrigin } from '../../../lib/csrf';
 import { writeAuditLog } from '../../../lib/auditLog';
+import { isSuperAdminUser } from '../../../lib/authGuard';
 
 export async function POST(request: Request) {
   // 1. CSRF Origin validation
@@ -26,7 +27,6 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized: Invalid session or token' }, { status: 401 });
     }
-    const adminUserId = user.id;
 
     const body = await request.json();
     const { hotel_id, status } = body;
@@ -38,11 +38,9 @@ export async function POST(request: Request) {
     pgClient = await pool.connect();
 
     // 3. Superadmin-only guard
-    if (adminUserId) {
-      const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
-      if (roleRes.rows.length === 0 || roleRes.rows[0].role !== 'superadmin') {
-        return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
-      }
+    const isSuperAdmin = await isSuperAdminUser(user, pgClient);
+    if (!isSuperAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
     }
 
     // 4. Update hotel status in PostgreSQL
@@ -58,14 +56,14 @@ export async function POST(request: Request) {
     const updatedHotel = updateRes.rows[0];
 
     logger.info('Application', `Hotel status updated to ${status} for hotel: ${updatedHotel.hotel_name} (${hotel_id})`, {
-      userId: adminUserId,
+      userId: user.id,
       hotelId: hotel_id,
     });
 
     // 5. Write Audit Log (non-blocking)
     void writeAuditLog({
       action: status === 'Suspended' ? 'hotel.suspended' : 'hotel.activated',
-      actor_id: adminUserId,
+      actor_id: user.id,
       actor_email: user.email,
       hotel_id: hotel_id,
       target_type: 'hotel',
@@ -78,7 +76,7 @@ export async function POST(request: Request) {
 
   } catch (err: any) {
     logger.error('Application', 'Update Hotel Status API Error', err);
-    return NextResponse.json({ error: 'Failed to update hotel status. Please try again.' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Failed to update hotel status. Please try again.' }, { status: 500 });
   } finally {
     if (pgClient) {
       pgClient.release();

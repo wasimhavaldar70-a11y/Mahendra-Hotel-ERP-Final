@@ -7,6 +7,7 @@ import { getAuthenticatedUser } from '../../../lib/supabase/server';
 import { logger } from '../../../lib/logger';
 import { validateCsrfOrigin } from '../../../lib/csrf';
 import { writeAuditLog } from '../../../lib/auditLog';
+import { isSuperAdminUser } from '../../../lib/authGuard';
 
 export async function POST(request: Request) {
   // 1. CSRF Origin validation
@@ -27,7 +28,6 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized: Invalid session or token' }, { status: 401 });
     }
-    const adminUserId = user.id;
 
     const body = await request.json();
     const { hotel_id } = body;
@@ -39,11 +39,9 @@ export async function POST(request: Request) {
     pgClient = await pool.connect();
 
     // 3. Superadmin-only guard
-    if (adminUserId) {
-      const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
-      if (roleRes.rows.length === 0 || roleRes.rows[0].role !== 'superadmin') {
-        return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
-      }
+    const isSuperAdmin = await isSuperAdminUser(user, pgClient);
+    if (!isSuperAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
     }
 
     // 4. Fetch hotel info for audit log before deletion
@@ -60,16 +58,26 @@ export async function POST(request: Request) {
     deletedHotelName = hotel_name;
 
     logger.info('Application', `Initiating deletion of hotel: ${hotel_name} (${hotel_id})`, {
-      userId: adminUserId,
+      userId: user.id,
       hotelId: hotel_id,
     });
 
     // 5. Start transaction
     await pgClient.query('BEGIN;');
 
-    // 6. Delete the user from auth.users (cascades to public.users)
+    // 6. Delete all auth.users associated with this hotel (by hotel_id claim or matching email)
     if (hotelEmail) {
-      await pgClient.query('DELETE FROM auth.users WHERE email = $1;', [hotelEmail]);
+      await pgClient.query(`
+        DELETE FROM auth.users 
+        WHERE id IN (
+          SELECT id FROM public.users WHERE hotel_id = $1
+        ) OR LOWER(email) = LOWER($2);
+      `, [hotel_id, hotelEmail]);
+
+      await pgClient.query('DELETE FROM public.users WHERE hotel_id = $1 OR LOWER(email) = LOWER($2);', [hotel_id, hotelEmail]);
+    } else {
+      await pgClient.query('DELETE FROM auth.users WHERE id IN (SELECT id FROM public.users WHERE hotel_id = $1);', [hotel_id]);
+      await pgClient.query('DELETE FROM public.users WHERE hotel_id = $1;', [hotel_id]);
     }
 
     // 7. Delete the hotel from public.hotels (cascades to all operational tables)
@@ -78,14 +86,14 @@ export async function POST(request: Request) {
     await pgClient.query('COMMIT;');
 
     logger.info('Application', `Hotel deleted successfully: ${hotel_name} (${hotel_id})`, {
-      userId: adminUserId,
+      userId: user.id,
       hotelId: hotel_id,
     });
 
     // 8. Write Audit Log (non-blocking, after commit — hotel_id ref no longer valid in DB)
     void writeAuditLog({
       action: 'hotel.deleted',
-      actor_id: adminUserId,
+      actor_id: user.id,
       actor_email: user.email,
       hotel_id: undefined, // hotel is deleted — don't reference it
       target_type: 'hotel',
@@ -105,7 +113,7 @@ export async function POST(request: Request) {
       }
     }
     logger.error('Application', `Delete Hotel API Error for hotel: ${deletedHotelName}`, err);
-    return NextResponse.json({ error: 'Failed to delete hotel. Please try again.' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Failed to delete hotel. Please try again.' }, { status: 500 });
   } finally {
     if (pgClient) {
       pgClient.release();

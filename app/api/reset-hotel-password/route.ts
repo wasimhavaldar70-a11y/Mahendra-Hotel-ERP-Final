@@ -10,6 +10,7 @@ import { writeAuditLog } from '../../../lib/auditLog';
 import { passwordValidationMessage } from '../../../lib/passwordStrength';
 import { sendPasswordResetEmail } from '../../../lib/email';
 import { createClient } from '@supabase/supabase-js';
+import { isSuperAdminUser } from '../../../lib/authGuard';
 
 // Singleton Supabase Admin Client
 let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
@@ -41,7 +42,6 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized: Invalid session or token' }, { status: 401 });
     }
-    const adminUserId = user.id;
 
     const body = await request.json();
     const { email, password } = body;
@@ -59,15 +59,18 @@ export async function POST(request: Request) {
     pgClient = await pool.connect();
 
     // 4. Superadmin-only guard
-    if (adminUserId) {
-      const roleRes = await pgClient.query('SELECT role FROM public.users WHERE id = $1;', [adminUserId]);
-      if (roleRes.rows.length === 0 || roleRes.rows[0].role !== 'superadmin') {
-        return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
-      }
+    const isSuperAdmin = await isSuperAdminUser(user, pgClient);
+    if (!isSuperAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Superadmin only' }, { status: 403 });
     }
 
-    // 5. Resolve User ID by email from public.users mapping table
+    // 5. Resolve User ID by email from public.users or auth.users
     const lowercaseEmail = email.toLowerCase().trim();
+    let targetUserId: string | null = null;
+    let targetHotelId: string | null = null;
+    let targetHotelName: string | null = null;
+    let targetOwnerName: string | null = null;
+
     const userRes = await pgClient.query(
       `SELECT u.id, u.hotel_id, h.hotel_name, h.owner_name
        FROM public.users u
@@ -76,12 +79,30 @@ export async function POST(request: Request) {
       [lowercaseEmail]
     );
     
-    if (userRes.rows.length === 0) {
-      return NextResponse.json({ error: 'No user account found for this email' }, { status: 404 });
+    if (userRes.rows.length > 0) {
+      const targetUser = userRes.rows[0];
+      targetUserId = targetUser.id;
+      targetHotelId = targetUser.hotel_id;
+      targetHotelName = targetUser.hotel_name;
+      targetOwnerName = targetUser.owner_name;
+    } else {
+      // Fallback: check auth.users and public.hotels directly
+      const authRes = await pgClient.query('SELECT id FROM auth.users WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+      const hotelRes = await pgClient.query('SELECT id, hotel_name, owner_name FROM public.hotels WHERE LOWER(email) = LOWER($1);', [lowercaseEmail]);
+
+      if (authRes.rows.length > 0) {
+        targetUserId = authRes.rows[0].id;
+        if (hotelRes.rows.length > 0) {
+          targetHotelId = hotelRes.rows[0].id;
+          targetHotelName = hotelRes.rows[0].hotel_name;
+          targetOwnerName = hotelRes.rows[0].owner_name;
+        }
+      }
     }
 
-    const targetUser = userRes.rows[0];
-    const targetUserId = targetUser.id;
+    if (!targetUserId) {
+      return NextResponse.json({ error: 'No user account found for this email' }, { status: 404 });
+    }
 
     // 6. Securely update password using GoTrue Admin Client or direct PostgreSQL fallback
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -95,41 +116,41 @@ export async function POST(request: Request) {
 
       if (authError) {
         logger.error('Application', 'Password reset via GoTrue Admin API failed', authError as unknown as Error, {
-          userId: adminUserId,
+          userId: user.id,
         });
-        return NextResponse.json({ error: 'Failed to update password. Please try again.' }, { status: 500 });
+        return NextResponse.json({ error: authError.message || 'Failed to update password. Please try again.' }, { status: 500 });
       }
-    } else {
-      // Fallback: Direct Postgres update using pgcrypto crypt
-      await pgClient.query(
-        `UPDATE auth.users SET encrypted_password = crypt($1, gen_salt('bf')), updated_at = NOW() WHERE id = $2::uuid;`,
-        [password, targetUserId]
-      );
     }
 
+    // Direct Postgres fallback / update sync
+    await pgClient.query(
+      `UPDATE auth.users SET encrypted_password = crypt($1, gen_salt('bf')), updated_at = NOW() WHERE id = $2::uuid;`,
+      [password, targetUserId]
+    );
+
     logger.info('Application', `Password reset successful for ${lowercaseEmail}`, {
-      userId: adminUserId,
-      hotelId: targetUser.hotel_id,
+      userId: user.id,
+      hotelId: targetHotelId || undefined,
     });
 
     // 8. Write Audit Log (non-blocking)
     void writeAuditLog({
       action: 'password.reset',
-      actor_id: adminUserId,
+      actor_id: user.id,
       actor_email: user.email,
-      hotel_id: targetUser.hotel_id,
+      hotel_id: targetHotelId || undefined,
       target_type: 'user',
       target_id: targetUserId,
-      metadata: { target_email: lowercaseEmail, hotel_name: targetUser.hotel_name },
+      metadata: { target_email: lowercaseEmail, hotel_name: targetHotelName },
       ip: clientIp,
     });
 
     // 9. Send password reset notification email (non-blocking)
-    if (targetUser.hotel_name && targetUser.owner_name) {
+    if (targetHotelName && targetOwnerName) {
       void sendPasswordResetEmail({
         to: lowercaseEmail,
-        hotelName: targetUser.hotel_name,
-        ownerName: targetUser.owner_name,
+        hotelName: targetHotelName,
+        ownerName: targetOwnerName,
         newPassword: password,
       });
     }
@@ -138,7 +159,7 @@ export async function POST(request: Request) {
 
   } catch (err: any) {
     logger.error('Application', 'Reset Password API Error', err);
-    return NextResponse.json({ error: 'Failed to reset password. Please try again.' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Failed to reset password. Please try again.' }, { status: 500 });
   } finally {
     if (pgClient) {
       pgClient.release();
