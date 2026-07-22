@@ -96,6 +96,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       return;
     }
 
+    setCurrentUser(session.user);
+    setCurrentHotel(session.hotel);
+
+    // Superadmin users have no hotel linked to their account
+    if (session.user.role === 'superadmin') {
+      setLoading(false);
+      return;
+    }
+
     if (session.hotel) {
       if (session.hotel.subscription_status === 'Suspended') {
         setSessionUser(null);
@@ -110,8 +119,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         return;
       }
 
-      setCurrentUser(session.user);
-      setCurrentHotel(session.hotel);
       setLoading(false);
       loadPendingCount(session.hotel.id);
 
@@ -125,6 +132,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       return () => {
         channel.close();
       };
+    } else {
+      setLoading(false);
+      router.push('/login?error=no_hotel');
     }
   }, [router, pathname]);
 
