@@ -10,13 +10,22 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
   hotel_id     UUID REFERENCES public.hotels(id) ON DELETE SET NULL,
   actor_id     UUID,                    -- auth.users.id of the person who performed the action
   actor_email  TEXT,                    -- denormalised for legibility (email at time of action)
-  action       TEXT NOT NULL,           -- e.g. 'hotel.created', 'password.reset', 'guest.exported'
+  action       TEXT NOT NULL,           -- e.g. 'hotel.created', 'password.reset', 'guest.exported', 'UPDATE', 'INSERT'
   target_type  TEXT,                    -- e.g. 'hotel', 'user', 'room', 'guest'
   target_id    TEXT,                    -- UUID or identifier of the affected record
   metadata     JSONB DEFAULT '{}'::jsonb, -- arbitrary context (hotel_name, ip, etc.)
   ip           TEXT,                    -- client IP at time of action
   created_at   TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now())
 );
+
+-- Ensure all columns exist even if public.audit_logs pre-existed from database triggers
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS hotel_id     UUID REFERENCES public.hotels(id) ON DELETE SET NULL;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS actor_id     UUID;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS actor_email  TEXT;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_type  TEXT;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS target_id    TEXT;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS metadata     JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS ip           TEXT;
 
 -- RLS: Only superadmins can read audit logs; writes go through the service-role key
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;

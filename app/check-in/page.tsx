@@ -90,6 +90,17 @@ function CheckInFormContent() {
     aadhar_number: string;
     phone: string;
     gender: 'Male' | 'Female' | 'Other';
+    doc_type?: 'Aadhar' | 'Driving License' | 'Passport' | 'Voter ID';
+    doc_number?: string;
+    front_image?: string;
+    back_image?: string;
+    same_vehicle_as_primary?: boolean;
+    vehicle_number?: string;
+    same_address_as_primary?: boolean;
+    address?: string;
+    city?: string;
+    state?: string;
+    country?: string;
   }[]>([
     { full_name: '', relationship: 'Self', document_verified: true, aadhar_number: '', phone: '', gender: 'Male' } // Primary guest
   ]);
@@ -272,7 +283,24 @@ function CheckInFormContent() {
   };
 
   const addGuestRow = () => {
-    setGuests([...guests, { full_name: '', relationship: 'Friend', document_verified: false, aadhar_number: '', phone: '', gender: 'Male' }]);
+    setGuests([
+      ...guests,
+      {
+        full_name: '',
+        relationship: 'Friend',
+        document_verified: true,
+        aadhar_number: '',
+        phone: '',
+        gender: 'Male',
+        same_vehicle_as_primary: true,
+        vehicle_number: '',
+        same_address_as_primary: true,
+        doc_type: 'Aadhar',
+        doc_number: '',
+        front_image: '',
+        back_image: ''
+      }
+    ]);
   };
 
   const removeGuestRow = (index: number) => {
@@ -286,7 +314,7 @@ function CheckInFormContent() {
       cleanVal = value.replace(/[^a-zA-Z\s]/g, '');
     } else if (field === 'phone') {
       cleanVal = value.replace(/\D/g, '').slice(0, 10);
-    } else if (field === 'aadhar_number') {
+    } else if (field === 'aadhar_number' || (field === 'doc_number' && guests[index].doc_type === 'Aadhar')) {
       const clean = value.replace(/\D/g, '').slice(0, 12);
       let formatted = '';
       for (let i = 0; i < clean.length; i++) {
@@ -303,6 +331,14 @@ function CheckInFormContent() {
       ...updated[index],
       [field]: cleanVal
     };
+
+    // Keep aadhar_number and doc_number synced if doc_type is Aadhar
+    if (field === 'aadhar_number') {
+      updated[index].doc_number = cleanVal;
+    } else if (field === 'doc_number' && updated[index].doc_type === 'Aadhar') {
+      updated[index].aadhar_number = cleanVal;
+    }
+
     setGuests(updated);
 
     if (errors.guests) {
@@ -448,16 +484,35 @@ function CheckInFormContent() {
               ? g.phone.trim()
               : `${finalCustomer.phone}-${index + 1}`;
 
+            const resolvedVehicle = g.same_vehicle_as_primary !== false
+              ? (vehicleNumber || finalCustomer.vehicle_number || '')
+              : (g.vehicle_number || '');
+
+            const resolvedAddress = g.same_address_as_primary !== false ? (finalCustomer.address || '') : (g.address || '');
+            const resolvedCity = g.same_address_as_primary !== false ? (finalCustomer.city || '') : (g.city || '');
+            const resolvedState = g.same_address_as_primary !== false ? (finalCustomer.state || '') : (g.state || '');
+            const resolvedCountry = g.same_address_as_primary !== false ? (finalCustomer.country || 'India') : (g.country || 'India');
+
+            const docTypeVal = g.doc_type || (g.doc_number || g.aadhar_number ? 'Aadhar' : undefined);
+            const docNumVal = g.doc_number || g.aadhar_number || undefined;
+
             const childCustomer = await db.addCustomer(
               currentHotel.id,
               {
                 full_name: g.full_name,
                 phone: resolvedPhone,
                 gender: g.gender || 'Male',
-                country: 'India'
+                address: resolvedAddress,
+                city: resolvedCity,
+                state: resolvedState,
+                country: resolvedCountry,
+                vehicle_number: resolvedVehicle,
+                nationality: 'Indian'
               },
-              g.aadhar_number ? 'Aadhar' : undefined,
-              g.aadhar_number || undefined
+              docTypeVal,
+              docNumVal,
+              g.front_image || undefined,
+              g.back_image || undefined
             );
             return {
               customer_id: childCustomer.id,
@@ -763,9 +818,9 @@ function CheckInFormContent() {
                       );
                     }
                     return (
-                      <div key={idx} className="bg-slate-50/50 p-4 rounded-[20px] border border-slate-100 space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-bold text-slate-500">Additional Guest #{idx} Details</span>
+                      <div key={idx} className="bg-slate-50/70 p-4 rounded-[20px] border border-slate-200/80 space-y-3.5">
+                        <div className="flex justify-between items-center pb-2 border-b border-slate-200/60">
+                          <span className="text-xs font-bold text-slate-700">Secondary Guest #{idx} Information</span>
                           <button
                             type="button"
                             onClick={() => removeGuestRow(idx)}
@@ -815,19 +870,8 @@ function CheckInFormContent() {
                               <option value="BF">Boyfriend</option>
                               <option value="Family">Family Member</option>
                               <option value="Child">Child</option>
+                              <option value="Self">Self</option>
                             </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Aadhaar Card Number *</label>
-                            <input
-                              type="text"
-                              required
-                              value={g.aadhar_number || ''}
-                              onChange={(e) => handleGuestFieldChange(idx, 'aadhar_number', e.target.value)}
-                              className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-primary transition-all"
-                              placeholder="12-digit Aadhaar Number"
-                            />
                           </div>
 
                           <div className="grid grid-cols-2 gap-2">
@@ -854,6 +898,111 @@ function CheckInFormContent() {
                               />
                             </div>
                           </div>
+
+                          {/* ID Document Type & Number */}
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">ID Document *</label>
+                              <select
+                                value={g.doc_type || 'Aadhar'}
+                                onChange={(e) => handleGuestFieldChange(idx, 'doc_type', e.target.value)}
+                                className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5"
+                              >
+                                <option value="Aadhar">Aadhaar</option>
+                                <option value="Driving License">Driving License</option>
+                                <option value="Passport">Passport</option>
+                                <option value="Voter ID">Voter ID</option>
+                              </select>
+                            </div>
+                            <input
+                              type="text"
+                              value={g.doc_number || g.aadhar_number || ''}
+                              onChange={(e) => handleGuestFieldChange(idx, 'doc_number', e.target.value)}
+                              className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                              placeholder={g.doc_type === 'Aadhar' || !g.doc_type ? '12-digit Aadhaar Number' : 'Document ID Number'}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Vehicle Number Checkbox Section */}
+                        <div className="p-2.5 bg-white border border-slate-200/80 rounded-xl space-y-1.5">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                            <input
+                              type="checkbox"
+                              checked={g.same_vehicle_as_primary !== false}
+                              onChange={(e) => handleGuestFieldChange(idx, 'same_vehicle_as_primary', e.target.checked)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 accent-blue-600"
+                            />
+                            Vehicle Number - Same as primary guest
+                          </label>
+                          {g.same_vehicle_as_primary === false ? (
+                            <input
+                              type="text"
+                              value={g.vehicle_number || ''}
+                              onChange={(e) => handleGuestFieldChange(idx, 'vehicle_number', e.target.value.toUpperCase())}
+                              placeholder="Enter Vehicle Number (e.g. MH09AB1234)"
+                              className="w-full text-xs font-bold text-slate-700 uppercase bg-slate-50 border border-slate-200 rounded-lg p-2 focus:bg-white focus:outline-none"
+                            />
+                          ) : (
+                            <p className="text-[10px] font-medium text-slate-400 pl-6">
+                              Auto-linked vehicle: <span className="font-bold text-slate-600">{vehicleNumber || selectedCustomer?.vehicle_number || 'None specified'}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Document Photo Uploads */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">ID Front Photo</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  try {
+                                    const { optimizeImage } = await import('../../lib/imageOptimizer');
+                                    const { dataUrl } = await optimizeImage(file, 'document');
+                                    handleGuestFieldChange(idx, 'front_image', dataUrl);
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }
+                              }}
+                              className="text-[10px] text-slate-500 w-full file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            />
+                            {g.front_image && (
+                              <div className="mt-1 h-10 w-16 rounded border overflow-hidden">
+                                <img src={g.front_image} alt="ID Front" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">ID Back Photo</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  try {
+                                    const { optimizeImage } = await import('../../lib/imageOptimizer');
+                                    const { dataUrl } = await optimizeImage(file, 'document');
+                                    handleGuestFieldChange(idx, 'back_image', dataUrl);
+                                  } catch (err) {
+                                    console.error(err);
+                                  }
+                                }
+                              }}
+                              className="text-[10px] text-slate-500 w-full file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            />
+                            {g.back_image && (
+                              <div className="mt-1 h-10 w-16 rounded border overflow-hidden">
+                                <img src={g.back_image} alt="ID Back" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 pt-1">
@@ -864,7 +1013,7 @@ function CheckInFormContent() {
                             onChange={(e) => handleGuestFieldChange(idx, 'document_verified', e.target.checked)}
                             className="w-4 h-4 rounded text-primary focus:ring-primary border-slate-300"
                           />
-                          <label htmlFor={`verify-${idx}`} className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer select-none">Aadhaar Card Verified</label>
+                          <label htmlFor={`verify-${idx}`} className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer select-none">ID Document Verified</label>
                         </div>
                       </div>
                     );

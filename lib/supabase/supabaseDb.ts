@@ -1321,6 +1321,132 @@ export const supabaseDb = {
     return checkIn;
   },
 
+  // Add a secondary guest to an active stay (late arrival mapping)
+  addSecondaryGuestToStay: async (
+    hotelId: string,
+    checkInId: string,
+    customerData: Omit<Customer, 'id' | 'hotel_id' | 'created_at'>,
+    docData?: { type: string; number: string; front: string; back: string },
+    relationship: 'Self' | 'Friend' | 'Family' | 'Wife' | 'Husband' | 'GF' | 'BF' | 'Child' = 'Friend',
+    documentVerified: boolean = true
+  ): Promise<CheckInGuest | null> => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+
+    // 1. Create or resolve customer profile & documents
+    const customer = await supabaseDb.addCustomer(
+      hotelId,
+      customerData,
+      docData?.type,
+      docData?.number,
+      docData?.front,
+      docData?.back
+    );
+
+    if (!customer) throw new Error('Failed to create or resolve customer profile');
+
+    // 2. Check if customer is already added to this check-in
+    const { data: existingGuest } = await supabase
+      .from('check_in_guests')
+      .select('*')
+      .eq('checkin_id', checkInId)
+      .eq('customer_id', customer.id)
+      .maybeSingle();
+
+    if (existingGuest) {
+      // Update relationship & document_verified
+      const { data: updated, error: updateErr } = await supabase
+        .from('check_in_guests')
+        .update({
+          relationship,
+          document_verified: documentVerified
+        })
+        .eq('id', existingGuest.id)
+        .select()
+        .single();
+
+      if (updateErr) throw new Error(updateErr.message);
+      broadcastDbUpdate('checkins');
+      broadcastDbUpdate('customers');
+      return updated;
+    }
+
+    // 3. Insert into check_in_guests
+    const { data: newGuest, error: insertErr } = await supabase
+      .from('check_in_guests')
+      .insert({
+        checkin_id: checkInId,
+        customer_id: customer.id,
+        relationship,
+        document_verified: documentVerified
+      })
+      .select()
+      .single();
+
+    if (insertErr || !newGuest) {
+      throw new Error(insertErr?.message || 'Failed to add guest to check-in');
+    }
+
+    // 4. Update number_of_guests on check_ins
+    const { data: currentStay } = await supabase
+      .from('check_ins')
+      .select('number_of_guests')
+      .eq('id', checkInId)
+      .single();
+
+    const currentCount = currentStay?.number_of_guests || 1;
+    await supabase
+      .from('check_ins')
+      .update({ number_of_guests: currentCount + 1 })
+      .eq('id', checkInId);
+
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('customers');
+
+    return newGuest;
+  },
+
+  // Remove a secondary guest from an active stay
+  removeSecondaryGuestFromStay: async (
+    hotelId: string,
+    checkInId: string,
+    guestId: string
+  ): Promise<boolean> => {
+    if (!supabase) return false;
+
+    // Delete guest entry
+    const { error } = await supabase
+      .from('check_in_guests')
+      .delete()
+      .eq('id', guestId)
+      .eq('checkin_id', checkInId);
+
+    if (error) {
+      console.error('Failed to remove guest from stay:', error.message);
+      throw new Error(error.message);
+    }
+
+    // Update number_of_guests on check_ins
+    const { data: currentStay } = await supabase
+      .from('check_ins')
+      .select('number_of_guests')
+      .eq('id', checkInId)
+      .single();
+
+    if (currentStay) {
+      const newCount = Math.max(1, (currentStay.number_of_guests || 1) - 1);
+      await supabase
+        .from('check_ins')
+        .update({ number_of_guests: newCount })
+        .eq('id', checkInId);
+    }
+
+    broadcastDbUpdate('checkins');
+    broadcastDbUpdate('customers');
+    return true;
+  },
+
+
+
   // Checkout Operation
   checkOut: async (
     hotelId: string, 
@@ -2117,5 +2243,56 @@ export const supabaseDb = {
       return null;
     }
     return data;
-  }
+  },
+
+  // ── Audit Logs ────────────────────────────────────────────
+  getAuditLogs: async (filters?: {
+    action?: string;
+    hotel_id?: string;
+    actor_email?: string;
+    from_date?: string;
+    to_date?: string;
+    limit?: number;
+  }): Promise<any[]> => {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    // In a browser context we can't use the service role key safely.
+    // Fall back to the anon client (relies on RLS allowing superadmin to read).
+    const client = (serviceRoleKey && supabaseUrl && typeof window === 'undefined')
+      ? (await import('@supabase/supabase-js').then(m => m.createClient(supabaseUrl, serviceRoleKey)))
+      : supabase;
+
+    if (!client) return [];
+
+    let query = (client as any)
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(filters?.limit ?? 200);
+
+    if (filters?.action && filters.action !== 'all') {
+      query = query.eq('action', filters.action);
+    }
+    if (filters?.hotel_id) {
+      query = query.eq('hotel_id', filters.hotel_id);
+    }
+    if (filters?.actor_email) {
+      query = query.ilike('actor_email', `%${filters.actor_email}%`);
+    }
+    if (filters?.from_date) {
+      query = query.gte('created_at', filters.from_date);
+    }
+    if (filters?.to_date) {
+      // Include the whole to_date day
+      query = query.lte('created_at', filters.to_date + 'T23:59:59Z');
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[AuditLogs] Failed to fetch audit logs:', error.message);
+      return [];
+    }
+    return data ?? [];
+  },
 };

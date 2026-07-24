@@ -29,6 +29,7 @@ import {
 import { db } from '../lib/supabase/client';
 import { Room, ExtendedCheckIn, RoomStatus, FolioLedger } from '../types';
 import LoadingButton from './ui/LoadingButton';
+import SecondaryGuestForm from './SecondaryGuestForm';
 
 interface RoomDetailModalProps {
   room: Room;
@@ -169,6 +170,53 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
 
   // Action loading state (extend stay / checkout)
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Secondary guest management states
+  const [showAddSecondaryGuestModal, setShowAddSecondaryGuestModal] = useState(false);
+  const [submittingSecondaryGuest, setSubmittingSecondaryGuest] = useState(false);
+  const [removingGuestId, setRemovingGuestId] = useState<string | null>(null);
+
+  const handleAddSecondaryGuestSubmit = async (
+    customerData: any,
+    docData?: any,
+    relationship?: string,
+    documentVerified?: boolean
+  ) => {
+    if (!stayData || !hotelId) return;
+    setSubmittingSecondaryGuest(true);
+    try {
+      await db.addSecondaryGuestToStay(
+        hotelId,
+        stayData.id,
+        customerData,
+        docData,
+        (relationship as any) || 'Friend',
+        documentVerified !== false
+      );
+      setShowAddSecondaryGuestModal(false);
+      await loadActiveStay();
+    } catch (err: any) {
+      console.error(err);
+      alert('Failed to add secondary guest: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setSubmittingSecondaryGuest(false);
+    }
+  };
+
+  const handleRemoveSecondaryGuest = async (guestId: string) => {
+    if (!stayData || !hotelId) return;
+    if (!confirm('Are you sure you want to remove this secondary guest from the stay?')) return;
+    setRemovingGuestId(guestId);
+    try {
+      await db.removeSecondaryGuestFromStay(hotelId, stayData.id, guestId);
+      await loadActiveStay();
+    } catch (err: any) {
+      console.error(err);
+      alert('Failed to remove guest: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setRemovingGuestId(null);
+    }
+  };
 
   // Ledger states
   const [ledgerEntries, setLedgerEntries] = useState<FolioLedger[]>([]);
@@ -694,29 +742,59 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                     )}
                   </div>
 
-                  {/* Guests List */}
-                  {stayData.guests && stayData.guests.some(g => g.relationship !== 'Self') && (
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Additional Guests</h4>
+                  {/* Guests List & Add Secondary Guest */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Additional Guests ({stayData.guests ? stayData.guests.filter(g => g.relationship !== 'Self').length : 0})
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddSecondaryGuestModal(true)}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 border border-blue-100 hover:bg-blue-100/80 px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition-all shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Secondary Guest
+                      </button>
+                    </div>
+
+                    {stayData.guests && stayData.guests.some(g => g.relationship !== 'Self') ? (
                       <div className="space-y-2">
                         {stayData.guests.filter(g => g.relationship !== 'Self').map((g) => (
-                          <div key={g.id} className="p-3 rounded-xl border border-slate-200/60 text-xs font-medium bg-slate-50/20 space-y-2">
+                          <div key={g.id} className="p-3 rounded-xl border border-slate-200/70 text-xs font-medium bg-slate-50/40 space-y-2">
                             <div className="flex items-center justify-between">
                               <span className="text-slate-800 font-bold">{g.customer?.full_name} ({g.relationship})</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                g.document_verified 
-                                  ? 'bg-green-50 text-green-700 border border-green-200/60' 
-                                  : 'bg-red-50 text-red-700 border border-red-200/60'
-                              }`}>
-                                {g.document_verified ? 'Docs Verified' : 'No Docs'}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  g.document_verified 
+                                    ? 'bg-green-50 text-green-700 border border-green-200/60' 
+                                    : 'bg-red-50 text-red-700 border border-red-200/60'
+                                }`}>
+                                  {g.document_verified ? 'Docs Verified' : 'No Docs'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSecondaryGuest(g.id)}
+                                  disabled={removingGuestId === g.id}
+                                  className="text-slate-400 hover:text-red-600 transition-colors p-1"
+                                  title="Remove Secondary Guest"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-505 pt-1.5 border-t border-slate-200/40">
+                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 pt-1.5 border-t border-slate-200/40">
                               {g.customer?.phone && (
                                 <div>
                                   <span className="font-bold text-slate-400 uppercase tracking-wider block">Phone</span>
                                   <span className="text-slate-700 font-semibold">{g.customer.phone}</span>
+                                </div>
+                              )}
+                              {g.customer?.vehicle_number && (
+                                <div>
+                                  <span className="font-bold text-slate-400 uppercase tracking-wider block">Vehicle</span>
+                                  <span className="text-slate-700 font-bold">{g.customer.vehicle_number}</span>
                                 </div>
                               )}
                               {g.customer?.customer_documents && g.customer.customer_documents.length > 0 && (
@@ -731,8 +809,12 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="p-3 text-center border border-dashed border-slate-200 rounded-xl text-xs text-slate-400 italic">
+                        No secondary guests mapped yet. Click "+ Add Secondary Guest" to map late-arriving guests.
+                      </div>
+                    )}
+                  </div>
 
                   {/* Bill Details */}
                   <div className="space-y-4">
@@ -1301,6 +1383,36 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
           )}
         </div>
       </div>
+
+      {/* Modal Dialog for Adding Late Secondary Guest */}
+      {showAddSecondaryGuestModal && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-150 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-800">Add Secondary Guest to Room {room.room_number}</h3>
+                <p className="text-xs text-slate-500 font-medium">Map late-arriving guest to current stay with full guest profile & ID proof</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddSecondaryGuestModal(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <SecondaryGuestForm
+              primaryCustomer={stayData?.primary_customer}
+              primaryVehicleNumber={stayData?.vehicle_number}
+              onSubmit={handleAddSecondaryGuestSubmit}
+              onCancel={() => setShowAddSecondaryGuestModal(false)}
+              submitButtonLabel="Map Secondary Guest to Room"
+              isSubmitting={submittingSecondaryGuest}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }

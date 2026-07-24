@@ -26,7 +26,8 @@ import {
   Globe,
   ChevronLeft,
   MoreHorizontal,
-  History
+  History,
+  ShieldCheck
 } from 'lucide-react';
 import { getSessionUser, setSessionUser, supabase, isRealSupabase, db } from '../lib/supabase/client';
 import { User, Hotel } from '../types';
@@ -204,6 +205,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const menuItems = isSuperAdmin
     ? [
         { name: 'Hotels Admin', path: '/super-admin', icon: Building2 },
+        { name: 'Audit Logs', path: '/audit', icon: ShieldCheck },
       ]
     : [
         { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
