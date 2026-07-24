@@ -1403,6 +1403,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
             </div>
 
             <SecondaryGuestForm
+              hotelId={hotelId}
               primaryCustomer={stayData?.primary_customer}
               primaryVehicleNumber={stayData?.vehicle_number}
               onSubmit={handleAddSecondaryGuestSubmit}

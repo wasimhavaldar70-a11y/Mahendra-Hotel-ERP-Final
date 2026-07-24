@@ -6,14 +6,15 @@
 // ========================================================
 
 import React, { useState, useEffect } from 'react';
-import { User, Phone, MapPin, ShieldAlert, Upload, Check, Loader2, Camera, ShieldCheck, Sparkles, FileText, Car, CheckSquare, Square } from 'lucide-react';
+import { User, Phone, MapPin, Search, Upload, Check, Loader2, Camera, ShieldCheck, Sparkles, FileText, Car, X } from 'lucide-react';
 import { Customer } from '../types';
 import { STATE_CITIES } from '../lib/constants/statesCities';
-import { supabase } from '../lib/supabase/client';
 import { optimizeImage } from '../lib/imageOptimizer';
+import CustomerSearch from './CustomerSearch';
 import LoadingButton from './ui/LoadingButton';
 
 interface SecondaryGuestFormProps {
+  hotelId?: string;
   primaryCustomer?: Partial<Customer> | null;
   primaryVehicleNumber?: string;
   initialData?: Partial<Customer>;
@@ -31,6 +32,7 @@ interface SecondaryGuestFormProps {
 }
 
 export default function SecondaryGuestForm({
+  hotelId,
   primaryCustomer,
   primaryVehicleNumber = '',
   initialData,
@@ -43,6 +45,9 @@ export default function SecondaryGuestForm({
 }: SecondaryGuestFormProps) {
   const primaryVehicle = primaryVehicleNumber || primaryCustomer?.vehicle_number || '';
   
+  // Search modal state
+  const [showSearchModal, setShowSearchModal] = useState(false);
+
   // Basic guest fields
   const [fullName, setFullName] = useState(initialData?.full_name || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
@@ -50,16 +55,26 @@ export default function SecondaryGuestForm({
   const [relationship, setRelationship] = useState<string>(initialRelationship);
   const [documentVerified, setDocumentVerified] = useState(true);
 
-  // Address fields
-  const [sameAddressAsPrimary, setSameAddressAsPrimary] = useState(true);
-  const [address, setAddress] = useState(initialData?.address || primaryCustomer?.address || '');
-  const [city, setCity] = useState(initialData?.city || primaryCustomer?.city || '');
-  const [state, setState] = useState(initialData?.state || primaryCustomer?.state || '');
-  const [country, setCountry] = useState(initialData?.country || primaryCustomer?.country || 'India');
+  // Address fields (same_address_as_primary UNCHECKED by default as requested)
+  const [sameAddressAsPrimary, setSameAddressAsPrimary] = useState(false);
+  const [address, setAddress] = useState(initialData?.address || '');
+  const [city, setCity] = useState(initialData?.city || '');
+  const [state, setState] = useState(initialData?.state || '');
+  const [country, setCountry] = useState(initialData?.country || 'India');
 
-  // Vehicle field with checkbox
-  const [sameVehicleAsPrimary, setSameVehicleAsPrimary] = useState(true);
-  const [vehicleNumber, setVehicleNumber] = useState(initialData?.vehicle_number || primaryVehicle);
+  const [isOtherState, setIsOtherState] = useState(() => {
+    const val = initialData?.state || '';
+    return !!(val && !Object.keys(STATE_CITIES).includes(val));
+  });
+  const [isOtherCity, setIsOtherCity] = useState(() => {
+    const val = initialData?.city || '';
+    const st = initialData?.state || '';
+    return !!(val && (!st || !STATE_CITIES[st]?.includes(val)));
+  });
+
+  // Vehicle field with checkbox (same_vehicle_as_primary UNCHECKED by default as requested)
+  const [sameVehicleAsPrimary, setSameVehicleAsPrimary] = useState(false);
+  const [vehicleNumber, setVehicleNumber] = useState(initialData?.vehicle_number || '');
 
   // ID Documents
   const [docType, setDocType] = useState<'Aadhar' | 'Driving License' | 'Passport' | 'Voter ID'>(initialDoc?.type || 'Aadhar');
@@ -73,22 +88,67 @@ export default function SecondaryGuestForm({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Sync address with primary customer when checkbox is toggled
+  // Sync address with primary customer when checkbox is checked
   useEffect(() => {
     if (sameAddressAsPrimary && primaryCustomer) {
       setAddress(primaryCustomer.address || '');
       setCity(primaryCustomer.city || '');
       setState(primaryCustomer.state || '');
       setCountry(primaryCustomer.country || 'India');
+      setIsOtherState(false);
+      setIsOtherCity(false);
     }
   }, [sameAddressAsPrimary, primaryCustomer]);
 
-  // Sync vehicle number with primary when checkbox is toggled
+  // Sync vehicle number with primary when checkbox is checked
   useEffect(() => {
     if (sameVehicleAsPrimary) {
       setVehicleNumber(primaryVehicle);
     }
   }, [sameVehicleAsPrimary, primaryVehicle]);
+
+  const handleSelectCustomerSearchResult = (customer: Customer) => {
+    setFullName(customer.full_name || '');
+    setPhone(customer.phone || '');
+    setGender(customer.gender || 'Male');
+    setAddress(customer.address || '');
+    setCity(customer.city || '');
+    setState(customer.state || '');
+    setCountry(customer.country || 'India');
+    setVehicleNumber(customer.vehicle_number || '');
+    setSameAddressAsPrimary(false);
+    setSameVehicleAsPrimary(false);
+
+    if (customer.state && !Object.keys(STATE_CITIES).includes(customer.state)) {
+      setIsOtherState(true);
+    } else {
+      setIsOtherState(false);
+    }
+
+    if (customer.city && customer.state && STATE_CITIES[customer.state] && !STATE_CITIES[customer.state].includes(customer.city)) {
+      setIsOtherCity(true);
+    } else {
+      setIsOtherCity(false);
+    }
+
+    if (customer.customer_documents && customer.customer_documents.length > 0) {
+      const primaryDoc = customer.customer_documents.find(d => d.is_primary) || customer.customer_documents[0];
+      if (primaryDoc) {
+        setDocType(primaryDoc.document_type as any);
+        setDocNumber(primaryDoc.document_number || '');
+        if (primaryDoc.front_image) {
+          setFrontImage(primaryDoc.front_image);
+          setFrontPreview(primaryDoc.front_image);
+        }
+        if (primaryDoc.back_image) {
+          setBackImage(primaryDoc.back_image);
+          setBackPreview(primaryDoc.back_image);
+        }
+      }
+    }
+
+    setShowSearchModal(false);
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
     const file = e.target.files?.[0];
@@ -178,6 +238,49 @@ export default function SecondaryGuestForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Top Bar with Guest Search/Lookup Option */}
+      {hotelId && (
+        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-bold text-slate-700">Search Existing Guest Database</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSearchModal(true)}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-2xs hover:bg-blue-50 transition-colors"
+          >
+            Search/Lookup Guest
+          </button>
+        </div>
+      )}
+
+      {/* Guest Search Modal */}
+      {showSearchModal && hotelId && (
+        <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-5 space-y-4 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-150 pb-2">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Search className="w-4 h-4 text-blue-600" />
+                Look Up Guest Profile
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowSearchModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <CustomerSearch
+              hotelId={hotelId}
+              onSelectCustomer={(cust) => handleSelectCustomerSearchResult(cust)}
+              onClear={() => {}}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Personal Info Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
@@ -259,22 +362,24 @@ export default function SecondaryGuestForm({
         </div>
       </div>
 
-      {/* Vehicle Number Section with Checkbox */}
+      {/* Vehicle Number Section with Checkbox (UNCHECKED by default) */}
       <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer select-none">
             <Car className="w-4 h-4 text-blue-600" />
             Vehicle Details
           </label>
-          <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
-            <input
-              type="checkbox"
-              checked={sameVehicleAsPrimary}
-              onChange={(e) => setSameVehicleAsPrimary(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 accent-blue-600"
-            />
-            Same vehicle number as primary guest
-          </label>
+          {primaryVehicle && (
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+              <input
+                type="checkbox"
+                checked={sameVehicleAsPrimary}
+                onChange={(e) => setSameVehicleAsPrimary(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 accent-blue-600"
+              />
+              Same vehicle number as primary guest
+            </label>
+          )}
         </div>
 
         {sameVehicleAsPrimary ? (
@@ -295,8 +400,8 @@ export default function SecondaryGuestForm({
         )}
       </div>
 
-      {/* Address Section */}
-      <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
+      {/* Address Section with State & City Dropdowns (UNCHECKED by default) */}
+      <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
             <MapPin className="w-4 h-4 text-blue-600" />
@@ -316,39 +421,111 @@ export default function SecondaryGuestForm({
         </div>
 
         {!sameAddressAsPrimary && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
-            <div className="md:col-span-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div className="md:col-span-2">
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">Street Address</label>
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Full residential address"
+                placeholder="Flat / House / Street Address"
                 className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
             </div>
+
+            {/* State Dropdown */}
             <div>
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="City"
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">State</label>
+              <select
+                value={isOtherState ? 'Other' : state}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'Other') {
+                    setState('');
+                    setIsOtherState(true);
+                    setCity('');
+                    setIsOtherCity(true);
+                  } else {
+                    setState(val);
+                    setIsOtherState(false);
+                    setCity('');
+                    setIsOtherCity(false);
+                  }
+                }}
                 className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
+              >
+                <option value="">Select State</option>
+                {Object.keys(STATE_CITIES).map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+                <option value="Other">Other State (Type manually)</option>
+              </select>
+
+              {isOtherState && (
+                <input
+                  type="text"
+                  value={state}
+                  onChange={(e) => setState(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                  className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 mt-2"
+                  placeholder="Enter custom state name"
+                />
+              )}
             </div>
+
+            {/* City Dropdown */}
             <div>
-              <input
-                type="text"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-                placeholder="State"
-                className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">City</label>
+              {isOtherState ? (
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                  className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  placeholder="Enter city name"
+                />
+              ) : (
+                <>
+                  <select
+                    value={isOtherCity ? 'Other' : city}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'Other') {
+                        setCity('');
+                        setIsOtherCity(true);
+                      } else {
+                        setCity(val);
+                        setIsOtherCity(false);
+                      }
+                    }}
+                    className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Select City</option>
+                    {(STATE_CITIES[state] || []).map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value="Other">Other City (Type manually)</option>
+                  </select>
+
+                  {isOtherCity && (
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
+                      className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 mt-2"
+                      placeholder="Enter custom city name"
+                    />
+                  )}
+                </>
+              )}
             </div>
-            <div>
+
+            {/* Country */}
+            <div className="md:col-span-2">
+              <label className="text-[11px] font-bold text-slate-600 block mb-1">Country</label>
               <input
                 type="text"
                 value={country}
-                onChange={(e) => setCountry(e.target.value)}
+                onChange={(e) => setCountry(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                 placeholder="Country"
                 className="w-full text-xs font-medium border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
@@ -357,12 +534,12 @@ export default function SecondaryGuestForm({
         )}
       </div>
 
-      {/* ID Document Details & Uploads */}
+      {/* ID Document Details & Take Photo / Upload Buttons */}
       <div className="p-3.5 bg-blue-50/40 border border-blue-100 rounded-xl space-y-3">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
             <FileText className="w-4 h-4 text-blue-600" />
-            ID Proof Document
+            ID Proof Document Verification
           </label>
           <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-slate-700 select-none">
             <input
@@ -418,62 +595,94 @@ export default function SecondaryGuestForm({
           </div>
         </div>
 
-        {/* Photo Uploads Grid */}
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          {/* Front Image */}
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-              Front Side Photo
-            </label>
-            <div className="relative border border-dashed border-slate-300 rounded-xl p-3 bg-white hover:bg-slate-50/80 transition-colors text-center cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e, 'front')}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-              />
-              {frontPreview ? (
-                <div className="relative h-20 w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
-                  <img src={frontPreview} alt="Front preview" className="w-full h-full object-cover" />
-                  <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-0.5">
-                    <Check className="w-3 h-3" />
-                  </div>
+        {/* Dual Photo Buttons: Upload File & Take Photo */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          {/* Front Side */}
+          <div className="bg-white p-3 rounded-xl border border-slate-200/80 space-y-2">
+            <span className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider block">ID Front Side Photo</span>
+            
+            {frontPreview ? (
+              <div className="relative h-28 w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                <img src={frontPreview} alt="Front preview" className="w-full h-full object-cover" />
+                <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-0.5">
+                  <Check className="w-3.5 h-3.5" />
                 </div>
-              ) : (
-                <div className="py-2 flex flex-col items-center justify-center text-slate-400">
-                  <Camera className="w-5 h-5 mb-1 text-slate-400" />
-                  <span className="text-[10px] font-bold text-slate-600">Upload Front</span>
-                </div>
-              )}
+              </div>
+            ) : (
+              <div className="h-24 rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
+                <FileText className="w-6 h-6 mb-1 text-slate-400" />
+                <span className="text-[10px] font-bold text-slate-500">No Front Image Selected</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <label className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-bold cursor-pointer transition-colors shadow-2xs">
+                <Upload className="w-3.5 h-3.5 text-slate-600" />
+                Upload File
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, 'front')}
+                  className="hidden"
+                />
+              </label>
+
+              <label className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer transition-colors shadow-2xs">
+                <Camera className="w-3.5 h-3.5 text-white" />
+                Take Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleImageUpload(e, 'front')}
+                  className="hidden"
+                />
+              </label>
             </div>
             {errors.frontImage && <p className="text-[10px] text-red-500 font-semibold mt-1">{errors.frontImage}</p>}
           </div>
 
-          {/* Back Image */}
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-              Back Side Photo
-            </label>
-            <div className="relative border border-dashed border-slate-300 rounded-xl p-3 bg-white hover:bg-slate-50/80 transition-colors text-center cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e, 'back')}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-              />
-              {backPreview ? (
-                <div className="relative h-20 w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
-                  <img src={backPreview} alt="Back preview" className="w-full h-full object-cover" />
-                  <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-0.5">
-                    <Check className="w-3 h-3" />
-                  </div>
+          {/* Back Side */}
+          <div className="bg-white p-3 rounded-xl border border-slate-200/80 space-y-2">
+            <span className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider block">ID Back Side Photo</span>
+            
+            {backPreview ? (
+              <div className="relative h-28 w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                <img src={backPreview} alt="Back preview" className="w-full h-full object-cover" />
+                <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-0.5">
+                  <Check className="w-3.5 h-3.5" />
                 </div>
-              ) : (
-                <div className="py-2 flex flex-col items-center justify-center text-slate-400">
-                  <Camera className="w-5 h-5 mb-1 text-slate-400" />
-                  <span className="text-[10px] font-bold text-slate-600">Upload Back</span>
-                </div>
-              )}
+              </div>
+            ) : (
+              <div className="h-24 rounded-lg border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
+                <FileText className="w-6 h-6 mb-1 text-slate-400" />
+                <span className="text-[10px] font-bold text-slate-500">No Back Image Selected</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <label className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-bold cursor-pointer transition-colors shadow-2xs">
+                <Upload className="w-3.5 h-3.5 text-slate-600" />
+                Upload File
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, 'back')}
+                  className="hidden"
+                />
+              </label>
+
+              <label className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold cursor-pointer transition-colors shadow-2xs">
+                <Camera className="w-3.5 h-3.5 text-white" />
+                Take Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(e) => handleImageUpload(e, 'back')}
+                  className="hidden"
+                />
+              </label>
             </div>
             {errors.backImage && <p className="text-[10px] text-red-500 font-semibold mt-1">{errors.backImage}</p>}
           </div>

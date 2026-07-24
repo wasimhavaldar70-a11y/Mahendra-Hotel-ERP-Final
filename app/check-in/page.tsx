@@ -13,6 +13,7 @@ import CustomerForm from '../../components/CustomerForm';
 import LoadingButton from '../../components/ui/LoadingButton';
 import { db, getSessionUser } from '../../lib/supabase/client';
 import { Room, Customer, CustomerDocument } from '../../types';
+import { STATE_CITIES } from '../../lib/constants/statesCities';
 import { 
   ClipboardSignature, 
   BedDouble, 
@@ -24,7 +25,9 @@ import {
   CalendarCheck,
   X,
   Search,
-  Loader2
+  Loader2,
+  Upload,
+  Camera
 } from 'lucide-react';
 
 const calculateStayDuration = (
@@ -292,9 +295,13 @@ function CheckInFormContent() {
         aadhar_number: '',
         phone: '',
         gender: 'Male',
-        same_vehicle_as_primary: true,
+        same_vehicle_as_primary: false,
         vehicle_number: '',
-        same_address_as_primary: true,
+        same_address_as_primary: false,
+        address: '',
+        city: '',
+        state: '',
+        country: 'India',
         doc_type: 'Aadhar',
         doc_number: '',
         front_image: '',
@@ -924,18 +931,97 @@ function CheckInFormContent() {
                           </div>
                         </div>
 
-                        {/* Vehicle Number Checkbox Section */}
+                        {/* Address Details with State & City Dropdowns */}
+                        <div className="p-2.5 bg-white border border-slate-200/80 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Address Details</span>
+                            {selectedCustomer && (
+                              <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-semibold text-slate-600 select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={g.same_address_as_primary === true}
+                                  onChange={(e) => handleGuestFieldChange(idx, 'same_address_as_primary', e.target.checked)}
+                                  className="w-3.5 h-3.5 text-blue-600 rounded focus:ring-blue-500 accent-blue-600"
+                                />
+                                Same address as primary guest
+                              </label>
+                            )}
+                          </div>
+
+                          {g.same_address_as_primary === true ? (
+                            <p className="text-[10px] font-medium text-slate-400">
+                              Linked address: <span className="font-bold text-slate-600">{selectedCustomer?.address || 'Primary Guest Address'}</span>
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                              <div className="md:col-span-3">
+                                <input
+                                  type="text"
+                                  value={g.address || ''}
+                                  onChange={(e) => handleGuestFieldChange(idx, 'address', e.target.value)}
+                                  placeholder="Residential Address"
+                                  className="w-full text-xs font-medium border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-none"
+                                />
+                              </div>
+
+                              <div>
+                                <select
+                                  value={g.state || ''}
+                                  onChange={(e) => {
+                                    handleGuestFieldChange(idx, 'state', e.target.value);
+                                    handleGuestFieldChange(idx, 'city', '');
+                                  }}
+                                  className="w-full text-xs font-medium border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-none"
+                                >
+                                  <option value="">Select State</option>
+                                  {Object.keys(STATE_CITIES).map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <select
+                                  value={g.city || ''}
+                                  onChange={(e) => handleGuestFieldChange(idx, 'city', e.target.value)}
+                                  className="w-full text-xs font-medium border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-none"
+                                >
+                                  <option value="">Select City</option>
+                                  {(STATE_CITIES[g.state || ''] || []).map((c) => (
+                                    <option key={c} value={c}>{c}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <input
+                                  type="text"
+                                  value={g.country || 'India'}
+                                  onChange={(e) => handleGuestFieldChange(idx, 'country', e.target.value)}
+                                  placeholder="Country"
+                                  className="w-full text-xs font-medium border border-slate-200 rounded-lg p-2 bg-slate-50 focus:bg-white focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Vehicle Number Checkbox Section (UNCHECKED by default) */}
                         <div className="p-2.5 bg-white border border-slate-200/80 rounded-xl space-y-1.5">
                           <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
                             <input
                               type="checkbox"
-                              checked={g.same_vehicle_as_primary !== false}
+                              checked={g.same_vehicle_as_primary === true}
                               onChange={(e) => handleGuestFieldChange(idx, 'same_vehicle_as_primary', e.target.checked)}
                               className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 accent-blue-600"
                             />
                             Vehicle Number - Same as primary guest
                           </label>
-                          {g.same_vehicle_as_primary === false ? (
+                          {g.same_vehicle_as_primary === true ? (
+                            <p className="text-[10px] font-medium text-slate-400 pl-6">
+                              Auto-linked vehicle: <span className="font-bold text-slate-600">{vehicleNumber || selectedCustomer?.vehicle_number || 'None specified'}</span>
+                            </p>
+                          ) : (
                             <input
                               type="text"
                               value={g.vehicle_number || ''}
@@ -943,65 +1029,121 @@ function CheckInFormContent() {
                               placeholder="Enter Vehicle Number (e.g. MH09AB1234)"
                               className="w-full text-xs font-bold text-slate-700 uppercase bg-slate-50 border border-slate-200 rounded-lg p-2 focus:bg-white focus:outline-none"
                             />
-                          ) : (
-                            <p className="text-[10px] font-medium text-slate-400 pl-6">
-                              Auto-linked vehicle: <span className="font-bold text-slate-600">{vehicleNumber || selectedCustomer?.vehicle_number || 'None specified'}</span>
-                            </p>
                           )}
                         </div>
 
-                        {/* Document Photo Uploads */}
+                        {/* Document Photo Uploads with Upload File & Take Photo buttons */}
                         <div className="grid grid-cols-2 gap-2 pt-1">
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">ID Front Photo</label>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  try {
-                                    const { optimizeImage } = await import('../../lib/imageOptimizer');
-                                    const { dataUrl } = await optimizeImage(file, 'document');
-                                    handleGuestFieldChange(idx, 'front_image', dataUrl);
-                                  } catch (err) {
-                                    console.error(err);
-                                  }
-                                }
-                              }}
-                              className="text-[10px] text-slate-500 w-full file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                            />
-                            {g.front_image && (
-                              <div className="mt-1 h-10 w-16 rounded border overflow-hidden">
+                          <div className="bg-white p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                            <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">ID Front Photo</label>
+                            {g.front_image ? (
+                              <div className="h-16 w-full rounded border overflow-hidden">
                                 <img src={g.front_image} alt="ID Front" className="w-full h-full object-cover" />
                               </div>
-                            )}
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">ID Back Photo</label>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  try {
-                                    const { optimizeImage } = await import('../../lib/imageOptimizer');
-                                    const { dataUrl } = await optimizeImage(file, 'document');
-                                    handleGuestFieldChange(idx, 'back_image', dataUrl);
-                                  } catch (err) {
-                                    console.error(err);
-                                  }
-                                }
-                              }}
-                              className="text-[10px] text-slate-500 w-full file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                            />
-                            {g.back_image && (
-                              <div className="mt-1 h-10 w-16 rounded border overflow-hidden">
-                                <img src={g.back_image} alt="ID Back" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="h-14 rounded border border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-bold">
+                                No Front Photo
                               </div>
                             )}
+
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <label className="flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg border border-slate-200 bg-white text-slate-700 text-[10px] font-bold cursor-pointer hover:bg-slate-50">
+                                <Upload className="w-3 h-3 text-slate-500" />
+                                File
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      try {
+                                        const { optimizeImage } = await import('../../lib/imageOptimizer');
+                                        const { dataUrl } = await optimizeImage(file, 'document');
+                                        handleGuestFieldChange(idx, 'front_image', dataUrl);
+                                      } catch (err) { console.error(err); }
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              <label className="flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold cursor-pointer hover:bg-blue-700">
+                                <Camera className="w-3 h-3 text-white" />
+                                Camera
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      try {
+                                        const { optimizeImage } = await import('../../lib/imageOptimizer');
+                                        const { dataUrl } = await optimizeImage(file, 'document');
+                                        handleGuestFieldChange(idx, 'front_image', dataUrl);
+                                      } catch (err) { console.error(err); }
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                            <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">ID Back Photo</label>
+                            {g.back_image ? (
+                              <div className="h-16 w-full rounded border overflow-hidden">
+                                <img src={g.back_image} alt="ID Back" className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="h-14 rounded border border-dashed border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-bold">
+                                No Back Photo
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <label className="flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg border border-slate-200 bg-white text-slate-700 text-[10px] font-bold cursor-pointer hover:bg-slate-50">
+                                <Upload className="w-3 h-3 text-slate-500" />
+                                File
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      try {
+                                        const { optimizeImage } = await import('../../lib/imageOptimizer');
+                                        const { dataUrl } = await optimizeImage(file, 'document');
+                                        handleGuestFieldChange(idx, 'back_image', dataUrl);
+                                      } catch (err) { console.error(err); }
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              <label className="flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold cursor-pointer hover:bg-blue-700">
+                                <Camera className="w-3 h-3 text-white" />
+                                Camera
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      try {
+                                        const { optimizeImage } = await import('../../lib/imageOptimizer');
+                                        const { dataUrl } = await optimizeImage(file, 'document');
+                                        handleGuestFieldChange(idx, 'back_image', dataUrl);
+                                      } catch (err) { console.error(err); }
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                              </label>
+                            </div>
                           </div>
                         </div>
 
