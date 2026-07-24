@@ -1405,7 +1405,7 @@ export default function RoomDetailModal({ room, hotelId, onClose, onStatusChange
             <SecondaryGuestForm
               hotelId={hotelId}
               primaryCustomer={stayData?.primary_customer}
-              primaryVehicleNumber={stayData?.vehicle_number}
+              primaryVehicleNumber={stayData?.vehicle_number || stayData?.primary_customer?.vehicle_number || ''}
               onSubmit={handleAddSecondaryGuestSubmit}
               onCancel={() => setShowAddSecondaryGuestModal(false)}
               submitButtonLabel="Map Secondary Guest to Room"

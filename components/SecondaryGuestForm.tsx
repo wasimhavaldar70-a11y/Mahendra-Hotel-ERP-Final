@@ -362,30 +362,28 @@ export default function SecondaryGuestForm({
         </div>
       </div>
 
-      {/* Vehicle Number Section with Checkbox (UNCHECKED by default) */}
+      {/* Vehicle Number Section with Checkbox */}
       <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer select-none">
             <Car className="w-4 h-4 text-blue-600" />
             Vehicle Details
           </label>
-          {primaryVehicle && (
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
-              <input
-                type="checkbox"
-                checked={sameVehicleAsPrimary}
-                onChange={(e) => setSameVehicleAsPrimary(e.target.checked)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 accent-blue-600"
-              />
-              Same vehicle number as primary guest
-            </label>
-          )}
+          <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+            <input
+              type="checkbox"
+              checked={sameVehicleAsPrimary}
+              onChange={(e) => setSameVehicleAsPrimary(e.target.checked)}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 accent-blue-600"
+            />
+            Same vehicle number as primary guest
+          </label>
         </div>
 
         {sameVehicleAsPrimary ? (
           <div className="text-xs font-medium text-slate-600 bg-white p-2 rounded-lg border border-slate-200/60 flex items-center justify-between">
             <span>Linked Primary Vehicle:</span>
-            <span className="font-bold text-slate-900">{primaryVehicle || 'None Specified'}</span>
+            <span className="font-bold text-slate-900">{primaryVehicle || 'Same as Primary Guest'}</span>
           </div>
         ) : (
           <div>
